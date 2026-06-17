@@ -1,0 +1,81 @@
+import { Router } from 'express';
+import { z } from 'zod';
+import { authenticate, AuthRequest, adminOnly } from '../middleware/auth';
+import { auditLog } from '../middleware/auditLog';
+import { upload } from '../middleware/upload';
+import { incomeService } from '../services/income.service';
+import { asyncHandler, sendSuccess } from '../utils/response';
+
+const router = Router();
+router.use(authenticate);
+
+const createSchema = z.object({
+  amount: z.number().positive(),
+  categoryId: z.string(),
+  source: z.string().optional(),
+  date: z.string(),
+  notes: z.string().optional(),
+});
+
+router.get(
+  '/',
+  asyncHandler(async (req: AuthRequest, res) => {
+    const result = await incomeService.list({
+      search: req.query.search as string,
+      categoryId: req.query.categoryId as string,
+      dateFrom: req.query.dateFrom as string,
+      dateTo: req.query.dateTo as string,
+      page: parseInt(req.query.page as string) || 1,
+      limit: parseInt(req.query.limit as string) || 20,
+    });
+    sendSuccess(res, result);
+  })
+);
+
+router.get(
+  '/:id',
+  asyncHandler(async (req, res) => {
+    const item = await incomeService.getById(req.params.id);
+    sendSuccess(res, item);
+  })
+);
+
+router.post(
+  '/',
+  upload.single('attachment'),
+  asyncHandler(async (req: AuthRequest, res) => {
+    const data = createSchema.parse({ ...req.body, amount: parseFloat(req.body.amount) });
+    const item = await incomeService.create({
+      ...data,
+      attachment: req.file?.filename,
+      createdById: req.user!.userId,
+    });
+    sendSuccess(res, item, 201);
+  })
+);
+
+router.put(
+  '/:id',
+  adminOnly,
+  auditLog('UPDATE_INCOME', 'Income'),
+  upload.single('attachment'),
+  asyncHandler(async (req, res) => {
+    const body = { ...req.body };
+    if (body.amount) body.amount = parseFloat(body.amount);
+    if (req.file) body.attachment = req.file.filename;
+    const item = await incomeService.update(req.params.id, body);
+    sendSuccess(res, item);
+  })
+);
+
+router.delete(
+  '/:id',
+  adminOnly,
+  auditLog('DELETE_INCOME', 'Income'),
+  asyncHandler(async (req, res) => {
+    const result = await incomeService.delete(req.params.id);
+    sendSuccess(res, result);
+  })
+);
+
+export default router;
