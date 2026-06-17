@@ -14,7 +14,7 @@ import { useAuthStore } from '@/stores/auth.store';
 
 const schema = z.object({
   email: z.string().email('Invalid email'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -26,7 +26,7 @@ export default function LoginPage() {
 
   const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { email: 'admin@fito6.com', password: 'Admin@123' },
+    defaultValues: { email: '', password: '' },
   });
 
   const onSubmit = async (data: FormData) => {
@@ -59,7 +59,7 @@ export default function LoginPage() {
 
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
-            <Input id="email" type="email" placeholder="admin@fito6.com" {...register('email')} />
+            <Input id="email" type="email" placeholder="you@business.com" autoComplete="email" {...register('email')} />
             {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
           </div>
 
@@ -70,17 +70,13 @@ export default function LoginPage() {
                 Forgot password?
               </Link>
             </div>
-            <Input id="password" type="password" placeholder="••••••••" {...register('password')} />
+            <Input id="password" type="password" placeholder="••••••••" autoComplete="current-password" {...register('password')} />
             {errors.password && <p className="text-xs text-destructive">{errors.password.message}</p>}
           </div>
 
           <Button type="submit" className="w-full" size="lg" disabled={isLoading}>
             {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Sign In'}
           </Button>
-
-          <p className="text-center text-xs text-muted-foreground">
-            Demo: admin@fito6.com / Admin@123
-          </p>
         </form>
       </div>
     </div>

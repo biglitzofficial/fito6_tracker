@@ -1,8 +1,9 @@
 import { Role } from '@prisma/client';
 import prisma from '../lib/prisma';
-import { hashPassword, comparePassword } from '../utils/password';
+import { hashPassword, comparePassword, validatePassword } from '../utils/password';
 import { signToken, generateResetToken } from '../utils/jwt';
 import { AppError } from '../utils/response';
+import { config } from '../config';
 
 export const authService = {
   async login(email: string, password: string) {
@@ -57,7 +58,7 @@ export const authService = {
 
     return {
       message: 'If account exists, reset link sent',
-      resetToken: process.env.NODE_ENV === 'development' ? resetToken : undefined,
+      resetToken: !config.isProduction ? resetToken : undefined,
     };
   },
 
@@ -71,6 +72,11 @@ export const authService = {
 
     if (!user) throw new AppError(400, 'Invalid or expired reset token');
 
+    try {
+      validatePassword(newPassword);
+    } catch (e) {
+      throw new AppError(400, e instanceof Error ? e.message : 'Invalid password');
+    }
     const hashed = await hashPassword(newPassword);
     await prisma.user.update({
       where: { id: user.id },

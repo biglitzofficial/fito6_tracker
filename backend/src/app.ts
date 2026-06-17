@@ -2,8 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
-import path from 'path';
 import { config } from './config';
+import prisma from './lib/prisma';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 
 import authRoutes from './routes/auth.routes';
@@ -23,13 +23,20 @@ import ledgerRoutes from './routes/ledger.routes';
 
 const app = express();
 
+if (config.isProduction) {
+  app.set('trust proxy', 1);
+}
+
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(
   cors({
     origin: (origin, cb) => {
-      // allow non-browser tools (no Origin) + local dev ports
       if (!origin) return cb(null, true);
-      const allowed = new Set([config.frontendUrl, 'http://localhost:3000', 'http://localhost:3001']);
+      const allowed = new Set([config.frontendUrl]);
+      if (!config.isProduction) {
+        allowed.add('http://localhost:3000');
+        allowed.add('http://localhost:3001');
+      }
       if (allowed.has(origin)) return cb(null, true);
       return cb(new Error(`CORS blocked for origin: ${origin}`));
     },
@@ -39,16 +46,20 @@ app.use(
 app.use(
   rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 200,
+    max: config.isProduction ? 150 : 200,
     message: { success: false, error: 'Too many requests' },
   })
 );
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
-app.use('/uploads', express.static(path.join(config.uploadDir)));
 
-app.get('/api/health', (_req, res) => {
-  res.json({ success: true, status: 'ok', timestamp: new Date().toISOString() });
+app.get('/api/health', async (_req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ success: true, status: 'ok', timestamp: new Date().toISOString() });
+  } catch {
+    res.status(503).json({ success: false, status: 'degraded', error: 'Database unavailable' });
+  }
 });
 
 app.use('/api/auth', authRoutes);

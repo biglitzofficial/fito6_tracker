@@ -4,15 +4,13 @@ services:
     container_name: fito6_postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: fito6
-      POSTGRES_PASSWORD: fito6_secret
-      POSTGRES_DB: fito6_tracker
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: ${POSTGRES_USER:-fito6}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-fito6_tracker}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U fito6 -d fito6_tracker"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-fito6} -d ${POSTGRES_DB:-fito6_tracker}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -24,35 +22,42 @@ services:
     container_name: fito6_backend
     restart: unless-stopped
     ports:
-      - "4000:4000"
+      - "${BACKEND_PORT:-4000}:4000"
     environment:
-      DATABASE_URL: postgresql://fito6:fito6_secret@postgres:5432/fito6_tracker
-      JWT_SECRET: ${JWT_SECRET:-fito6_jwt_secret_change_in_production}
-      JWT_EXPIRES_IN: 7d
+      DATABASE_URL: postgresql://${POSTGRES_USER:-fito6}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-fito6_tracker}
+      DIRECT_URL: postgresql://${POSTGRES_USER:-fito6}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-fito6_tracker}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
       PORT: 4000
       NODE_ENV: production
-      FRONTEND_URL: http://localhost:3000
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       UPLOAD_DIR: /app/uploads
     volumes:
       - uploads_data:/app/uploads
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: http://localhost:4000/api
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000/api}
     container_name: fito6_frontend
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "${FRONTEND_PORT:-3000}:3000"
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:4000/api
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000/api}
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
 
 volumes:
   postgres_data:

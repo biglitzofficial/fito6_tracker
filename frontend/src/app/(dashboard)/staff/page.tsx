@@ -23,6 +23,7 @@ const schema = z.object({
   phone: z.string().optional(),
   salary: z.coerce.number().min(0),
   joiningDate: z.string().min(1),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
 });
 
 function StaffContent() {
@@ -34,7 +35,7 @@ function StaffContent() {
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<z.infer<typeof schema>>({
     resolver: zodResolver(schema),
-    defaultValues: { joiningDate: new Date().toISOString().split('T')[0], salary: 3000 },
+    defaultValues: { joiningDate: new Date().toISOString().split('T')[0], salary: 0 },
   });
 
   const fetchStaff = async () => {
@@ -80,6 +81,7 @@ function StaffContent() {
                 <div className="space-y-2"><Label>Phone</Label><Input {...register('phone')} /></div>
                 <div className="space-y-2"><Label>Salary</Label><Input type="number" {...register('salary')} /></div>
                 <div className="space-y-2"><Label>Joining Date</Label><Input type="date" {...register('joiningDate')} /></div>
+                <div className="space-y-2"><Label>Password</Label><Input type="password" autoComplete="new-password" {...register('password')} />{errors.password && <p className="text-xs text-destructive">{errors.password.message}</p>}</div>
                 <div className="md:col-span-2 flex gap-3">
                   <Button type="submit" disabled={submitting}>{submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Add Staff'}</Button>
                   <Button type="button" variant="ghost" onClick={() => setShowForm(false)}>Cancel</Button>

@@ -15,7 +15,7 @@ const createSchema = z.object({
   phone: z.string().optional(),
   salary: z.number().min(0),
   joiningDate: z.string(),
-  password: z.string().min(8).optional(),
+  password: z.string().min(8),
 });
 
 router.get(

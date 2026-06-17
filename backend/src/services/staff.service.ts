@@ -1,6 +1,6 @@
 import { Role } from '@prisma/client';
 import prisma from '../lib/prisma';
-import { hashPassword } from '../utils/password';
+import { hashPassword, validatePassword } from '../utils/password';
 import { AppError } from '../utils/response';
 
 export const staffService = {
@@ -30,12 +30,17 @@ export const staffService = {
     phone?: string;
     salary: number;
     joiningDate: string;
-    password?: string;
+    password: string;
   }) {
     const existing = await prisma.user.findUnique({ where: { email: data.email.toLowerCase() } });
     if (existing) throw new AppError(400, 'Email already exists');
 
-    const password = await hashPassword(data.password || 'Staff@123');
+    try {
+      validatePassword(data.password);
+    } catch (e) {
+      throw new AppError(400, e instanceof Error ? e.message : 'Invalid password');
+    }
+    const password = await hashPassword(data.password);
 
     return prisma.user.create({
       data: {

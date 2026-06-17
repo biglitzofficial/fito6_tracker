@@ -124,10 +124,13 @@ function DocumentsContent() {
                     <p className="text-xs text-muted-foreground mt-2">{formatDate(doc.createdAt)} · {doc.uploadedBy.name}</p>
                   </div>
                 </div>
-                <Button variant="outline" size="sm" className="mt-4 w-full" asChild>
-                  <a href={`${process.env.NEXT_PUBLIC_API_URL}/documents/${doc.id}/download`} target="_blank" rel="noopener">
-                    <Download className="h-4 w-4" /> Download
-                  </a>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-4 w-full"
+                  onClick={() => api.download(`/documents/${doc.id}/download`, doc.name)}
+                >
+                  <Download className="h-4 w-4" /> Download
                 </Button>
               </CardContent>
             </Card>

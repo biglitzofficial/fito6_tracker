@@ -1,6 +1,6 @@
 # Fito6 — Business Finance & Operations Tracker
 
-A premium full-stack SaaS application for gyms and small businesses to track income, expenses, staff, attendance, tasks, documents, analytics, and reports.
+A full-stack SaaS application for gyms and small businesses to track income, expenses, staff, attendance, tasks, documents, analytics, ledger, and reports.
 
 ## Tech Stack
 
@@ -14,43 +14,57 @@ A premium full-stack SaaS application for gyms and small businesses to track inc
 ## Features
 
 - **Role-Based Access** — Admin and Staff roles with granular permissions
-- **Admin Dashboard** — Revenue, expenses, profit, cash flow, health score, AI insights
-- **Staff Dashboard** — Attendance, tasks, recent entries
-- **Income & Expense Management** — Categories, filters, recurring expenses, attachments
+- **Admin Dashboard** — Revenue, expenses, profit, cash flow, health score
+- **General Ledger** — Running balance, filters, CSV export
+- **Income & Expense Management** — Categories, filters, recurring expenses
 - **Staff Management** — CRUD, disable/enable, salary tracking
 - **Attendance** — Check in/out, late tracking, monthly reports
 - **Task Management** — Assign, prioritize, status updates
-- **Document Management** — Upload bills, invoices, receipts
-- **Analytics** — Revenue, expense breakdown, profit, cash flow charts
-- **Reports** — Income, expense, P&L, attendance (CSV/Excel/PDF)
-- **Notifications** — Salary due, high expenses, low cash flow alerts
-- **Audit Logs** — Full action tracking with IP and user agent
-- **Premium UI** — Dark glassmorphism theme, command palette (⌘K), responsive design
+- **Document Management** — Secure upload and authenticated download
+- **Analytics & Reports** — Charts, CSV/Excel/PDF exports
+- **Audit Logs** — Full action tracking
 
-## Quick Start with Docker
+## Production Deployment
+
+### 1. Configure environment
 
 ```bash
-# Clone and configure
 cp .env.example .env
+# Set strong values for POSTGRES_PASSWORD, JWT_SECRET (32+ chars), FRONTEND_URL, NEXT_PUBLIC_API_URL
+```
 
-# Start all services
-docker compose up --build
+For cloud databases (e.g. Neon), set both `DATABASE_URL` (pooled) and `DIRECT_URL` (direct) in `backend/.env`.
 
-# Seed database (run in backend container)
+### 2. Start services
+
+```bash
+docker compose up --build -d
 docker compose exec backend npx prisma migrate deploy
 docker compose exec backend npm run db:seed
 ```
 
-- **Frontend:** http://localhost:3000
-- **API:** http://localhost:4000/api
-- **Health:** http://localhost:4000/api/health
+`db:seed` only adds **reference data** (categories and default settings). It does not create users or sample transactions.
+
+### 3. Create the first admin (one time)
+
+```bash
+# In backend/.env set ADMIN_EMAIL, ADMIN_PASSWORD, ADMIN_NAME
+docker compose exec backend npm run db:bootstrap-admin
+```
+
+Password must be at least 8 characters with uppercase, lowercase, and a number.
+
+### 4. Verify
+
+- **Frontend:** your `FRONTEND_URL`
+- **API health:** `{API_URL}/health` (includes database check)
 
 ## Local Development
 
 ### Prerequisites
 
 - Node.js 22+
-- PostgreSQL 16+
+- PostgreSQL 16+ (or Neon)
 - npm
 
 ### Backend
@@ -61,6 +75,8 @@ cp ../.env.example .env
 npm install
 npx prisma migrate deploy
 npm run db:seed
+# Set ADMIN_EMAIL and ADMIN_PASSWORD, then:
+npm run db:bootstrap-admin
 npm run dev
 ```
 
@@ -68,16 +84,10 @@ npm run dev
 
 ```bash
 cd frontend
+cp .env.example .env.local
 npm install
 npm run dev
 ```
-
-## Demo Credentials
-
-| Role | Email | Password |
-|------|-------|----------|
-| Admin | admin@fito6.com | Admin@123 |
-| Staff | john@fito6.com | Staff@123 |
 
 ## Project Structure
 
@@ -87,47 +97,48 @@ fito6_tracker/
 ├── .env.example
 ├── backend/
 │   ├── prisma/
-│   │   ├── schema.prisma      # Database models
-│   │   ├── seed.ts            # Demo data
-│   │   └── migrations/
+│   │   ├── schema.prisma
+│   │   ├── seed.ts            # Reference data only
+│   │   └── bootstrap-admin.ts # First admin setup
 │   └── src/
-│       ├── routes/            # API routes
-│       ├── services/          # Business logic
-│       ├── middleware/        # Auth, audit, upload
-│       └── utils/             # JWT, password helpers
+│       ├── routes/
+│       ├── services/
+│       └── middleware/
 └── frontend/
     └── src/
-        ├── app/               # Next.js App Router pages
-        ├── components/        # UI components
-        ├── lib/               # API client, utilities
-        ├── stores/            # Zustand state
-        └── types/             # TypeScript types
+        ├── app/
+        ├── components/
+        └── lib/
 ```
 
 ## API Endpoints
 
 | Method | Endpoint | Access |
 |--------|----------|--------|
-| POST | `/api/auth/login` | Public |
-| POST | `/api/auth/forgot-password` | Public |
-| POST | `/api/auth/reset-password` | Public |
+| POST | `/api/auth/login` | Public (rate limited) |
+| POST | `/api/auth/forgot-password` | Public (rate limited) |
+| POST | `/api/auth/reset-password` | Public (rate limited) |
+| GET | `/api/health` | Public |
 | GET | `/api/dashboard` | Auth |
 | CRUD | `/api/income` | Auth (delete: Admin) |
 | CRUD | `/api/expenses` | Auth (delete: Admin) |
 | CRUD | `/api/staff` | Admin |
-| POST | `/api/attendance/check-in` | Auth |
-| CRUD | `/api/tasks` | Auth |
+| GET | `/api/ledger` | Admin |
 | GET | `/api/analytics/*` | Admin |
 | POST | `/api/reports/*` | Admin |
 | GET | `/api/audit-logs` | Admin |
 
 ## Security
 
-- JWT authentication with bcrypt password hashing (12 rounds)
-- Role-based access control on all protected routes
-- Rate limiting (200 req/15min)
+- JWT authentication with bcrypt (12 rounds)
+- Strong password policy (8+ chars, mixed case, number)
+- Role-based access control on protected routes
+- Auth rate limiting (10 attempts / 15 min in production)
+- Global rate limiting (150 req / 15 min in production)
 - Helmet security headers
 - Input validation with Zod
+- Authenticated document downloads (no public file URLs)
+- Production env validation (JWT, database URLs required)
 - Audit logging for sensitive operations
 
 ## License
