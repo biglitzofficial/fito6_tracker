@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { authenticate, AuthRequest, adminOnly } from '../middleware/auth';
 import { auditLog } from '../middleware/auditLog';
 import { upload } from '../middleware/upload';
+import { uploadFile } from '../lib/storage';
 import { incomeService } from '../services/income.service';
 import { asyncHandler, sendSuccess } from '../utils/response';
 
@@ -45,9 +46,14 @@ router.post(
   upload.single('attachment'),
   asyncHandler(async (req: AuthRequest, res) => {
     const data = createSchema.parse({ ...req.body, amount: parseFloat(req.body.amount) });
+    let attachment: string | undefined;
+    if (req.file) {
+      const uploaded = await uploadFile(req.file.buffer, req.file.originalname, req.file.mimetype);
+      attachment = uploaded.path;
+    }
     const item = await incomeService.create({
       ...data,
-      attachment: req.file?.filename,
+      attachment,
       createdById: req.user!.userId,
     });
     sendSuccess(res, item, 201);
@@ -62,7 +68,10 @@ router.put(
   asyncHandler(async (req, res) => {
     const body = { ...req.body };
     if (body.amount) body.amount = parseFloat(body.amount);
-    if (req.file) body.attachment = req.file.filename;
+    if (req.file) {
+      const uploaded = await uploadFile(req.file.buffer, req.file.originalname, req.file.mimetype);
+      body.attachment = uploaded.path;
+    }
     const item = await incomeService.update(req.params.id, body);
     sendSuccess(res, item);
   })

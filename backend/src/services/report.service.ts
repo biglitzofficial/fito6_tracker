@@ -1,5 +1,6 @@
-import { ReportType, ReportFormat } from '@prisma/client';
-import prisma from '../lib/prisma';
+import { ReportFormat, ReportType } from '../types/enums';
+import { Attendance, Expense, Income, Report } from '../types/models';
+import { COL, create, findMany, getCategoryMap, getUserMap, inDateRange, sortBy, sumAmounts } from '../lib/firestore';
 import PDFDocument from 'pdfkit';
 import ExcelJS from 'exceljs';
 
@@ -35,7 +36,6 @@ async function generatePdf(title: string, columns: string[], rows: Record<string
   doc.fontSize(9).fillColor('#666').text(`Generated: ${new Date().toISOString()}`);
   doc.moveDown(1);
 
-  // Simple table rendering (monospace-ish columns)
   doc.fillColor('#000').fontSize(10);
   doc.text(columns.join(' | '));
   doc.moveDown(0.25);
@@ -93,7 +93,6 @@ async function buildReportBlob(args: {
     };
   }
 
-  // EXCEL
   const xlsx = await generateExcel(args.title.slice(0, 31), columns, args.rows);
   return {
     format: args.format,
@@ -105,19 +104,20 @@ async function buildReportBlob(args: {
 
 export const reportService = {
   async generateIncomeReport(dateFrom: string, dateTo: string, format: ReportFormat, userId: string) {
-    const items = await prisma.income.findMany({
-      where: { date: { gte: new Date(dateFrom), lte: new Date(dateTo) } },
-      include: { category: true, createdBy: { select: { name: true } } },
-      orderBy: { date: 'desc' },
-    });
+    const from = new Date(dateFrom);
+    const to = new Date(dateTo);
+    const items = (await findMany<Income>(COL.income)).filter((i) => inDateRange(i.date, from, to));
+    const sorted = sortBy(items, 'date', 'desc');
+    const categoryMap = await getCategoryMap(sorted.map((i) => i.categoryId));
+    const userMap = await getUserMap(sorted.map((i) => i.createdById));
 
-    const rows = items.map((i) => ({
+    const rows = sorted.map((i) => ({
       date: i.date.toISOString().split('T')[0],
       amount: Number(i.amount),
-      category: i.category.name,
+      category: categoryMap.get(i.categoryId)?.name || 'Unknown',
       source: i.source || '',
       notes: i.notes || '',
-      createdBy: i.createdBy.name,
+      createdBy: userMap.get(i.createdById)?.name || 'Unknown',
     }));
 
     const total = rows.reduce((sum, r) => sum + r.amount, 0);
@@ -128,34 +128,33 @@ export const reportService = {
       filenameBase: `Income_Report_${dateFrom}_to_${dateTo}`,
     });
 
-    const report = await prisma.report.create({
-      data: {
-        type: ReportType.INCOME,
-        format,
-        title: `Income Report ${dateFrom} to ${dateTo}`,
-        dateFrom: new Date(dateFrom),
-        dateTo: new Date(dateTo),
-        generatedById: userId,
-      },
+    const report = await create<Report>(COL.reports, {
+      type: ReportType.INCOME,
+      format,
+      title: `Income Report ${dateFrom} to ${dateTo}`,
+      dateFrom: from,
+      dateTo: to,
+      generatedById: userId,
     });
 
     return { report, ...blob, rows, total };
   },
 
   async generateExpenseReport(dateFrom: string, dateTo: string, format: ReportFormat, userId: string) {
-    const items = await prisma.expense.findMany({
-      where: { date: { gte: new Date(dateFrom), lte: new Date(dateTo) } },
-      include: { category: true, createdBy: { select: { name: true } } },
-      orderBy: { date: 'desc' },
-    });
+    const from = new Date(dateFrom);
+    const to = new Date(dateTo);
+    const items = (await findMany<Expense>(COL.expenses)).filter((e) => inDateRange(e.date, from, to));
+    const sorted = sortBy(items, 'date', 'desc');
+    const categoryMap = await getCategoryMap(sorted.map((e) => e.categoryId));
+    const userMap = await getUserMap(sorted.map((e) => e.createdById));
 
-    const rows = items.map((e) => ({
+    const rows = sorted.map((e) => ({
       date: e.date.toISOString().split('T')[0],
       amount: Number(e.amount),
-      category: e.category.name,
+      category: categoryMap.get(e.categoryId)?.name || 'Unknown',
       vendor: e.vendor || '',
       notes: e.notes || '',
-      createdBy: e.createdBy.name,
+      createdBy: userMap.get(e.createdById)?.name || 'Unknown',
     }));
 
     const total = rows.reduce((sum, r) => sum + r.amount, 0);
@@ -166,37 +165,36 @@ export const reportService = {
       filenameBase: `Expense_Report_${dateFrom}_to_${dateTo}`,
     });
 
-    const report = await prisma.report.create({
-      data: {
-        type: ReportType.EXPENSE,
-        format,
-        title: `Expense Report ${dateFrom} to ${dateTo}`,
-        dateFrom: new Date(dateFrom),
-        dateTo: new Date(dateTo),
-        generatedById: userId,
-      },
+    const report = await create<Report>(COL.reports, {
+      type: ReportType.EXPENSE,
+      format,
+      title: `Expense Report ${dateFrom} to ${dateTo}`,
+      dateFrom: from,
+      dateTo: to,
+      generatedById: userId,
     });
 
     return { report, ...blob, rows, total };
   },
 
   async generateProfitLossReport(dateFrom: string, dateTo: string, format: ReportFormat, userId: string) {
-    const [income, expense] = await Promise.all([
-      prisma.income.aggregate({
-        where: { date: { gte: new Date(dateFrom), lte: new Date(dateTo) } },
-        _sum: { amount: true },
-      }),
-      prisma.expense.aggregate({
-        where: { date: { gte: new Date(dateFrom), lte: new Date(dateTo) } },
-        _sum: { amount: true },
-      }),
+    const from = new Date(dateFrom);
+    const to = new Date(dateTo);
+    const [incomes, expenses] = await Promise.all([
+      findMany<Income>(COL.income),
+      findMany<Expense>(COL.expenses),
     ]);
 
-    const totalIncome = Number(income._sum.amount || 0);
-    const totalExpense = Number(expense._sum.amount || 0);
+    const totalIncome = sumAmounts(incomes, from, to);
+    const totalExpense = sumAmounts(expenses, from, to);
     const netProfit = totalIncome - totalExpense;
 
-    const data = { totalIncome, totalExpense, netProfit, profitMargin: totalIncome > 0 ? (netProfit / totalIncome) * 100 : 0 };
+    const data = {
+      totalIncome,
+      totalExpense,
+      netProfit,
+      profitMargin: totalIncome > 0 ? (netProfit / totalIncome) * 100 : 0,
+    };
     const rows = [data] as unknown as Record<string, unknown>[];
     const blob = await buildReportBlob({
       title: `P&L Report ${dateFrom} to ${dateTo}`,
@@ -205,15 +203,13 @@ export const reportService = {
       filenameBase: `PL_Report_${dateFrom}_to_${dateTo}`,
     });
 
-    const report = await prisma.report.create({
-      data: {
-        type: ReportType.PROFIT_LOSS,
-        format,
-        title: `P&L Report ${dateFrom} to ${dateTo}`,
-        dateFrom: new Date(dateFrom),
-        dateTo: new Date(dateTo),
-        generatedById: userId,
-      },
+    const report = await create<Report>(COL.reports, {
+      type: ReportType.PROFIT_LOSS,
+      format,
+      title: `P&L Report ${dateFrom} to ${dateTo}`,
+      dateFrom: from,
+      dateTo: to,
+      generatedById: userId,
     });
 
     return { report, ...blob, ...data };
@@ -221,22 +217,21 @@ export const reportService = {
 
   async generateAttendanceReport(month: number, year: number, format: ReportFormat, userId: string) {
     const start = new Date(year, month, 1);
-    const end = new Date(year, month + 1, 0);
+    const end = new Date(year, month + 1, 0, 23, 59, 59, 999);
 
-    const items = await prisma.attendance.findMany({
-      where: { date: { gte: start, lte: end } },
-      include: { user: { select: { name: true, email: true } } },
-      orderBy: [{ user: { name: 'asc' } }, { date: 'asc' }],
-    });
+    const items = (await findMany<Attendance>(COL.attendance)).filter((a) => inDateRange(a.date, start, end));
+    const userMap = await getUserMap(items.map((a) => a.userId));
 
-    const rows = items.map((a) => ({
-      staff: a.user.name,
-      email: a.user.email,
-      date: a.date.toISOString().split('T')[0],
-      checkIn: a.checkIn?.toISOString() || '',
-      checkOut: a.checkOut?.toISOString() || '',
-      isLate: a.isLate,
-    }));
+    const rows = items
+      .map((a) => ({
+        staff: userMap.get(a.userId)?.name || 'Unknown',
+        email: userMap.get(a.userId)?.email || '',
+        date: a.date.toISOString().split('T')[0],
+        checkIn: a.checkIn?.toISOString() || '',
+        checkOut: a.checkOut?.toISOString() || '',
+        isLate: a.isLate,
+      }))
+      .sort((a, b) => a.staff.localeCompare(b.staff) || a.date.localeCompare(b.date));
 
     const blob = await buildReportBlob({
       title: `Attendance Report ${year}-${month + 1}`,
@@ -245,26 +240,25 @@ export const reportService = {
       filenameBase: `Attendance_Report_${year}-${month + 1}`,
     });
 
-    const report = await prisma.report.create({
-      data: {
-        type: ReportType.ATTENDANCE,
-        format,
-        title: `Attendance Report ${year}-${month + 1}`,
-        dateFrom: start,
-        dateTo: end,
-        generatedById: userId,
-      },
+    const report = await create<Report>(COL.reports, {
+      type: ReportType.ATTENDANCE,
+      format,
+      title: `Attendance Report ${year}-${month + 1}`,
+      dateFrom: start,
+      dateTo: end,
+      generatedById: userId,
     });
 
     return { report, ...blob, rows };
   },
 
   async list(userId?: string) {
-    return prisma.report.findMany({
-      where: userId ? { generatedById: userId } : {},
-      include: { generatedBy: { select: { name: true } } },
-      orderBy: { createdAt: 'desc' },
-      take: 50,
-    });
+    const items = await findMany<Report>(COL.reports, (r) => !userId || r.generatedById === userId);
+    const sorted = sortBy(items, 'createdAt', 'desc').slice(0, 50);
+    const userMap = await getUserMap(sorted.map((r) => r.generatedById));
+    return sorted.map((r) => ({
+      ...r,
+      generatedBy: { name: userMap.get(r.generatedById)?.name || 'Unknown' },
+    }));
   },
 };

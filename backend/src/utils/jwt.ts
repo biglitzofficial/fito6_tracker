@@ -1,5 +1,5 @@
 import jwt from 'jsonwebtoken';
-import { Role } from '@prisma/client';
+import { Role } from '../types/enums';
 import { config } from '../config';
 
 export interface JwtPayload {

@@ -1,27 +1,28 @@
-import { Role } from '@prisma/client';
-import prisma from '../lib/prisma';
+import { Role } from '../types/enums';
+import { User, Staff } from '../types/models';
+import { COL, create, findMany, findOne, getById, sortBy, update } from '../lib/firestore';
 import { hashPassword, validatePassword } from '../utils/password';
 import { AppError } from '../utils/response';
 
+async function withStaff(user: User & { id: string }) {
+  const staff = await findOne<Staff>(COL.staff, 'userId', user.id);
+  return { ...user, staff: staff ? { ...staff, salary: Number(staff.salary) } : null };
+}
+
 export const staffService = {
   async list(includeInactive = false) {
-    return prisma.user.findMany({
-      where: {
-        role: Role.STAFF,
-        ...(includeInactive ? {} : { isActive: true }),
-      },
-      include: { staff: true },
-      orderBy: { createdAt: 'desc' },
-    });
+    const users = await findMany<User>(
+      COL.users,
+      (u) => u.role === Role.STAFF && (includeInactive || u.isActive)
+    );
+    const sorted = sortBy(users, 'createdAt', 'desc');
+    return Promise.all(sorted.map(withStaff));
   },
 
   async getById(id: string) {
-    const user = await prisma.user.findFirst({
-      where: { id, role: Role.STAFF },
-      include: { staff: true },
-    });
-    if (!user) throw new AppError(404, 'Staff not found');
-    return user;
+    const user = await getById<User>(COL.users, id);
+    if (!user || user.role !== Role.STAFF) throw new AppError(404, 'Staff not found');
+    return withStaff(user);
   },
 
   async create(data: {
@@ -32,7 +33,7 @@ export const staffService = {
     joiningDate: string;
     password: string;
   }) {
-    const existing = await prisma.user.findUnique({ where: { email: data.email.toLowerCase() } });
+    const existing = await findOne<User>(COL.users, 'email', data.email.toLowerCase());
     if (existing) throw new AppError(400, 'Email already exists');
 
     try {
@@ -40,68 +41,66 @@ export const staffService = {
     } catch (e) {
       throw new AppError(400, e instanceof Error ? e.message : 'Invalid password');
     }
-    const password = await hashPassword(data.password);
 
-    return prisma.user.create({
-      data: {
-        name: data.name,
-        email: data.email.toLowerCase(),
-        password,
-        role: Role.STAFF,
-        staff: {
-          create: {
-            phone: data.phone,
-            salary: data.salary,
-            joiningDate: new Date(data.joiningDate),
-          },
-        },
-      },
-      include: { staff: true },
+    const password = await hashPassword(data.password);
+    const user = await create<User>(COL.users, {
+      name: data.name,
+      email: data.email.toLowerCase(),
+      password,
+      role: Role.STAFF,
+      isActive: true,
     });
+
+    const staff = await create<Staff>(COL.staff, {
+      userId: user.id,
+      phone: data.phone,
+      salary: data.salary,
+      joiningDate: new Date(data.joiningDate),
+    });
+
+    return { ...user, staff: { ...staff, salary: Number(staff.salary) } };
   },
 
-  async update(id: string, data: Partial<{
-    name: string;
-    email: string;
-    phone: string;
-    salary: number;
-    joiningDate: string;
-  }>) {
+  async update(
+    id: string,
+    data: Partial<{
+      name: string;
+      email: string;
+      phone: string;
+      salary: number;
+      joiningDate: string;
+    }>
+  ) {
     await staffService.getById(id);
-
     const { phone, salary, joiningDate, ...userData } = data;
 
-    return prisma.user.update({
-      where: { id },
-      data: {
+    if (Object.keys(userData).length) {
+      await update<User>(COL.users, id, {
         ...userData,
         email: userData.email?.toLowerCase(),
-        staff: {
-          update: {
-            phone,
-            salary,
-            joiningDate: joiningDate ? new Date(joiningDate) : undefined,
-          },
-        },
-      },
-      include: { staff: true },
-    });
+      });
+    }
+
+    const staff = await findOne<Staff>(COL.staff, 'userId', id);
+    if (staff && (phone !== undefined || salary !== undefined || joiningDate !== undefined)) {
+      await update<Staff>(COL.staff, staff.id, {
+        phone,
+        salary,
+        joiningDate: joiningDate ? new Date(joiningDate) : undefined,
+      });
+    }
+
+    return staffService.getById(id);
   },
 
   async disable(id: string) {
     await staffService.getById(id);
-    return prisma.user.update({
-      where: { id },
-      data: { isActive: false },
-      include: { staff: true },
-    });
+    await update<User>(COL.users, id, { isActive: false });
+    return staffService.getById(id);
   },
 
   async enable(id: string) {
-    return prisma.user.update({
-      where: { id },
-      data: { isActive: true },
-      include: { staff: true },
-    });
+    await update<User>(COL.users, id, { isActive: true });
+    return staffService.getById(id);
   },
 };

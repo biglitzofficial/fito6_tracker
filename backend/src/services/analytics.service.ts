@@ -1,4 +1,5 @@
-import prisma from '../lib/prisma';
+import { Category, Expense, Income } from '../types/models';
+import { COL, findMany, getCategoryMap, inDateRange, sumAmounts } from '../lib/firestore';
 
 type Period = 'daily' | 'weekly' | 'monthly';
 
@@ -24,15 +25,9 @@ function getDateRange(input?: { dateFrom?: string; dateTo?: string; period?: Per
   }
 }
 
-function dateFilter(since: Date, until?: Date) {
-  return until ? { gte: since, lte: until } : { gte: since };
-}
-
 function groupKey(date: Date, period: Period): string {
   const d = new Date(date);
-  if (period === 'daily') {
-    return d.toISOString().split('T')[0];
-  }
+  if (period === 'daily') return d.toISOString().split('T')[0];
   if (period === 'weekly') {
     const start = new Date(d);
     const day = start.getDay();
@@ -54,47 +49,33 @@ function sumByPeriod(
   }
   return Array.from(map.entries())
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([period, total]) => ({ period, total }));
+    .map(([p, total]) => ({ period: p, total }));
 }
 
 export const analyticsService = {
   async getRevenueAnalytics(input?: { period?: Period; dateFrom?: string; dateTo?: string }) {
     const { since, until, period } = getDateRange(input);
-
-    const items = await prisma.income.findMany({
-      where: { date: dateFilter(since, until) },
-      select: { date: true, amount: true },
-      orderBy: { date: 'asc' },
-    });
-
-    const data = sumByPeriod(items, period);
-    return { period, data };
+    const items = (await findMany<Income>(COL.income)).filter((i) => inDateRange(i.date, since, until));
+    return { period, data: sumByPeriod(items, period) };
   },
 
   async getExpenseAnalytics(input?: { dateFrom?: string; dateTo?: string; period?: Period }) {
     const { since, until, period } = getDateRange(input);
+    const expenses = (await findMany<Expense>(COL.expenses)).filter((e) => inDateRange(e.date, since, until));
 
-    const [expenses, byCategory] = await Promise.all([
-      prisma.expense.findMany({
-        where: { date: dateFilter(since, until) },
-        select: { date: true, amount: true },
-        orderBy: { date: 'asc' },
-      }),
-      prisma.expense.groupBy({
-        by: ['categoryId'],
-        where: { date: dateFilter(since, until) },
-        _sum: { amount: true },
-      }),
-    ]);
+    const categoryTotals = new Map<string, number>();
+    for (const expense of expenses) {
+      categoryTotals.set(
+        expense.categoryId,
+        (categoryTotals.get(expense.categoryId) || 0) + Number(expense.amount)
+      );
+    }
 
-    const categories = await prisma.category.findMany({
-      where: { id: { in: byCategory.map((c) => c.categoryId) } },
-    });
-
-    const categoryBreakdown = byCategory.map((c) => ({
-      categoryId: c.categoryId,
-      categoryName: categories.find((cat) => cat.id === c.categoryId)?.name || 'Unknown',
-      total: Number(c._sum.amount || 0),
+    const categoryMap = await getCategoryMap([...categoryTotals.keys()]);
+    const categoryBreakdown = [...categoryTotals.entries()].map(([categoryId, total]) => ({
+      categoryId,
+      categoryName: categoryMap.get(categoryId)?.name || 'Unknown',
+      total,
     }));
 
     const monthlyTrends = sumByPeriod(expenses, period).map((d) => ({
@@ -111,28 +92,27 @@ export const analyticsService = {
     const endOfRange = input?.dateTo ? new Date(input.dateTo) : undefined;
     const startOfYear = new Date(now.getFullYear(), 0, 1);
 
-    const rangeFilter = dateFilter(startOfMonth, endOfRange);
-
-    const [monthlyIncome, monthlyExpense, yearlyIncome, yearlyExpense] = await Promise.all([
-      prisma.income.aggregate({ where: { date: rangeFilter }, _sum: { amount: true } }),
-      prisma.expense.aggregate({ where: { date: rangeFilter }, _sum: { amount: true } }),
-      prisma.income.aggregate({ where: { date: { gte: startOfYear } }, _sum: { amount: true } }),
-      prisma.expense.aggregate({ where: { date: { gte: startOfYear } }, _sum: { amount: true } }),
+    const [incomes, expenses] = await Promise.all([
+      findMany<Income>(COL.income),
+      findMany<Expense>(COL.expenses),
     ]);
 
-    const grossRevenue = Number(monthlyIncome._sum.amount || 0);
-    const totalExpense = Number(monthlyExpense._sum.amount || 0);
+    const grossRevenue = sumAmounts(incomes, startOfMonth, endOfRange);
+    const totalExpense = sumAmounts(expenses, startOfMonth, endOfRange);
     const netProfit = grossRevenue - totalExpense;
     const profitMargin = grossRevenue > 0 ? (netProfit / grossRevenue) * 100 : 0;
+
+    const yearlyRevenue = sumAmounts(incomes, startOfYear);
+    const yearlyExpense = sumAmounts(expenses, startOfYear);
 
     return {
       grossProfit: grossRevenue,
       netProfit,
       profitMargin: Math.round(profitMargin * 100) / 100,
       yearly: {
-        revenue: Number(yearlyIncome._sum.amount || 0),
-        expense: Number(yearlyExpense._sum.amount || 0),
-        profit: Number(yearlyIncome._sum.amount || 0) - Number(yearlyExpense._sum.amount || 0),
+        revenue: yearlyRevenue,
+        expense: yearlyExpense,
+        profit: yearlyRevenue - yearlyExpense,
       },
     };
   },
@@ -141,18 +121,15 @@ export const analyticsService = {
     const { since, until, period } = getDateRange(input);
 
     const [incomes, expenses] = await Promise.all([
-      prisma.income.findMany({
-        where: { date: dateFilter(since, until) },
-        select: { date: true, amount: true },
-      }),
-      prisma.expense.findMany({
-        where: { date: dateFilter(since, until) },
-        select: { date: true, amount: true },
-      }),
+      findMany<Income>(COL.income),
+      findMany<Expense>(COL.expenses),
     ]);
 
-    const incomeByPeriod = sumByPeriod(incomes, period);
-    const expenseByPeriod = sumByPeriod(expenses, period);
+    const filteredIncomes = incomes.filter((i) => inDateRange(i.date, since, until));
+    const filteredExpenses = expenses.filter((e) => inDateRange(e.date, since, until));
+
+    const incomeByPeriod = sumByPeriod(filteredIncomes, period);
+    const expenseByPeriod = sumByPeriod(filteredExpenses, period);
     const periods = new Set([...incomeByPeriod.map((i) => i.period), ...expenseByPeriod.map((e) => e.period)]);
 
     return Array.from(periods)

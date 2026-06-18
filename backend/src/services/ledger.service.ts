@@ -1,4 +1,15 @@
-import prisma from '../lib/prisma';
+import { Category, Expense, Income } from '../types/models';
+import {
+  COL,
+  findMany,
+  getCategoryMap,
+  getUserMap,
+  inDateRange,
+  matchesSearch,
+  paginate,
+  sortBy,
+  sumAmounts,
+} from '../lib/firestore';
 
 export type LedgerType = 'INCOME' | 'EXPENSE' | 'ALL';
 
@@ -31,84 +42,69 @@ export const ledgerService = {
 
     const dateToEnd = dateTo ? new Date(dateTo) : undefined;
     if (dateToEnd) dateToEnd.setHours(23, 59, 59, 999);
-
-    const rangeFilter = {
-      ...(dateFrom ? { gte: new Date(dateFrom) } : {}),
-      ...(dateToEnd ? { lte: dateToEnd } : {}),
-    };
-    const hasRange = dateFrom || dateTo;
+    const dateFromStart = dateFrom ? new Date(dateFrom) : undefined;
+    if (dateFromStart) dateFromStart.setHours(0, 0, 0, 0);
 
     let openingBalance = 0;
-    if (hasRange && dateFrom) {
-      const before = new Date(dateFrom);
-      before.setHours(0, 0, 0, 0);
-      const [incomeBefore, expenseBefore] = await Promise.all([
-        prisma.income.aggregate({ where: { date: { lt: before } }, _sum: { amount: true } }),
-        prisma.expense.aggregate({ where: { date: { lt: before } }, _sum: { amount: true } }),
+    if (dateFromStart) {
+      const [incomes, expenses] = await Promise.all([
+        findMany<Income>(COL.income, (i) => i.date < dateFromStart),
+        findMany<Expense>(COL.expenses, (e) => e.date < dateFromStart),
       ]);
-      openingBalance = Number(incomeBefore._sum.amount || 0) - Number(expenseBefore._sum.amount || 0);
-    }
-
-    const incomeWhere: Record<string, unknown> = {};
-    const expenseWhere: Record<string, unknown> = {};
-    if (hasRange) {
-      incomeWhere.date = rangeFilter;
-      expenseWhere.date = rangeFilter;
-    }
-    if (search) {
-      incomeWhere.OR = [
-        { source: { contains: search, mode: 'insensitive' } },
-        { notes: { contains: search, mode: 'insensitive' } },
-        { category: { name: { contains: search, mode: 'insensitive' } } },
-      ];
-      expenseWhere.OR = [
-        { vendor: { contains: search, mode: 'insensitive' } },
-        { notes: { contains: search, mode: 'insensitive' } },
-        { category: { name: { contains: search, mode: 'insensitive' } } },
-      ];
+      openingBalance = sumAmounts(incomes) - sumAmounts(expenses);
     }
 
     const [incomes, expenses] = await Promise.all([
-      type !== 'EXPENSE'
-        ? prisma.income.findMany({
-            where: incomeWhere,
-            include: { category: true, createdBy: { select: { name: true } } },
-            orderBy: { date: 'asc' },
-          })
-        : Promise.resolve([]),
-      type !== 'INCOME'
-        ? prisma.expense.findMany({
-            where: expenseWhere,
-            include: { category: true, createdBy: { select: { name: true } } },
-            orderBy: { date: 'asc' },
-          })
-        : Promise.resolve([]),
+      type !== 'EXPENSE' ? findMany<Income>(COL.income) : Promise.resolve([] as Income[]),
+      type !== 'INCOME' ? findMany<Expense>(COL.expenses) : Promise.resolve([] as Expense[]),
     ]);
 
+    const allCategoryIds = [...incomes.map((i) => i.categoryId), ...expenses.map((e) => e.categoryId)];
+    const allUserIds = [...incomes.map((i) => i.createdById), ...expenses.map((e) => e.createdById)];
+    const [cats, users] = await Promise.all([getCategoryMap(allCategoryIds), getUserMap(allUserIds)]);
+
+    const filteredIncomes = incomes.filter((i) => {
+      if (dateFromStart || dateToEnd) {
+        if (!inDateRange(i.date, dateFromStart, dateToEnd)) return false;
+      }
+      const cat = cats.get(i.categoryId) as Category | undefined;
+      if (!matchesSearch(search, i.source, i.notes, cat?.name)) return false;
+      return true;
+    });
+
+    const filteredExpenses = expenses.filter((e) => {
+      if (dateFromStart || dateToEnd) {
+        if (!inDateRange(e.date, dateFromStart, dateToEnd)) return false;
+      }
+      const cat = cats.get(e.categoryId) as Category | undefined;
+      if (!matchesSearch(search, e.vendor, e.notes, cat?.name)) return false;
+      return true;
+    });
+
     const rawEntries: Omit<LedgerEntry, 'balance'>[] = [
-      ...incomes.map((i) => ({
+      ...filteredIncomes.map((i) => ({
         id: `income-${i.id}`,
         referenceId: i.id,
         date: i.date.toISOString(),
         type: 'INCOME' as const,
-        description: i.source || i.notes || i.category.name,
-        category: i.category.name,
+        description: i.source || i.notes || cats.get(i.categoryId)?.name || '',
+        category: cats.get(i.categoryId)?.name || 'Unknown',
         categoryId: i.categoryId,
         debit: 0,
         credit: Number(i.amount),
-        createdBy: i.createdBy.name,
+        createdBy: users.get(i.createdById)?.name || 'Unknown',
       })),
-      ...expenses.map((e) => ({
+      ...filteredExpenses.map((e) => ({
         id: `expense-${e.id}`,
         referenceId: e.id,
         date: e.date.toISOString(),
         type: 'EXPENSE' as const,
-        description: e.vendor || e.notes || e.category.name,
-        category: e.category.name,
+        description: e.vendor || e.notes || cats.get(e.categoryId)?.name || '',
+        category: cats.get(e.categoryId)?.name || 'Unknown',
         categoryId: e.categoryId,
         debit: Number(e.amount),
         credit: 0,
-        createdBy: e.createdBy.name,
+        createdBy: users.get(e.createdById)?.name || 'Unknown',
       })),
     ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
@@ -122,12 +118,10 @@ export const ledgerService = {
     const totalExpense = rawEntries.reduce((s, e) => s + e.debit, 0);
     const closingBalance = openingBalance + totalIncome - totalExpense;
 
-    const total = withBalance.length;
-    const start = (page - 1) * limit;
-    const paginated = withBalance.slice(start, start + limit);
+    const paged = paginate(withBalance, page, limit);
 
     return {
-      entries: paginated,
+      entries: paged.items,
       summary: {
         openingBalance,
         totalIncome,
@@ -135,10 +129,10 @@ export const ledgerService = {
         netMovement: totalIncome - totalExpense,
         closingBalance,
       },
-      total,
+      total: paged.total,
       page,
       limit,
-      totalPages: Math.ceil(total / limit),
+      totalPages: paged.totalPages,
     };
   },
 

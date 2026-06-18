@@ -1,41 +1,48 @@
-import prisma from '../lib/prisma';
+import { AuditLog, Setting, User } from '../types/models';
+import { COL, create, findMany, findOne, getUserMap, paginate, sortBy, update } from '../lib/firestore';
 
 export const auditService = {
   async list(filters: { page?: number; limit?: number; userId?: string }) {
     const { page = 1, limit = 50, userId } = filters;
-    const where = userId ? { userId } : {};
 
-    const [items, total] = await Promise.all([
-      prisma.auditLog.findMany({
-        where,
-        include: { user: { select: { id: true, name: true, email: true, role: true } } },
-        orderBy: { createdAt: 'desc' },
-        skip: (page - 1) * limit,
-        take: limit,
-      }),
-      prisma.auditLog.count({ where }),
-    ]);
+    let items = await findMany<AuditLog>(COL.auditLogs, (log) => !userId || log.userId === userId);
+    items = sortBy(items, 'createdAt', 'desc');
+    const paged = paginate(items, page, limit);
+    const userMap = await getUserMap(paged.items.map((i) => i.userId).filter(Boolean) as string[]);
 
-    return { items, total, page, limit, totalPages: Math.ceil(total / limit) };
+    return {
+      ...paged,
+      items: paged.items.map((log) => ({
+        ...log,
+        user: log.userId
+          ? {
+              id: log.userId,
+              name: userMap.get(log.userId)?.name || 'Unknown',
+              email: userMap.get(log.userId)?.email || '',
+              role: (userMap.get(log.userId) as User | undefined)?.role,
+            }
+          : null,
+      })),
+    };
   },
 };
 
 export const settingsService = {
   async get(key: string) {
-    const setting = await prisma.setting.findUnique({ where: { key } });
+    const setting = await findOne<Setting>(COL.settings, 'key', key);
     return setting?.value ?? null;
   },
 
   async getAll() {
-    const settings = await prisma.setting.findMany();
+    const settings = await findMany<Setting>(COL.settings);
     return Object.fromEntries(settings.map((s) => [s.key, s.value]));
   },
 
   async set(key: string, value: unknown) {
-    return prisma.setting.upsert({
-      where: { key },
-      create: { key, value: value as object },
-      update: { value: value as object },
-    });
+    const existing = await findOne<Setting>(COL.settings, 'key', key);
+    if (existing) {
+      return update<Setting>(COL.settings, existing.id, { value: value as Record<string, unknown> });
+    }
+    return create<Setting>(COL.settings, { key, value: value as Record<string, unknown> });
   },
 };

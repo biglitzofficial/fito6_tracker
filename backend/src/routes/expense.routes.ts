@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { authenticate, AuthRequest, adminOnly } from '../middleware/auth';
 import { auditLog } from '../middleware/auditLog';
 import { upload } from '../middleware/upload';
+import { uploadFile } from '../lib/storage';
 import { expenseService } from '../services/expense.service';
 import { asyncHandler, sendSuccess } from '../utils/response';
 
@@ -53,9 +54,14 @@ router.post(
       isRecurring: req.body.isRecurring === 'true',
       recurringDay: req.body.recurringDay ? parseInt(req.body.recurringDay) : undefined,
     });
+    let attachment: string | undefined;
+    if (req.file) {
+      const uploaded = await uploadFile(req.file.buffer, req.file.originalname, req.file.mimetype);
+      attachment = uploaded.path;
+    }
     const item = await expenseService.create({
       ...data,
-      attachment: req.file?.filename,
+      attachment,
       createdById: req.user!.userId,
     });
     sendSuccess(res, item, 201);
@@ -70,7 +76,10 @@ router.put(
   asyncHandler(async (req, res) => {
     const body = { ...req.body };
     if (body.amount) body.amount = parseFloat(body.amount);
-    if (req.file) body.attachment = req.file.filename;
+    if (req.file) {
+      const uploaded = await uploadFile(req.file.buffer, req.file.originalname, req.file.mimetype);
+      body.attachment = uploaded.path;
+    }
     const item = await expenseService.update(req.params.id, body);
     sendSuccess(res, item);
   })

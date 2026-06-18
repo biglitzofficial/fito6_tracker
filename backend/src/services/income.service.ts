@@ -1,5 +1,18 @@
-import { Prisma, Role } from '@prisma/client';
-import prisma from '../lib/prisma';
+import { Income, Category } from '../types/models';
+import {
+  COL,
+  create,
+  findMany,
+  getById,
+  getCategoryMap,
+  getUserMap,
+  inDateRange,
+  matchesSearch,
+  paginate,
+  remove,
+  sortBy,
+  update,
+} from '../lib/firestore';
 import { AppError } from '../utils/response';
 
 interface IncomeFilters {
@@ -11,45 +24,43 @@ interface IncomeFilters {
   limit?: number;
 }
 
+async function withRelations(items: Income[]) {
+  const categoryMap = await getCategoryMap(items.map((i) => i.categoryId));
+  const userMap = await getUserMap(items.map((i) => i.createdById));
+
+  return items.map((item) => ({
+    ...item,
+    amount: Number(item.amount),
+    category: categoryMap.get(item.categoryId) as Category,
+    createdBy: {
+      id: item.createdById,
+      name: userMap.get(item.createdById)?.name || 'Unknown',
+    },
+  }));
+}
+
 export const incomeService = {
   async list(filters: IncomeFilters) {
     const { search, categoryId, dateFrom, dateTo, page = 1, limit = 20 } = filters;
-    const where: Prisma.IncomeWhereInput = {};
+    const from = dateFrom ? new Date(dateFrom) : undefined;
+    const to = dateTo ? new Date(dateTo) : undefined;
 
-    if (categoryId) where.categoryId = categoryId;
-    if (dateFrom || dateTo) {
-      where.date = {};
-      if (dateFrom) where.date.gte = new Date(dateFrom);
-      if (dateTo) where.date.lte = new Date(dateTo);
-    }
-    if (search) {
-      where.OR = [
-        { source: { contains: search, mode: 'insensitive' } },
-        { notes: { contains: search, mode: 'insensitive' } },
-      ];
-    }
+    let items = await findMany<Income>(COL.income, (item) => {
+      if (categoryId && item.categoryId !== categoryId) return false;
+      if (!inDateRange(item.date, from, to)) return false;
+      if (!matchesSearch(search, item.source, item.notes)) return false;
+      return true;
+    });
 
-    const [items, total] = await Promise.all([
-      prisma.income.findMany({
-        where,
-        include: { category: true, createdBy: { select: { id: true, name: true } } },
-        orderBy: { date: 'desc' },
-        skip: (page - 1) * limit,
-        take: limit,
-      }),
-      prisma.income.count({ where }),
-    ]);
-
-    return { items, total, page, limit, totalPages: Math.ceil(total / limit) };
+    items = sortBy(items, 'date', 'desc');
+    const paged = paginate(items, page, limit);
+    return { ...paged, items: await withRelations(paged.items) };
   },
 
   async getById(id: string) {
-    const income = await prisma.income.findUnique({
-      where: { id },
-      include: { category: true, createdBy: { select: { id: true, name: true } } },
-    });
+    const income = await getById<Income>(COL.income, id);
     if (!income) throw new AppError(404, 'Income record not found');
-    return income;
+    return (await withRelations([income]))[0];
   },
 
   async create(data: {
@@ -61,42 +72,40 @@ export const incomeService = {
     attachment?: string;
     createdById: string;
   }) {
-    return prisma.income.create({
-      data: {
-        amount: data.amount,
-        categoryId: data.categoryId,
-        source: data.source,
-        date: new Date(data.date),
-        notes: data.notes,
-        attachment: data.attachment,
-        createdById: data.createdById,
-      },
-      include: { category: true },
+    const income = await create<Income>(COL.income, {
+      amount: data.amount,
+      categoryId: data.categoryId,
+      source: data.source,
+      date: new Date(data.date),
+      notes: data.notes,
+      attachment: data.attachment,
+      createdById: data.createdById,
     });
+    return (await withRelations([income]))[0];
   },
 
-  async update(id: string, data: Partial<{
-    amount: number;
-    categoryId: string;
-    source: string;
-    date: string;
-    notes: string;
-    attachment: string;
-  }>) {
+  async update(
+    id: string,
+    data: Partial<{
+      amount: number;
+      categoryId: string;
+      source: string;
+      date: string;
+      notes: string;
+      attachment: string;
+    }>
+  ) {
     await incomeService.getById(id);
-    return prisma.income.update({
-      where: { id },
-      data: {
-        ...data,
-        date: data.date ? new Date(data.date) : undefined,
-      },
-      include: { category: true },
+    const income = await update<Income>(COL.income, id, {
+      ...data,
+      date: data.date ? new Date(data.date) : undefined,
     });
+    return (await withRelations([income]))[0];
   },
 
   async delete(id: string) {
     await incomeService.getById(id);
-    await prisma.income.delete({ where: { id } });
+    await remove(COL.income, id);
     return { message: 'Income deleted' };
   },
 };

@@ -1,27 +1,27 @@
-import { NotificationType, Prisma } from '@prisma/client';
-import prisma from '../lib/prisma';
+import { NotificationType, Role } from '../types/enums';
+import { Notification, User } from '../types/models';
+import { COL, create, findMany, sortBy, sumAmounts, update } from '../lib/firestore';
 
 export const notificationService = {
   async list(userId: string, unreadOnly = false) {
-    return prisma.notification.findMany({
-      where: { userId, ...(unreadOnly ? { isRead: false } : {}) },
-      orderBy: { createdAt: 'desc' },
-      take: 50,
+    const items = await findMany<Notification>(COL.notifications, (n) => {
+      if (n.userId !== userId) return false;
+      if (unreadOnly && n.isRead) return false;
+      return true;
     });
+    return sortBy(items, 'createdAt', 'desc').slice(0, 50);
   },
 
   async markRead(id: string, userId: string) {
-    return prisma.notification.updateMany({
-      where: { id, userId },
-      data: { isRead: true },
-    });
+    const notification = (await findMany<Notification>(COL.notifications, (n) => n.id === id && n.userId === userId))[0];
+    if (notification) await update<Notification>(COL.notifications, id, { isRead: true });
+    return { count: notification ? 1 : 0 };
   },
 
   async markAllRead(userId: string) {
-    return prisma.notification.updateMany({
-      where: { userId, isRead: false },
-      data: { isRead: true },
-    });
+    const unread = await findMany<Notification>(COL.notifications, (n) => n.userId === userId && !n.isRead);
+    await Promise.all(unread.map((n) => update<Notification>(COL.notifications, n.id, { isRead: true })));
+    return { count: unread.length };
   },
 
   async create(data: {
@@ -31,27 +31,26 @@ export const notificationService = {
     message: string;
     metadata?: Record<string, unknown>;
   }) {
-    return prisma.notification.create({
-      data: {
-        ...data,
-        metadata: data.metadata as Prisma.InputJsonValue | undefined,
-      },
+    return create<Notification>(COL.notifications, {
+      ...data,
+      isRead: false,
     });
   },
 
   async generateSystemNotifications() {
-    const admins = await prisma.user.findMany({ where: { role: 'ADMIN', isActive: true } });
+    const admins = await findMany<User>(COL.users, (u) => u.role === Role.ADMIN && u.isActive);
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    const [monthlyExpense, monthlyIncome, pendingTasks] = await Promise.all([
-      prisma.expense.aggregate({ where: { date: { gte: startOfMonth } }, _sum: { amount: true } }),
-      prisma.income.aggregate({ where: { date: { gte: startOfMonth } }, _sum: { amount: true } }),
-      prisma.task.count({ where: { status: 'PENDING' } }),
+    const [incomes, expenses, tasks] = await Promise.all([
+      findMany<{ amount: number; date: Date }>(COL.income, (i) => i.date >= startOfMonth),
+      findMany<{ amount: number; date: Date }>(COL.expenses, (e) => e.date >= startOfMonth),
+      findMany<{ status: string }>(COL.tasks, (t) => t.status === 'PENDING'),
     ]);
 
-    const expense = Number(monthlyExpense._sum.amount || 0);
-    const income = Number(monthlyIncome._sum.amount || 0);
+    const income = sumAmounts(incomes, startOfMonth);
+    const expense = sumAmounts(expenses, startOfMonth);
+    const pendingTasks = tasks.length;
 
     for (const admin of admins) {
       if (expense > income * 0.8) {

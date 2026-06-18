@@ -1,13 +1,13 @@
 import app from './app';
 import { config } from './config';
-import prisma from './lib/prisma';
+import { pingFirebase } from './lib/firebase';
 
 async function start() {
   try {
-    await prisma.$connect();
-    console.log('Database connected');
+    await pingFirebase();
+    console.log('Firebase connected');
   } catch (err) {
-    console.error('Database warmup failed:', (err as Error).message);
+    console.error('Firebase warmup failed:', (err as Error).message);
   }
 
   app.listen(config.port, () => {
@@ -17,9 +17,8 @@ async function start() {
 
 start();
 
-async function shutdown(signal: string) {
+function shutdown(signal: string) {
   console.log(`${signal} received, shutting down...`);
-  await prisma.$disconnect();
   process.exit(0);
 }
 

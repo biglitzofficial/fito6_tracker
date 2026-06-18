@@ -4,6 +4,8 @@ dist/
 build/
 .env
 .env.local
+firebase-service-account.json
+*firebase-adminsdk*.json
 *.log
 uploads/
 .DS_Store

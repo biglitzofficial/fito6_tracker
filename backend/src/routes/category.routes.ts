@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { CategoryType } from '@prisma/client';
+import { CategoryType } from '../types/enums';
 import { authenticate, adminOnly } from '../middleware/auth';
 import { auditLog } from '../middleware/auditLog';
 import { categoryService } from '../services/category.service';

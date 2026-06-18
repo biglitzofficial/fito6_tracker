@@ -8,7 +8,8 @@ A full-stack SaaS application for gyms and small businesses to track income, exp
 |-------|------------|
 | Frontend | Next.js 15 (App Router), Tailwind CSS v4, shadcn/ui, Recharts, Zustand, React Hook Form + Zod |
 | Backend | Node.js, Express.js 5, JWT Authentication |
-| Database | PostgreSQL, Prisma ORM |
+| Database | Firebase Firestore |
+| File Storage | Firebase Storage |
 | DevOps | Docker, Docker Compose |
 
 ## Features
@@ -37,7 +38,7 @@ cp .env.example .env
 # Set strong values for POSTGRES_PASSWORD, JWT_SECRET (32+ chars), FRONTEND_URL, NEXT_PUBLIC_API_URL
 ```
 
-For cloud databases (e.g. Neon), set both `DATABASE_URL` (pooled) and `DIRECT_URL` (direct) in `backend/.env`.
+For Firebase, copy `backend/.env.example` to `backend/.env` and add your service account credentials.
 
 ### 2. Start services
 

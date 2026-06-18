@@ -1,11 +1,10 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { DocumentType } from '@prisma/client';
-import path from 'path';
+import { DocumentType } from '../types/enums';
 import { authenticate, AuthRequest, adminOnly } from '../middleware/auth';
 import { upload } from '../middleware/upload';
 import { documentService } from '../services/document.service';
-import { config } from '../config';
+import { uploadFile, getSignedDownloadUrl } from '../lib/storage';
 import { asyncHandler, sendSuccess } from '../utils/response';
 
 const router = Router();
@@ -33,11 +32,13 @@ router.post(
       .object({ type: z.nativeEnum(DocumentType), category: z.string().optional() })
       .parse(req.body);
 
+    const uploaded = await uploadFile(req.file.buffer, req.file.originalname, req.file.mimetype);
+
     const doc = await documentService.create({
       name: req.file.originalname,
       type,
-      filePath: req.file.filename,
-      fileSize: req.file.size,
+      filePath: uploaded.path,
+      fileSize: uploaded.size,
       mimeType: req.file.mimetype,
       category,
       uploadedById: req.user!.userId,
@@ -50,7 +51,8 @@ router.get(
   '/:id/download',
   asyncHandler(async (req, res) => {
     const doc = await documentService.getById(req.params.id);
-    res.download(path.join(config.uploadDir, doc.filePath), doc.name);
+    const url = await getSignedDownloadUrl(doc.filePath, doc.name);
+    res.redirect(url);
   })
 );
 

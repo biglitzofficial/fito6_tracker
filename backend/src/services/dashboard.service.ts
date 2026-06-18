@@ -1,53 +1,45 @@
-import { Role, Prisma } from '@prisma/client';
-import prisma from '../lib/prisma';
-import { hashPassword } from '../utils/password';
-import { AppError } from '../utils/response';
+import { Role } from '../types/enums';
+import { Attendance, Expense, Income, Task, User } from '../types/models';
+import {
+  COL,
+  findMany,
+  getById,
+  inDateRange,
+  sortBy,
+  startOfDay,
+  sumAmounts,
+} from '../lib/firestore';
 
 export const dashboardService = {
   async getAdminDashboard() {
     const now = new Date();
-    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfDay = startOfDayDate(now);
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
 
-    const [
-      todayIncome,
-      monthlyIncome,
-      todayExpense,
-      monthlyExpense,
-      totalStaff,
-      attendanceToday,
-      monthlyTrends,
-      healthMetrics,
-    ] = await Promise.all([
-      prisma.income.aggregate({
-        where: { date: { gte: startOfDay } },
-        _sum: { amount: true },
-      }),
-      prisma.income.aggregate({
-        where: { date: { gte: startOfMonth } },
-        _sum: { amount: true },
-      }),
-      prisma.expense.aggregate({
-        where: { date: { gte: startOfDay } },
-        _sum: { amount: true },
-      }),
-      prisma.expense.aggregate({
-        where: { date: { gte: startOfMonth } },
-        _sum: { amount: true },
-      }),
-      prisma.user.count({ where: { role: Role.STAFF, isActive: true } }),
-      prisma.attendance.count({ where: { date: startOfDay, checkIn: { not: null } } }),
-      getMonthlyTrends(sixMonthsAgo),
-      getHealthMetrics(),
+    const [incomes, expenses, staff, attendance] = await Promise.all([
+      findMany<Income>(COL.income),
+      findMany<Expense>(COL.expenses),
+      findMany<User>(COL.users, (u) => u.role === Role.STAFF && u.isActive),
+      findMany<Attendance>(COL.attendance),
     ]);
 
-    const todayRev = Number(todayIncome._sum.amount || 0);
-    const monthRev = Number(monthlyIncome._sum.amount || 0);
-    const todayExp = Number(todayExpense._sum.amount || 0);
-    const monthExp = Number(monthlyExpense._sum.amount || 0);
+    const todayRev = sumAmounts(incomes, startOfDay);
+    const monthRev = sumAmounts(incomes, startOfMonth);
+    const todayExp = sumAmounts(expenses, startOfDay);
+    const monthExp = sumAmounts(expenses, startOfMonth);
     const netProfit = monthRev - monthExp;
     const cashFlow = todayRev - todayExp;
+
+    const attendanceToday = attendance.filter(
+      (a) => a.date.getTime() === startOfDay.getTime() && a.checkIn
+    ).length;
+
+    const monthlyTrends = getMonthlyTrends(
+      incomes.filter((i) => i.date >= sixMonthsAgo),
+      expenses.filter((e) => e.date >= sixMonthsAgo)
+    );
+    const healthMetrics = getHealthMetrics(incomes, expenses, attendance, staff.length, now);
 
     return {
       cards: {
@@ -57,7 +49,7 @@ export const dashboardService = {
         monthlyExpense: monthExp,
         netProfit,
         cashFlow,
-        totalStaff,
+        totalStaff: staff.length,
         attendanceToday,
       },
       charts: monthlyTrends,
@@ -67,51 +59,41 @@ export const dashboardService = {
   },
 
   async getStaffDashboard(userId: string) {
-    const now = new Date();
-    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfDay = startOfDayDate(new Date());
 
     const [todayAttendance, tasks, recentIncome, recentExpense] = await Promise.all([
-      prisma.attendance.findUnique({
-        where: { userId_date: { userId, date: startOfDay } },
-      }),
-      prisma.task.findMany({
-        where: { assignedToId: userId, status: { not: 'COMPLETED' } },
-        orderBy: { dueDate: 'asc' },
-        take: 5,
-      }),
-      prisma.income.findMany({
-        where: { createdById: userId },
-        orderBy: { createdAt: 'desc' },
-        take: 5,
-        include: { category: true },
-      }),
-      prisma.expense.findMany({
-        where: { createdById: userId },
-        orderBy: { createdAt: 'desc' },
-        take: 5,
-        include: { category: true },
-      }),
+      getById<Attendance>(COL.attendance, `${userId}_${startOfDay.toISOString().split('T')[0]}`),
+      findMany<Task>(COL.tasks, (t) => t.assignedToId === userId && t.status !== 'COMPLETED'),
+      findMany<Income>(COL.income, (i) => i.createdById === userId),
+      findMany<Expense>(COL.expenses, (e) => e.createdById === userId),
     ]);
+
+    const sortedTasks = sortBy(tasks, 'dueDate', 'asc').slice(0, 5);
+    const incomeItems = sortBy(recentIncome, 'createdAt', 'desc').slice(0, 5);
+    const expenseItems = sortBy(recentExpense, 'createdAt', 'desc').slice(0, 5);
 
     return {
       attendanceStatus: todayAttendance
-        ? { checkedIn: !!todayAttendance.checkIn, checkedOut: !!todayAttendance.checkOut, isLate: todayAttendance.isLate }
+        ? {
+            checkedIn: !!todayAttendance.checkIn,
+            checkedOut: !!todayAttendance.checkOut,
+            isLate: todayAttendance.isLate,
+          }
         : { checkedIn: false, checkedOut: false, isLate: false },
-      assignedTasks: tasks,
-      recentIncome,
-      recentExpense,
+      assignedTasks: sortedTasks,
+      recentIncome: incomeItems,
+      recentExpense: expenseItems,
       pendingTasksCount: tasks.length,
     };
   },
 };
 
-async function getMonthlyTrends(since: Date) {
-  const [incomes, expenses] = await Promise.all([
-    prisma.income.findMany({ where: { date: { gte: since } }, select: { date: true, amount: true } }),
-    prisma.expense.findMany({ where: { date: { gte: since } }, select: { date: true, amount: true } }),
-  ]);
+function startOfDayDate(date: Date) {
+  return startOfDay(date);
+}
 
-  const group = (items: { date: Date; amount: unknown }[]) => {
+function getMonthlyTrends(incomes: Income[], expenses: Expense[]) {
+  const group = (items: { date: Date; amount: number | unknown }[]) => {
     const map = new Map<string, number>();
     for (const item of items) {
       const d = new Date(item.date);
@@ -140,40 +122,38 @@ async function getMonthlyTrends(since: Date) {
   };
 }
 
-async function getHealthMetrics() {
-  const now = new Date();
+function getHealthMetrics(
+  incomes: Income[],
+  expenses: Expense[],
+  attendance: Attendance[],
+  staffCount: number,
+  now: Date
+) {
   const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+  const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
 
-  const [thisMonthIncome, lastMonthIncome, thisMonthExpense, lastMonthExpense, attendanceRate] =
-    await Promise.all([
-      prisma.income.aggregate({ where: { date: { gte: thisMonth } }, _sum: { amount: true } }),
-      prisma.income.aggregate({
-        where: { date: { gte: lastMonth, lte: lastMonthEnd } },
-        _sum: { amount: true },
-      }),
-      prisma.expense.aggregate({ where: { date: { gte: thisMonth } }, _sum: { amount: true } }),
-      prisma.expense.aggregate({
-        where: { date: { gte: lastMonth, lte: lastMonthEnd } },
-        _sum: { amount: true },
-      }),
-      prisma.attendance.count({ where: { date: { gte: thisMonth }, checkIn: { not: null } } }),
-    ]);
+  const thisMonthRevenue = sumAmounts(incomes, thisMonth);
+  const lastMonthRevenue = sumAmounts(incomes, lastMonth, lastMonthEnd);
+  const thisMonthExpense = sumAmounts(expenses, thisMonth);
+  const lastMonthExpense = sumAmounts(expenses, lastMonth, lastMonthEnd);
 
-  const staffCount = await prisma.user.count({ where: { role: Role.STAFF, isActive: true } });
+  const attendanceRate = attendance.filter(
+    (a) => inDateRange(a.date, thisMonth) && a.checkIn
+  ).length;
+
   const workingDays = Math.min(now.getDate(), 22);
 
   return {
-    thisMonthRevenue: Number(thisMonthIncome._sum.amount || 0),
-    lastMonthRevenue: Number(lastMonthIncome._sum.amount || 0),
-    thisMonthExpense: Number(thisMonthExpense._sum.amount || 0),
-    lastMonthExpense: Number(lastMonthExpense._sum.amount || 0),
+    thisMonthRevenue,
+    lastMonthRevenue,
+    thisMonthExpense,
+    lastMonthExpense,
     attendanceRate: staffCount > 0 ? attendanceRate / (staffCount * workingDays) : 0,
   };
 }
 
-function calculateHealthScore(metrics: Awaited<ReturnType<typeof getHealthMetrics>>) {
+function calculateHealthScore(metrics: ReturnType<typeof getHealthMetrics>) {
   let score = 0;
 
   const revenueGrowth =
@@ -201,7 +181,7 @@ function calculateHealthScore(metrics: Awaited<ReturnType<typeof getHealthMetric
   return { score: finalScore, rating };
 }
 
-function generateInsights(metrics: Awaited<ReturnType<typeof getHealthMetrics>>) {
+function generateInsights(metrics: ReturnType<typeof getHealthMetrics>) {
   const insights: string[] = [];
 
   if (metrics.lastMonthRevenue > 0) {

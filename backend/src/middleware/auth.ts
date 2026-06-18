@@ -1,8 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
-import { Role } from '@prisma/client';
+import { Role } from '../types/enums';
+import { User } from '../types/models';
+import { COL, getById } from '../lib/firestore';
 import { verifyToken, JwtPayload } from '../utils/jwt';
 import { AppError } from '../utils/response';
-import prisma from '../lib/prisma';
 
 export interface AuthRequest extends Request {
   user?: JwtPayload & { name: string };
@@ -18,11 +19,7 @@ export async function authenticate(req: AuthRequest, _res: Response, next: NextF
     const token = authHeader.split(' ')[1];
     const payload = verifyToken(token);
 
-    const user = await prisma.user.findUnique({
-      where: { id: payload.userId },
-      select: { id: true, email: true, role: true, name: true, isActive: true },
-    });
-
+    const user = await getById<User>(COL.users, payload.userId);
     if (!user || !user.isActive) {
       throw new AppError(401, 'Invalid or inactive account');
     }

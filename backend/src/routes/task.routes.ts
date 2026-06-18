@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { TaskPriority, TaskStatus } from '@prisma/client';
+import { TaskPriority, TaskStatus } from '../types/enums';
 import { authenticate, AuthRequest, adminOnly } from '../middleware/auth';
 import { auditLog } from '../middleware/auditLog';
 import { taskService } from '../services/task.service';

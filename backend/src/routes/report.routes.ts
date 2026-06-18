@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { ReportFormat } from '@prisma/client';
+import { ReportFormat } from '../types/enums';
 import { authenticate, AuthRequest, adminOnly } from '../middleware/auth';
 import { auditLog } from '../middleware/auditLog';
 import { reportService } from '../services/report.service';

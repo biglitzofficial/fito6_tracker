@@ -3,7 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { config } from './config';
-import prisma from './lib/prisma';
+import { pingFirebase } from './lib/firebase';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 
 import authRoutes from './routes/auth.routes';
@@ -55,10 +55,10 @@ app.use(express.urlencoded({ extended: true }));
 
 app.get('/api/health', async (_req, res) => {
   try {
-    await prisma.$queryRaw`SELECT 1`;
+    await pingFirebase();
     res.json({ success: true, status: 'ok', timestamp: new Date().toISOString() });
   } catch {
-    res.status(503).json({ success: false, status: 'degraded', error: 'Database unavailable' });
+    res.status(503).json({ success: false, status: 'degraded', error: 'Firebase unavailable' });
   }
 });
 

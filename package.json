@@ -12,7 +12,6 @@
     "dev:frontend": "cd frontend && npm run dev",
     "docker:up": "docker compose up --build",
     "docker:down": "docker compose down",
-    "db:migrate": "cd backend && npx prisma migrate deploy",
     "db:seed": "cd backend && npm run db:seed",
     "db:bootstrap-admin": "cd backend && npm run db:bootstrap-admin"
   }
