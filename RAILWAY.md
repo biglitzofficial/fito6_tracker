@@ -20,8 +20,9 @@ Deploy the backend, frontend, and PostgreSQL database from the [GitHub repo](htt
 
 1. **+ Create** → **GitHub Repo** → same repo (or duplicate the connected repo service).
 2. Open service **Settings**:
-   - **Root Directory:** `backend`
-   - **Config file:** `backend/railway.toml` (auto-detected)
+   - **Root Directory:** `backend` (required — do not leave as `/`)
+   - **Config file:** `/backend/railway.toml`
+   - **Custom Start Command** (if Railpack error): `npm run start:prod`
 3. **Variables** (Settings → Variables):
 
 | Variable | Value |
@@ -57,8 +58,9 @@ Remove `ADMIN_PASSWORD` from variables after bootstrap.
 
 1. **+ Create** → **GitHub Repo** → same repo.
 2. **Settings**:
-   - **Root Directory:** `frontend`
-   - **Config file:** `frontend/railway.toml`
+   - **Root Directory:** `frontend` (required)
+   - **Config file:** `/frontend/railway.toml`
+   - **Custom Start Command** (if needed): `npm run start`
 3. **Variables:**
 
 | Variable | Value |
@@ -99,6 +101,7 @@ Push to `master` on GitHub — Railway redeploys automatically if GitHub integra
 
 | Issue | Fix |
 |-------|-----|
+| **No start command detected** | Set **Root Directory** to `backend` or `frontend`. Add **Custom Start Command**: `npm run start:prod` (backend) or `npm run start` (frontend). |
 | CORS error in browser | Set `FRONTEND_URL` to exact frontend URL with `https://`, redeploy backend |
 | API calls wrong host | Rebuild frontend after fixing `NEXT_PUBLIC_API_URL` |
 | `JWT_SECRET` error | Use 32+ char random secret |
