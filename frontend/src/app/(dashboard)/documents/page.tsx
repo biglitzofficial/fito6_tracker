@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, Suspense } from 'react';
+import { useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Upload, Download, Search, FileText } from 'lucide-react';
 import { Header } from '@/components/layout/header';
@@ -11,6 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { api } from '@/lib/api';
+import { useApiQuery, useInvalidate } from '@/hooks/use-api-query';
+import { useDebounce } from '@/hooks/use-debounce';
+import { queryKeys } from '@/lib/query-keys';
 import type { PaginatedResponse } from '@/types';
 import { formatDate } from '@/lib/utils';
 
@@ -26,18 +29,18 @@ interface Document {
 
 function DocumentsContent() {
   const searchParams = useSearchParams();
-  const [docs, setDocs] = useState<Document[]>([]);
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search);
   const [showUpload, setShowUpload] = useState(searchParams.get('action') === 'upload');
   const [uploading, setUploading] = useState(false);
   const [docType, setDocType] = useState('INVOICE');
+  const invalidate = useInvalidate();
 
-  const fetchDocs = async () => {
-    const res = await api.get<PaginatedResponse<Document>>(`/documents?search=${search}`);
-    setDocs(res.items);
-  };
-
-  useEffect(() => { fetchDocs(); }, [search]);
+  const { data: docsRes } = useApiQuery<PaginatedResponse<Document>>(
+    queryKeys.documents(debouncedSearch),
+    `/documents?search=${debouncedSearch}`
+  );
+  const docs = docsRes?.items ?? [];
 
   const handleUpload = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -48,7 +51,7 @@ function DocumentsContent() {
       await api.post('/documents/upload', formData);
       form.reset();
       setShowUpload(false);
-      fetchDocs();
+      invalidate(queryKeys.documents(debouncedSearch));
     } finally {
       setUploading(false);
     }

@@ -1,12 +1,14 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Header } from '@/components/layout/header';
 import { AdminGuard } from '@/components/auth/admin-guard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatCard } from '@/components/dashboard/stat-card';
 import { DashboardChart } from '@/components/dashboard/charts';
 import { api } from '@/lib/api';
+import { queryKeys } from '@/lib/query-keys';
 import { formatCurrency } from '@/lib/utils';
 import { DollarSign, TrendingDown, TrendingUp, Wallet } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
@@ -18,13 +20,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 const COLORS = ['#6366f1', '#8b5cf6', '#22c55e', '#f59e0b', '#ef4444', '#06b6d4'];
 
 export default function AnalyticsPage() {
-  const [revenue, setRevenue] = useState<{ period: string; data: { period: string; total: number }[] } | null>(null);
-  const [expense, setExpense] = useState<{ categoryBreakdown: { categoryName: string; total: number }[]; monthlyTrends: { month: string; total: number }[] } | null>(null);
-  const [profit, setProfit] = useState<{ grossProfit: number; netProfit: number; profitMargin: number; yearly: { revenue: number; expense: number; profit: number } } | null>(null);
-  const [cashFlow, setCashFlow] = useState<{ month: string; income: number; expense: number; net: number }[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-
   const today = useMemo(() => new Date().toISOString().split('T')[0], []);
   const monthStart = useMemo(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0], []);
 
@@ -42,24 +37,29 @@ export default function AnalyticsPage() {
     return params.toString();
   }, [preset, dateFrom, dateTo]);
 
-  useEffect(() => {
-    setLoading(true);
-    setError('');
-    Promise.all([
-      api.get<{ period: string; data: { period: string; total: number }[] }>(`/analytics/revenue?${query}`),
-      api.get<{ categoryBreakdown: { categoryName: string; total: number }[]; monthlyTrends: { month: string; total: number }[] }>(`/analytics/expense?${query}`),
-      api.get<{ grossProfit: number; netProfit: number; profitMargin: number; yearly: { revenue: number; expense: number; profit: number } }>(`/analytics/profit?${preset === 'custom' ? `dateFrom=${dateFrom}&dateTo=${dateTo}` : ''}`),
-      api.get<{ month: string; income: number; expense: number; net: number }[]>(`/analytics/cash-flow?${query}`),
-    ])
-      .then(([rev, exp, prof, cf]) => {
-        setRevenue(rev);
-        setExpense(exp);
-        setProfit(prof);
-        setCashFlow(cf);
-      })
-      .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load analytics'))
-      .finally(() => setLoading(false));
-  }, [query, preset, dateFrom, dateTo]);
+  const profitQuery = preset === 'custom' ? `dateFrom=${dateFrom}&dateTo=${dateTo}` : '';
+  const analyticsKey = `${query}|${profitQuery}`;
+
+  const { data: analyticsData, isLoading, error: queryError } = useQuery({
+    queryKey: queryKeys.analytics(analyticsKey),
+    queryFn: async () => {
+      const [revenue, expense, profit, cashFlow] = await Promise.all([
+        api.get<{ period: string; data: { period: string; total: number }[] }>(`/analytics/revenue?${query}`),
+        api.get<{ categoryBreakdown: { categoryName: string; total: number }[]; monthlyTrends: { month: string; total: number }[] }>(`/analytics/expense?${query}`),
+        api.get<{ grossProfit: number; netProfit: number; profitMargin: number; yearly: { revenue: number; expense: number; profit: number } }>(`/analytics/profit?${profitQuery}`),
+        api.get<{ month: string; income: number; expense: number; net: number }[]>(`/analytics/cash-flow?${query}`),
+      ]);
+      return { revenue, expense, profit, cashFlow };
+    },
+    staleTime: 60_000,
+  });
+
+  const revenue = analyticsData?.revenue ?? null;
+  const expense = analyticsData?.expense ?? null;
+  const profit = analyticsData?.profit ?? null;
+  const cashFlow = analyticsData?.cashFlow ?? [];
+  const loading = isLoading && !analyticsData;
+  const error = queryError instanceof Error ? queryError.message : '';
 
   return (
     <AdminGuard>

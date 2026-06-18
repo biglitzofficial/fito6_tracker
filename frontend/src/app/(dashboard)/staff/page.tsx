@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, Suspense } from 'react';
+import { useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -14,6 +14,8 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { api } from '@/lib/api';
+import { useApiQuery, useInvalidate } from '@/hooks/use-api-query';
+import { queryKeys } from '@/lib/query-keys';
 import type { User } from '@/types';
 import { formatCurrency, formatDate } from '@/lib/utils';
 
@@ -28,23 +30,19 @@ const schema = z.object({
 
 function StaffContent() {
   const searchParams = useSearchParams();
-  const [staff, setStaff] = useState<User[]>([]);
   const [showForm, setShowForm] = useState(searchParams.get('action') === 'add');
-  const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const invalidate = useInvalidate();
+
+  const { data: staff = [], isLoading } = useApiQuery<User[]>(
+    queryKeys.staffList,
+    '/staff?includeInactive=true'
+  );
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<z.infer<typeof schema>>({
     resolver: zodResolver(schema),
     defaultValues: { joiningDate: new Date().toISOString().split('T')[0], salary: 0 },
   });
-
-  const fetchStaff = async () => {
-    const data = await api.get<User[]>('/staff?includeInactive=true');
-    setStaff(data);
-    setLoading(false);
-  };
-
-  useEffect(() => { fetchStaff(); }, []);
 
   const onSubmit = async (data: z.infer<typeof schema>) => {
     setSubmitting(true);
@@ -52,7 +50,7 @@ function StaffContent() {
       await api.post('/staff', data);
       reset();
       setShowForm(false);
-      fetchStaff();
+      invalidate(queryKeys.staffList);
     } finally {
       setSubmitting(false);
     }
@@ -60,7 +58,7 @@ function StaffContent() {
 
   const disableStaff = async (id: string) => {
     await api.patch(`/staff/${id}/disable`);
-    fetchStaff();
+    invalidate(queryKeys.staffList);
   };
 
   return (
@@ -92,7 +90,7 @@ function StaffContent() {
         )}
 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {loading ? (
+          {isLoading && !staff.length ? (
             [...Array(3)].map((_, i) => <div key={i} className="glass rounded-2xl h-40 animate-pulse" />)
           ) : staff.map((member) => (
             <Card key={member.id}>

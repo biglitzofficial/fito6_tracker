@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, Suspense } from 'react';
+import { useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -15,8 +15,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { api } from '@/lib/api';
+import { useApiQuery, useCategories, useInvalidate } from '@/hooks/use-api-query';
+import { useDebounce } from '@/hooks/use-debounce';
+import { queryKeys } from '@/lib/query-keys';
 import { useAuthStore, isAdmin } from '@/stores/auth.store';
-import type { Expense, Category, PaginatedResponse } from '@/types';
+import type { Expense, PaginatedResponse } from '@/types';
 import { formatCurrency, formatDate } from '@/lib/utils';
 
 const schema = z.object({
@@ -32,29 +35,24 @@ const schema = z.object({
 function ExpenseContent() {
   const searchParams = useSearchParams();
   const { user } = useAuthStore();
-  const [items, setItems] = useState<Expense[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search);
   const [showForm, setShowForm] = useState(searchParams.get('action') === 'add');
-  const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const invalidate = useInvalidate();
 
   const { register, handleSubmit, reset, control, formState: { errors } } = useForm<z.infer<typeof schema>>({
     resolver: zodResolver(schema),
     defaultValues: { date: new Date().toISOString().split('T')[0], isRecurring: false },
   });
 
-  const fetchData = async () => {
-    const [expRes, catRes] = await Promise.all([
-      api.get<PaginatedResponse<Expense>>(`/expenses?search=${search}`),
-      api.get<Category[]>('/categories?type=EXPENSE'),
-    ]);
-    setItems(expRes.items);
-    setCategories(catRes.filter((c) => c.parentId));
-    setLoading(false);
-  };
-
-  useEffect(() => { fetchData(); }, [search]);
+  const { data: allCategories = [] } = useCategories('EXPENSE');
+  const categories = allCategories.filter((c) => c.parentId);
+  const { data: expenseRes, isLoading } = useApiQuery<PaginatedResponse<Expense>>(
+    queryKeys.expenses(debouncedSearch),
+    `/expenses?search=${debouncedSearch}`
+  );
+  const items = expenseRes?.items ?? [];
 
   const onSubmit = async (data: z.infer<typeof schema>) => {
     setSubmitting(true);
@@ -62,7 +60,8 @@ function ExpenseContent() {
       await api.post('/expenses', data);
       reset();
       setShowForm(false);
-      fetchData();
+      invalidate(queryKeys.expenses(debouncedSearch));
+      invalidate(queryKeys.dashboard);
     } finally {
       setSubmitting(false);
     }
@@ -71,7 +70,8 @@ function ExpenseContent() {
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this record?')) return;
     await api.delete(`/expenses/${id}`);
-    fetchData();
+    invalidate(queryKeys.expenses(debouncedSearch));
+    invalidate(queryKeys.dashboard);
   };
 
   return (
@@ -149,7 +149,7 @@ function ExpenseContent() {
 
         <Card>
           <CardContent className="p-0">
-            {loading ? (
+            {isLoading && !expenseRes ? (
               <div className="p-8 text-center text-muted-foreground">Loading...</div>
             ) : (
               <div className="overflow-x-auto">

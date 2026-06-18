@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -15,6 +15,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { api } from '@/lib/api';
+import { useApiQuery, useInvalidate } from '@/hooks/use-api-query';
+import { queryKeys } from '@/lib/query-keys';
 import { useAuthStore, isAdmin } from '@/stores/auth.store';
 import type { Task, User, PaginatedResponse } from '@/types';
 import { formatDate } from '@/lib/utils';
@@ -29,37 +31,37 @@ const createSchema = z.object({
 
 export default function TasksPage() {
   const { user } = useAuthStore();
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [staff, setStaff] = useState<User[]>([]);
   const [showForm, setShowForm] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const invalidate = useInvalidate();
+  const admin = isAdmin(user);
+
+  const { data: taskRes, isLoading } = useApiQuery<PaginatedResponse<Task>>(
+    queryKeys.tasks,
+    '/tasks',
+    { enabled: !!user }
+  );
+  const { data: staff = [] } = useApiQuery<User[]>(
+    queryKeys.staff,
+    '/staff',
+    { enabled: !!user && admin, staleTime: 2 * 60_000 }
+  );
+  const tasks = taskRes?.items ?? [];
 
   const { register, handleSubmit, reset, control, formState: { errors } } = useForm<z.infer<typeof createSchema>>({
     resolver: zodResolver(createSchema),
     defaultValues: { priority: 'MEDIUM' },
   });
 
-  const fetchTasks = async () => {
-    const res = await api.get<PaginatedResponse<Task>>('/tasks');
-    setTasks(res.items);
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    fetchTasks();
-    if (isAdmin(user)) api.get<User[]>('/staff').then(setStaff);
-  }, [user]);
-
   const onSubmit = async (data: z.infer<typeof createSchema>) => {
     await api.post('/tasks', data);
     reset();
     setShowForm(false);
-    fetchTasks();
+    invalidate(queryKeys.tasks);
   };
 
   const updateStatus = async (id: string, status: string) => {
     await api.patch(`/tasks/${id}/status`, { status });
-    fetchTasks();
+    invalidate(queryKeys.tasks);
   };
 
   const priorityColor = (p: string) => p === 'HIGH' ? 'destructive' : p === 'MEDIUM' ? 'warning' : 'secondary';
@@ -127,7 +129,7 @@ export default function TasksPage() {
         )}
 
         <div className="grid gap-4">
-          {loading ? (
+          {isLoading && !taskRes ? (
             <div className="text-center text-muted-foreground py-8">Loading...</div>
           ) : tasks.map((task) => (
             <Card key={task.id}>
@@ -161,7 +163,7 @@ export default function TasksPage() {
               </CardContent>
             </Card>
           ))}
-          {!tasks.length && !loading && <div className="text-center text-muted-foreground py-8">No tasks found</div>}
+          {!tasks.length && !isLoading && <div className="text-center text-muted-foreground py-8">No tasks found</div>}
         </div>
       </div>
     </div>

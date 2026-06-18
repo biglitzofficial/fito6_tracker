@@ -1,12 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { LogIn, LogOut, Clock, AlertTriangle } from 'lucide-react';
 import { Header } from '@/components/layout/header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { api } from '@/lib/api';
+import { queryKeys } from '@/lib/query-keys';
 import { useAuthStore, isAdmin } from '@/stores/auth.store';
 import { formatDateTime } from '@/lib/utils';
 
@@ -21,31 +23,36 @@ interface AttendanceRecord {
 
 export default function AttendancePage() {
   const { user } = useAuthStore();
-  const [today, setToday] = useState<AttendanceRecord | null>(null);
-  const [history, setHistory] = useState<AttendanceRecord[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const admin = isAdmin(user);
   const [actionLoading, setActionLoading] = useState(false);
 
-  const fetchData = async () => {
-    const [todayRes, historyRes] = await Promise.all([
-      api.get<AttendanceRecord | null>('/attendance/today'),
-      isAdmin(user) ? api.get<AttendanceRecord[]>('/attendance/report') : api.get<AttendanceRecord[]>('/attendance/history'),
-    ]);
-    setToday(todayRes);
-    setHistory(historyRes);
-    setLoading(false);
-  };
+  const { data, isLoading } = useQuery({
+    queryKey: queryKeys.attendance(admin),
+    queryFn: async () => {
+      const [todayRes, historyRes] = await Promise.all([
+        api.get<AttendanceRecord | null>('/attendance/today'),
+        admin ? api.get<AttendanceRecord[]>('/attendance/report') : api.get<AttendanceRecord[]>('/attendance/history'),
+      ]);
+      return { today: todayRes, history: historyRes };
+    },
+    enabled: !!user,
+    staleTime: 30_000,
+  });
 
-  useEffect(() => { if (user) fetchData(); }, [user]);
+  const today = data?.today ?? null;
+  const history = data?.history ?? [];
+
+  const refresh = () => queryClient.invalidateQueries({ queryKey: queryKeys.attendance(admin) });
 
   const checkIn = async () => {
     setActionLoading(true);
-    try { await api.post('/attendance/check-in'); fetchData(); } finally { setActionLoading(false); }
+    try { await api.post('/attendance/check-in'); refresh(); } finally { setActionLoading(false); }
   };
 
   const checkOut = async () => {
     setActionLoading(true);
-    try { await api.post('/attendance/check-out'); fetchData(); } finally { setActionLoading(false); }
+    try { await api.post('/attendance/check-out'); refresh(); } finally { setActionLoading(false); }
   };
 
   return (
@@ -85,7 +92,7 @@ export default function AttendancePage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            {loading ? (
+            {isLoading && !data ? (
               <div className="p-8 text-center text-muted-foreground">Loading...</div>
             ) : (
               <div className="overflow-x-auto">

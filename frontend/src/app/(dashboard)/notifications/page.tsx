@@ -1,30 +1,31 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { Bell, CheckCheck } from 'lucide-react';
 import { Header } from '@/components/layout/header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { api } from '@/lib/api';
+import { useApiQuery, useInvalidate } from '@/hooks/use-api-query';
+import { queryKeys } from '@/lib/query-keys';
 import type { Notification } from '@/types';
 import { formatDateTime } from '@/lib/utils';
 
 export default function NotificationsPage() {
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-
-  const fetchNotifications = () => api.get<Notification[]>('/notifications').then(setNotifications);
-
-  useEffect(() => { fetchNotifications(); }, []);
+  const invalidate = useInvalidate();
+  const { data: notifications = [] } = useApiQuery<Notification[]>(
+    queryKeys.notifications,
+    '/notifications'
+  );
 
   const markAllRead = async () => {
     await api.patch('/notifications/read-all');
-    fetchNotifications();
+    invalidate(queryKeys.notifications);
   };
 
   const markRead = async (id: string) => {
     await api.patch(`/notifications/${id}/read`);
-    fetchNotifications();
+    invalidate(queryKeys.notifications);
   };
 
   const typeVariant = (type: string) => {
@@ -63,7 +64,7 @@ export default function NotificationsPage() {
               </CardContent>
             </Card>
           ))}
-          {!notifications.length && <div className="text-center text-muted-foreground py-8">No notifications</div>}
+          {!notifications.length && <p className="text-center text-muted-foreground py-8">No notifications</p>}
         </div>
       </div>
     </div>

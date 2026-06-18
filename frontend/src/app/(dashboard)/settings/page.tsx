@@ -8,14 +8,22 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { api } from '@/lib/api';
+import { useApiQuery, useInvalidate } from '@/hooks/use-api-query';
+import { queryKeys } from '@/lib/query-keys';
 
 export default function SettingsPage() {
+  const invalidate = useInvalidate();
+  const { data: loadedSettings } = useApiQuery<Record<string, { name?: string; code?: string; symbol?: string; hour?: number; minute?: number }>>(
+    queryKeys.settings,
+    '/settings',
+    { staleTime: 5 * 60_000 }
+  );
   const [settings, setSettings] = useState<Record<string, { name?: string; code?: string; symbol?: string; hour?: number; minute?: number }>>({});
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    api.get<Record<string, unknown>>('/settings').then((data) => setSettings(data as any));
-  }, []);
+    if (loadedSettings) setSettings(loadedSettings);
+  }, [loadedSettings]);
 
   const save = async () => {
     setSaving(true);

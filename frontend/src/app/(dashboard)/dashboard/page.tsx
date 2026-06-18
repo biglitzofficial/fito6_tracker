@@ -1,6 +1,5 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
   DollarSign,
@@ -21,23 +20,21 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { api } from '@/lib/api';
+import { useApiQuery } from '@/hooks/use-api-query';
+import { queryKeys } from '@/lib/query-keys';
 import { useAuthStore, isAdmin } from '@/stores/auth.store';
 import type { AdminDashboard, StaffDashboard } from '@/types';
 import { formatCurrency, formatDate } from '@/lib/utils';
 
 export default function DashboardPage() {
   const { user } = useAuthStore();
-  const [data, setData] = useState<AdminDashboard | StaffDashboard | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { data, isLoading } = useApiQuery<AdminDashboard | StaffDashboard>(
+    queryKeys.dashboard,
+    '/dashboard',
+    { staleTime: 30_000 }
+  );
 
-  useEffect(() => {
-    api.get<AdminDashboard | StaffDashboard>('/dashboard')
-      .then(setData)
-      .catch(() => setData(null))
-      .finally(() => setLoading(false));
-  }, []);
-
-  if (loading) {
+  if (isLoading && !data) {
     return (
       <div>
         <Header title="Dashboard" subtitle="Loading..." />

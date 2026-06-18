@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, Suspense } from 'react';
+import { useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -15,8 +15,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { api } from '@/lib/api';
+import { useApiQuery, useCategories, useInvalidate } from '@/hooks/use-api-query';
+import { useDebounce } from '@/hooks/use-debounce';
+import { queryKeys } from '@/lib/query-keys';
 import { useAuthStore, isAdmin } from '@/stores/auth.store';
-import type { Income, Category, PaginatedResponse } from '@/types';
+import type { Income, PaginatedResponse } from '@/types';
 import { formatCurrency, formatDate } from '@/lib/utils';
 
 const schema = z.object({
@@ -30,29 +33,23 @@ const schema = z.object({
 function IncomeContent() {
   const searchParams = useSearchParams();
   const { user } = useAuthStore();
-  const [items, setItems] = useState<Income[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search);
   const [showForm, setShowForm] = useState(searchParams.get('action') === 'add');
-  const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const invalidate = useInvalidate();
 
   const { register, handleSubmit, reset, control, formState: { errors } } = useForm<z.infer<typeof schema>>({
     resolver: zodResolver(schema),
     defaultValues: { date: new Date().toISOString().split('T')[0] },
   });
 
-  const fetchData = async () => {
-    const [incomeRes, catRes] = await Promise.all([
-      api.get<PaginatedResponse<Income>>(`/income?search=${search}`),
-      api.get<Category[]>('/categories?type=INCOME'),
-    ]);
-    setItems(incomeRes.items);
-    setCategories(catRes);
-    setLoading(false);
-  };
-
-  useEffect(() => { fetchData(); }, [search]);
+  const { data: categories = [] } = useCategories('INCOME');
+  const { data: incomeRes, isLoading } = useApiQuery<PaginatedResponse<Income>>(
+    queryKeys.income(debouncedSearch),
+    `/income?search=${debouncedSearch}`
+  );
+  const items = incomeRes?.items ?? [];
 
   const onSubmit = async (data: z.infer<typeof schema>) => {
     setSubmitting(true);
@@ -60,7 +57,8 @@ function IncomeContent() {
       await api.post('/income', data);
       reset();
       setShowForm(false);
-      fetchData();
+      invalidate(queryKeys.income(debouncedSearch));
+      invalidate(queryKeys.dashboard);
     } finally {
       setSubmitting(false);
     }
@@ -69,7 +67,8 @@ function IncomeContent() {
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this record?')) return;
     await api.delete(`/income/${id}`);
-    fetchData();
+    invalidate(queryKeys.income(debouncedSearch));
+    invalidate(queryKeys.dashboard);
   };
 
   return (
@@ -139,7 +138,7 @@ function IncomeContent() {
 
         <Card>
           <CardContent className="p-0">
-            {loading ? (
+            {isLoading && !incomeRes ? (
               <div className="p-8 text-center text-muted-foreground">Loading...</div>
             ) : (
               <div className="overflow-x-auto">

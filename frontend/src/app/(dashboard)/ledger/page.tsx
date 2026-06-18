@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useState, useMemo } from 'react';
 import { Download, Search, BookOpen, ArrowDownLeft, ArrowUpRight, Wallet } from 'lucide-react';
 import { Header } from '@/components/layout/header';
 import { AdminGuard } from '@/components/auth/admin-guard';
@@ -12,6 +12,9 @@ import { Badge } from '@/components/ui/badge';
 import { StatCard } from '@/components/dashboard/stat-card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { api } from '@/lib/api';
+import { useApiQuery } from '@/hooks/use-api-query';
+import { useDebounce } from '@/hooks/use-debounce';
+import { queryKeys } from '@/lib/query-keys';
 import { formatCurrency, formatDate } from '@/lib/utils';
 
 interface LedgerEntry {
@@ -46,35 +49,29 @@ export default function LedgerPage() {
   const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
   const today = new Date().toISOString().split('T')[0];
 
-  const [data, setData] = useState<LedgerResponse | null>(null);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search);
   const [type, setType] = useState<'ALL' | 'INCOME' | 'EXPENSE'>('ALL');
   const [dateFrom, setDateFrom] = useState(monthStart);
   const [dateTo, setDateTo] = useState(today);
   const [page, setPage] = useState(1);
 
-  const fetchLedger = useCallback(async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams({
-        page: String(page),
-        limit: '50',
-        type,
-        ...(search ? { search } : {}),
-        ...(dateFrom ? { dateFrom } : {}),
-        ...(dateTo ? { dateTo } : {}),
-      });
-      const result = await api.get<LedgerResponse>(`/ledger?${params}`);
-      setData(result);
-    } finally {
-      setLoading(false);
-    }
-  }, [page, type, search, dateFrom, dateTo]);
+  const ledgerParams = useMemo(() => {
+    const params = new URLSearchParams({
+      page: String(page),
+      limit: '50',
+      type,
+      ...(debouncedSearch ? { search: debouncedSearch } : {}),
+      ...(dateFrom ? { dateFrom } : {}),
+      ...(dateTo ? { dateTo } : {}),
+    });
+    return params.toString();
+  }, [page, type, debouncedSearch, dateFrom, dateTo]);
 
-  useEffect(() => {
-    fetchLedger();
-  }, [fetchLedger]);
+  const { data, isLoading } = useApiQuery<LedgerResponse>(
+    queryKeys.ledger(ledgerParams),
+    `/ledger?${ledgerParams}`
+  );
 
   const exportCsv = async () => {
     const params = new URLSearchParams({
@@ -151,7 +148,7 @@ export default function LedgerPage() {
 
           <Card>
             <CardContent className="p-0">
-              {loading ? (
+              {isLoading && !data ? (
                 <div className="p-8 text-center text-muted-foreground">Loading ledger...</div>
               ) : (
                 <div className="overflow-x-auto">

@@ -1,0 +1,16 @@
+export const queryKeys = {
+  dashboard: ['dashboard'] as const,
+  income: (search: string) => ['income', search] as const,
+  expenses: (search: string) => ['expenses', search] as const,
+  categories: (type: string) => ['categories', type] as const,
+  staff: ['staff'] as const,
+  staffList: ['staff', 'all'] as const,
+  tasks: ['tasks'] as const,
+  attendance: (isAdmin: boolean) => ['attendance', isAdmin] as const,
+  documents: (search: string) => ['documents', search] as const,
+  ledger: (params: string) => ['ledger', params] as const,
+  notifications: ['notifications'] as const,
+  auditLogs: ['audit-logs'] as const,
+  settings: ['settings'] as const,
+  analytics: (query: string) => ['analytics', query] as const,
+};

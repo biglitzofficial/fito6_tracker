@@ -1,11 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { Header } from '@/components/layout/header';
 import { AdminGuard } from '@/components/auth/admin-guard';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { api } from '@/lib/api';
+import { useApiQuery } from '@/hooks/use-api-query';
+import { queryKeys } from '@/lib/query-keys';
 import { formatDateTime } from '@/lib/utils';
 import type { PaginatedResponse } from '@/types';
 
@@ -21,15 +21,11 @@ interface AuditLog {
 }
 
 export default function AuditLogsPage() {
-  const [logs, setLogs] = useState<AuditLog[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    api.get<PaginatedResponse<AuditLog>>('/audit-logs').then((res) => {
-      setLogs(res.items);
-      setLoading(false);
-    });
-  }, []);
+  const { data, isLoading } = useApiQuery<PaginatedResponse<AuditLog>>(
+    queryKeys.auditLogs,
+    '/audit-logs'
+  );
+  const logs = data?.items ?? [];
 
   return (
     <AdminGuard>
@@ -38,7 +34,7 @@ export default function AuditLogsPage() {
         <div className="p-6">
           <Card>
             <CardContent className="p-0">
-              {loading ? (
+              {isLoading && !data ? (
                 <div className="p-8 text-center text-muted-foreground">Loading...</div>
               ) : (
                 <div className="overflow-x-auto">
