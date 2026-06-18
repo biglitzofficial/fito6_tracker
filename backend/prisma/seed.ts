@@ -27,29 +27,28 @@ const DEFAULT_SETTINGS: { key: string; value: Record<string, unknown> }[] = [
   { key: 'fiscal_year_start', value: { month: 4 } },
 ];
 
+async function ensureCategory(name: string, type: CategoryType, parentId?: string) {
+  const existing = await prisma.category.findFirst({
+    where: { name, type, parentId: parentId ?? null },
+  });
+  if (existing) return existing;
+
+  return prisma.category.create({
+    data: { name, type, ...(parentId ? { parentId } : {}) },
+  });
+}
+
 async function seedCategories() {
   for (const name of INCOME_CATEGORIES) {
-    await prisma.category.upsert({
-      where: { name_type_parentId: { name, type: CategoryType.INCOME, parentId: null } },
-      create: { name, type: CategoryType.INCOME },
-      update: {},
-    });
+    await ensureCategory(name, CategoryType.INCOME);
   }
 
   for (const group of EXPENSE_CATEGORIES) {
-    const parent = await prisma.category.upsert({
-      where: { name_type_parentId: { name: group.name, type: CategoryType.EXPENSE, parentId: null } },
-      create: { name: group.name, type: CategoryType.EXPENSE },
-      update: {},
-    });
+    const parent = await ensureCategory(group.name, CategoryType.EXPENSE);
 
     if (group.children) {
       for (const child of group.children) {
-        await prisma.category.upsert({
-          where: { name_type_parentId: { name: child, type: CategoryType.EXPENSE, parentId: parent.id } },
-          create: { name: child, type: CategoryType.EXPENSE, parentId: parent.id },
-          update: {},
-        });
+        await ensureCategory(child, CategoryType.EXPENSE, parent.id);
       }
     }
   }
