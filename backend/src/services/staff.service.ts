@@ -2,7 +2,9 @@ import { Role } from '../types/enums';
 import { User, Staff } from '../types/models';
 import { COL, create, findMany, findOne, getById, sortBy, update } from '../lib/firestore';
 import { hashPassword, validatePassword } from '../utils/password';
+import { sendStaffWelcomeEmail } from '../lib/email';
 import { AppError } from '../utils/response';
+import { config } from '../config';
 
 async function withStaff(user: User & { id: string }) {
   const staff = await findOne<Staff>(COL.staff, 'userId', user.id);
@@ -32,6 +34,7 @@ export const staffService = {
     salary: number;
     joiningDate: string;
     password: string;
+    sendWelcomeEmail?: boolean;
   }) {
     const existing = await findOne<User>(COL.users, 'email', data.email.toLowerCase());
     if (existing) throw new AppError(400, 'Email already exists');
@@ -58,7 +61,26 @@ export const staffService = {
       joiningDate: new Date(data.joiningDate),
     });
 
+    if (data.sendWelcomeEmail && config.smtp.configured) {
+      sendStaffWelcomeEmail(user.email, user.name, data.password).catch(console.error);
+    }
+
     return { ...user, staff: { ...staff, salary: Number(staff.salary) } };
+  },
+
+  async setPassword(id: string, password: string) {
+    const user = await staffService.getById(id);
+    if (!user.isActive) throw new AppError(400, 'Cannot reset password for disabled staff');
+
+    try {
+      validatePassword(password);
+    } catch (e) {
+      throw new AppError(400, e instanceof Error ? e.message : 'Invalid password');
+    }
+
+    const hashed = await hashPassword(password);
+    await update<User>(COL.users, id, { password: hashed });
+    return { message: 'Staff password updated' };
   },
 
   async update(

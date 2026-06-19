@@ -16,6 +16,11 @@ const createSchema = z.object({
   salary: z.number().min(0),
   joiningDate: z.string(),
   password: z.string().min(8),
+  sendWelcomeEmail: z.boolean().optional(),
+});
+
+const passwordSchema = z.object({
+  password: z.string().min(8),
 });
 
 router.get(
@@ -50,6 +55,16 @@ router.put(
   asyncHandler(async (req, res) => {
     const staff = await staffService.update(req.params.id, req.body);
     sendSuccess(res, staff);
+  })
+);
+
+router.patch(
+  '/:id/password',
+  auditLog('RESET_STAFF_PASSWORD', 'Staff'),
+  asyncHandler(async (req, res) => {
+    const { password } = passwordSchema.parse(req.body);
+    const result = await staffService.setPassword(req.params.id, password);
+    sendSuccess(res, result);
   })
 );
 

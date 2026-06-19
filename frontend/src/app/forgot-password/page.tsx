@@ -16,6 +16,7 @@ const schema = z.object({ email: z.string().email() });
 export default function ForgotPasswordPage() {
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [devResetUrl, setDevResetUrl] = useState('');
   const { register, handleSubmit, formState: { errors } } = useForm<z.infer<typeof schema>>({
     resolver: zodResolver(schema),
   });
@@ -23,10 +24,12 @@ export default function ForgotPasswordPage() {
   const onSubmit = async (data: z.infer<typeof schema>) => {
     setLoading(true);
     try {
-      await api.post('/auth/forgot-password', data);
+      const result = await api.post<{ message: string; resetUrl?: string }>('/auth/forgot-password', data);
+      if (result.resetUrl) setDevResetUrl(result.resetUrl);
       setSent(true);
-    } catch {
+    } catch (e) {
       setSent(true);
+      if (e instanceof Error) setDevResetUrl(e.message);
     } finally {
       setLoading(false);
     }
@@ -42,17 +45,27 @@ export default function ForgotPasswordPage() {
         <div className="glass-strong rounded-2xl p-8 space-y-6">
           <div>
             <h1 className="text-2xl font-bold">Forgot Password</h1>
-            <p className="text-muted-foreground text-sm mt-1">Enter your email to receive a reset link</p>
+            <p className="text-muted-foreground text-sm mt-1">
+              Admin accounts only. Staff passwords are set by your administrator.
+            </p>
           </div>
 
           {sent ? (
-            <div className="rounded-xl bg-success/10 border border-success/20 px-4 py-3 text-sm text-success">
-              If an account exists, a reset link has been sent to your email.
+            <div className="space-y-3">
+              <div className="rounded-xl bg-success/10 border border-success/20 px-4 py-3 text-sm text-success">
+                If an admin account exists for that email, a reset link has been sent.
+              </div>
+              {devResetUrl && devResetUrl.startsWith('http') && (
+                <div className="rounded-xl bg-muted px-4 py-3 text-xs break-all">
+                  <p className="font-medium mb-1">Dev reset link (SMTP not configured):</p>
+                  <a href={devResetUrl} className="text-primary hover:underline">{devResetUrl}</a>
+                </div>
+              )}
             </div>
           ) : (
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email">Admin email</Label>
                 <Input id="email" type="email" {...register('email')} />
                 {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
               </div>

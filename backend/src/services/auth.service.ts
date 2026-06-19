@@ -3,6 +3,7 @@ import { User, Staff } from '../types/models';
 import { COL, create, findMany, findOne, getById, update } from '../lib/firestore';
 import { hashPassword, comparePassword, validatePassword } from '../utils/password';
 import { signToken, generateResetToken } from '../utils/jwt';
+import { sendPasswordResetEmail } from '../lib/email';
 import { AppError } from '../utils/response';
 import { config } from '../config';
 
@@ -36,17 +37,40 @@ export const authService = {
   },
 
   async forgotPassword(email: string) {
+    const genericMessage =
+      'If an admin account exists for this email, a reset link has been sent.';
+
     const user = await findOne<User>(COL.users, 'email', email.toLowerCase());
-    if (!user) return { message: 'If account exists, reset link sent' };
+    if (!user || !user.isActive || user.role !== Role.ADMIN) {
+      return { message: genericMessage };
+    }
 
     const resetToken = generateResetToken();
     const resetTokenExp = new Date(Date.now() + 3600000);
 
     await update<User>(COL.users, user.id, { resetToken, resetTokenExp });
 
+    if (config.smtp.configured) {
+      try {
+        await sendPasswordResetEmail(user.email, user.name, resetToken);
+      } catch (err) {
+        console.error('Failed to send reset email:', err);
+        if (config.isProduction) {
+          throw new AppError(503, 'Unable to send reset email. Try again later.');
+        }
+      }
+    } else if (config.isProduction) {
+      console.error('SMTP not configured — cannot send admin password reset email');
+      throw new AppError(503, 'Password reset email is not configured.');
+    }
+
     return {
-      message: 'If account exists, reset link sent',
-      resetToken: !config.isProduction ? resetToken : undefined,
+      message: genericMessage,
+      resetToken: !config.isProduction && !config.smtp.configured ? resetToken : undefined,
+      resetUrl:
+        !config.isProduction && !config.smtp.configured
+          ? `${config.frontendUrl}/reset-password?token=${encodeURIComponent(resetToken)}`
+          : undefined,
     };
   },
 
