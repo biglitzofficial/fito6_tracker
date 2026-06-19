@@ -61,7 +61,7 @@ export const staffService = {
       joiningDate: new Date(data.joiningDate),
     });
 
-    if (data.sendWelcomeEmail && config.smtp.configured) {
+    if (data.sendWelcomeEmail && config.email.configured) {
       sendStaffWelcomeEmail(user.email, user.name, data.password).catch(console.error);
     }
 

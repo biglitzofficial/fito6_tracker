@@ -49,7 +49,7 @@ export const authService = {
 
     await update<User>(COL.users, user.id, { resetToken, resetTokenExp });
 
-    if (config.smtp.configured) {
+    if (config.email.configured) {
       try {
         await sendPasswordResetEmail(user.email, user.name, resetToken);
       } catch (err) {
@@ -59,15 +59,15 @@ export const authService = {
         }
       }
     } else if (config.isProduction) {
-      console.error('SMTP not configured — cannot send password reset email');
+      console.error('Email not configured — cannot send password reset email');
       throw new AppError(503, 'Password reset email is not configured.');
     }
 
     return {
       message: genericMessage,
-      resetToken: !config.isProduction && !config.smtp.configured ? resetToken : undefined,
+      resetToken: !config.isProduction && !config.email.configured ? resetToken : undefined,
       resetUrl:
-        !config.isProduction && !config.smtp.configured
+        !config.isProduction && !config.email.configured
           ? `${config.frontendUrl}/reset-password?token=${encodeURIComponent(resetToken)}`
           : undefined,
     };

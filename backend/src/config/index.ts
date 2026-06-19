@@ -110,6 +110,20 @@ export const config = {
     secure: process.env.SMTP_SECURE === 'true',
     configured: !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS),
   },
+  email: {
+    resendApiKey: process.env.RESEND_API_KEY || '',
+    from:
+      process.env.RESEND_FROM ||
+      process.env.SMTP_FROM ||
+      process.env.SMTP_USER ||
+      'Fito6 <onboarding@resend.dev>',
+    configured: !!(
+      process.env.RESEND_API_KEY ||
+      (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS)
+    ),
+    smtpConfigured: !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS),
+    resendConfigured: !!process.env.RESEND_API_KEY,
+  },
   firebase: {
     serviceAccountPath: firebaseServiceAccountPath,
     serviceAccountJson: firebaseServiceAccountJson,
