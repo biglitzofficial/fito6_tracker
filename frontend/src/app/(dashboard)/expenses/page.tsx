@@ -172,7 +172,7 @@ function ExpenseContent() {
                     {items.map((item) => (
                       <tr key={item.id} className="border-b border-border/50 hover:bg-accent/30">
                         <td className="p-4">{formatDate(item.date)}</td>
-                        <td className="p-4"><Badge variant="secondary">{item.category.name}</Badge></td>
+                        <td className="p-4"><Badge variant="secondary">{item.category?.name ?? 'Unknown'}</Badge></td>
                         <td className="p-4 text-muted-foreground">{item.vendor || '—'}</td>
                         <td className="p-4 text-right font-medium text-destructive">{formatCurrency(Number(item.amount))}</td>
                         <td className="p-4">{item.isRecurring ? <Badge variant="warning">Yes</Badge> : '—'}</td>

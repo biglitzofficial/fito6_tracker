@@ -4,6 +4,8 @@ import {
   COL,
   findMany,
   getById,
+  getCategoryMap,
+  getUserMap,
   inDateRange,
   sortBy,
   startOfDay,
@@ -72,6 +74,43 @@ export const dashboardService = {
     const incomeItems = sortBy(recentIncome, 'createdAt', 'desc').slice(0, 5);
     const expenseItems = sortBy(recentExpense, 'createdAt', 'desc').slice(0, 5);
 
+    const categoryMap = await getCategoryMap([
+      ...incomeItems.map((i) => i.categoryId),
+      ...expenseItems.map((e) => e.categoryId),
+    ]);
+    const userMap = await getUserMap([
+      ...incomeItems.map((i) => i.createdById),
+      ...expenseItems.map((e) => e.createdById),
+    ]);
+
+    const mapIncome = (item: Income) => ({
+      ...item,
+      amount: Number(item.amount),
+      category: categoryMap.get(item.categoryId) ?? {
+        id: item.categoryId,
+        name: 'Unknown',
+        type: 'INCOME' as const,
+      },
+      createdBy: {
+        id: item.createdById,
+        name: userMap.get(item.createdById)?.name || 'Unknown',
+      },
+    });
+
+    const mapExpense = (item: Expense) => ({
+      ...item,
+      amount: Number(item.amount),
+      category: categoryMap.get(item.categoryId) ?? {
+        id: item.categoryId,
+        name: 'Unknown',
+        type: 'EXPENSE' as const,
+      },
+      createdBy: {
+        id: item.createdById,
+        name: userMap.get(item.createdById)?.name || 'Unknown',
+      },
+    });
+
     return {
       attendanceStatus: todayAttendance
         ? {
@@ -81,8 +120,8 @@ export const dashboardService = {
           }
         : { checkedIn: false, checkedOut: false, isLate: false },
       assignedTasks: sortedTasks,
-      recentIncome: incomeItems,
-      recentExpense: expenseItems,
+      recentIncome: incomeItems.map(mapIncome),
+      recentExpense: expenseItems.map(mapExpense),
       pendingTasksCount: tasks.length,
     };
   },

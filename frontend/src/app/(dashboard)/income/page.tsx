@@ -160,10 +160,10 @@ function IncomeContent() {
                     {items.map((item) => (
                       <tr key={item.id} className="border-b border-border/50 hover:bg-accent/30 transition-colors">
                         <td className="p-4">{formatDate(item.date)}</td>
-                        <td className="p-4"><Badge variant="secondary">{item.category.name}</Badge></td>
+                        <td className="p-4"><Badge variant="secondary">{item.category?.name ?? 'Unknown'}</Badge></td>
                         <td className="p-4 text-muted-foreground">{item.source || '—'}</td>
                         <td className="p-4 text-right font-medium text-success">{formatCurrency(Number(item.amount))}</td>
-                        <td className="p-4 text-muted-foreground">{item.createdBy.name}</td>
+                        <td className="p-4 text-muted-foreground">{item.createdBy?.name ?? 'Unknown'}</td>
                         {isAdmin(user) && (
                           <td className="p-4 text-right">
                             <Button variant="ghost" size="sm" className="text-destructive" onClick={() => handleDelete(item.id)}>Delete</Button>

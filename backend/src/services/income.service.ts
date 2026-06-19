@@ -31,7 +31,11 @@ async function withRelations(items: Income[]) {
   return items.map((item) => ({
     ...item,
     amount: Number(item.amount),
-    category: categoryMap.get(item.categoryId) as Category,
+    category: categoryMap.get(item.categoryId) ?? {
+      id: item.categoryId,
+      name: 'Unknown',
+      type: 'INCOME' as const,
+    },
     createdBy: {
       id: item.createdById,
       name: userMap.get(item.createdById)?.name || 'Unknown',

@@ -188,7 +188,7 @@ export default function DashboardPage() {
             <CardContent className="space-y-2">
               {staffData.recentIncome.map((item) => (
                 <div key={item.id} className="flex justify-between text-sm py-2 border-b border-border last:border-0">
-                  <span>{item.category.name}</span>
+                  <span>{item.category?.name ?? 'Unknown'}</span>
                   <span className="text-success font-medium">{formatCurrency(Number(item.amount))}</span>
                 </div>
               ))}
@@ -199,7 +199,7 @@ export default function DashboardPage() {
             <CardContent className="space-y-2">
               {staffData.recentExpense.map((item) => (
                 <div key={item.id} className="flex justify-between text-sm py-2 border-b border-border last:border-0">
-                  <span>{item.category.name}</span>
+                  <span>{item.category?.name ?? 'Unknown'}</span>
                   <span className="text-destructive font-medium">{formatCurrency(Number(item.amount))}</span>
                 </div>
               ))}

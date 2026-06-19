@@ -46,7 +46,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     if (!user) fetchProfile();
   }, [hasHydrated, token, user, router, fetchProfile]);
 
-  if (!hasHydrated || !token) {
+  if (!hasHydrated || !token || !user) {
     return (
       <div className="min-h-screen gradient-mesh">
         <main className="pl-64 min-h-screen">
