@@ -7,10 +7,12 @@ interface AuthState {
   user: User | null;
   token: string | null;
   isLoading: boolean;
+  hasHydrated: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   fetchProfile: () => Promise<void>;
   setUser: (user: User | null) => void;
+  setHasHydrated: (hasHydrated: boolean) => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -19,6 +21,7 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       token: null,
       isLoading: false,
+      hasHydrated: false,
 
       login: async (email, password) => {
         set({ isLoading: true });
@@ -50,10 +53,17 @@ export const useAuthStore = create<AuthState>()(
       },
 
       setUser: (user) => set({ user }),
+      setHasHydrated: (hasHydrated) => set({ hasHydrated }),
     }),
     {
       name: 'fito6-auth',
       partialize: (state) => ({ token: state.token, user: state.user }),
+      onRehydrateStorage: () => (state) => {
+        if (state?.token) {
+          localStorage.setItem('token', state.token);
+        }
+        state?.setHasHydrated(true);
+      },
     }
   )
 );

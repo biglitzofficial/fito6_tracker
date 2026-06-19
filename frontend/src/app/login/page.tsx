@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -19,8 +19,16 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>;
 
-export default function LoginPage() {
+function getSafeRedirect(path: string | null) {
+  if (!path || !path.startsWith('/') || path.startsWith('//')) {
+    return '/dashboard';
+  }
+  return path;
+}
+
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { login, isLoading } = useAuthStore();
   const [error, setError] = useState('');
 
@@ -33,7 +41,7 @@ export default function LoginPage() {
     setError('');
     try {
       await login(data.email, data.password);
-      router.push('/dashboard');
+      router.replace(getSafeRedirect(searchParams.get('redirect')));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Login failed');
     }
@@ -80,5 +88,13 @@ export default function LoginPage() {
         </form>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
   );
 }

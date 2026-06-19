@@ -6,15 +6,16 @@ import { useAuthStore, isAdmin } from '@/stores/auth.store';
 
 export function AdminGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const { user } = useAuthStore();
+  const { user, hasHydrated } = useAuthStore();
 
   useEffect(() => {
-    if (user && !isAdmin(user)) {
-      router.push('/dashboard');
+    if (!hasHydrated || !user) return;
+    if (!isAdmin(user)) {
+      router.replace('/dashboard');
     }
-  }, [user, router]);
+  }, [hasHydrated, user, router]);
 
-  if (!user) {
+  if (!hasHydrated || !user) {
     return (
       <div className="p-6 space-y-6 animate-pulse">
         <div className="h-10 w-48 rounded-xl bg-secondary/50" />
