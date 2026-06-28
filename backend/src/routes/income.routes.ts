@@ -63,7 +63,6 @@ router.post(
 
 router.put(
   '/:id',
-  adminOnly,
   auditLog('UPDATE_INCOME', 'Income'),
   upload.single('attachment'),
   asyncHandler(async (req, res) => {

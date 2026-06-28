@@ -14,6 +14,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { QueryState } from '@/components/ui/query-state';
+import { RowHoverActions } from '@/components/ui/row-hover-actions';
 import { CategorySelectField } from '@/components/forms/category-select-field';
 import { AccountSelectField } from '@/components/forms/account-select-field';
 import Link from 'next/link';
@@ -41,6 +42,7 @@ function IncomeContent() {
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounce(search);
   const [showForm, setShowForm] = useState(searchParams.get('action') === 'add');
+  const [editingItem, setEditingItem] = useState<Income | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const invalidate = useInvalidate();
   const { data: entryFieldsData } = useEntryFields();
@@ -73,16 +75,45 @@ function IncomeContent() {
   );
   const items = incomeRes?.items ?? [];
 
+  const openAddForm = () => {
+    setEditingItem(null);
+    reset({ date: new Date().toISOString().split('T')[0] });
+    setShowForm(true);
+  };
+
+  const openEditForm = (item: Income) => {
+    setEditingItem(item);
+    reset({
+      amount: Number(item.amount),
+      categoryId: item.categoryId,
+      accountId: item.accountId || undefined,
+      source: item.source || '',
+      date: item.date.slice(0, 10),
+      notes: item.notes || '',
+    });
+    setShowForm(true);
+  };
+
+  const closeForm = () => {
+    setShowForm(false);
+    setEditingItem(null);
+    reset({ date: new Date().toISOString().split('T')[0] });
+  };
+
   const onSubmit = async (data: z.infer<typeof baseSchema>) => {
     setSubmitting(true);
     try {
-      await api.post('/income', {
+      const payload = {
         ...data,
         categoryId: data.categoryId,
         accountId: fieldConfig.income.paymentMode ? data.accountId : undefined,
-      });
-      reset();
-      setShowForm(false);
+      };
+      if (editingItem) {
+        await api.put(`/income/${editingItem.id}`, payload);
+      } else {
+        await api.post('/income', payload);
+      }
+      closeForm();
       invalidate(queryKeys.income(debouncedSearch));
       invalidate(queryKeys.dashboard);
     } finally {
@@ -106,7 +137,9 @@ function IncomeContent() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input className="pl-10" placeholder="Search income..." value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
-          <Button onClick={() => setShowForm(!showForm)}><Plus className="h-4 w-4" /> Add Income</Button>
+          <Button onClick={() => (showForm && !editingItem ? closeForm() : openAddForm())}>
+            <Plus className="h-4 w-4" /> Add Income
+          </Button>
           <Button variant="outline" asChild>
             <Link href="/entry-fields">Entry Fields</Link>
           </Button>
@@ -114,7 +147,11 @@ function IncomeContent() {
 
         {showForm && (
           <Card className="animate-fade-in">
-            <CardHeader><CardTitle className="text-base">New Income Entry</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle className="text-base">
+                {editingItem ? 'Edit Income Entry' : 'New Income Entry'}
+              </CardTitle>
+            </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit(onSubmit)} className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
@@ -171,9 +208,15 @@ function IncomeContent() {
                 </div>
                 <div className="md:col-span-2 flex gap-3">
                   <Button type="submit" disabled={submitting}>
-                    {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save Income'}
+                    {submitting ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : editingItem ? (
+                      'Save Changes'
+                    ) : (
+                      'Save Income'
+                    )}
                   </Button>
-                  <Button type="button" variant="ghost" onClick={() => setShowForm(false)}>Cancel</Button>
+                  <Button type="button" variant="ghost" onClick={closeForm}>Cancel</Button>
                 </div>
               </form>
             </CardContent>
@@ -199,23 +242,24 @@ function IncomeContent() {
                       <th className="text-left p-4 font-medium">Source</th>
                       <th className="text-right p-4 font-medium">Amount</th>
                       <th className="text-left p-4 font-medium">By</th>
-                      {isAdmin(user) && <th className="text-right p-4 font-medium">Actions</th>}
+                      <th className="text-right p-4 font-medium w-[140px]"> </th>
                     </tr>
                   </thead>
                   <tbody>
                     {items.map((item) => (
-                      <tr key={item.id} className="border-b border-border/50 hover:bg-accent/30 transition-colors">
+                      <tr key={item.id} className="group border-b border-border/50 hover:bg-accent/30 transition-colors">
                         <td className="p-4">{formatDate(item.date)}</td>
                         <td className="p-4"><Badge variant="secondary">{item.category?.name ?? 'Unknown'}</Badge></td>
                         <td className="p-4 text-muted-foreground">{item.account?.name ?? '—'}</td>
                         <td className="p-4 text-muted-foreground">{item.source || '—'}</td>
                         <td className="p-4 text-right font-medium text-success">{formatCurrency(Number(item.amount))}</td>
                         <td className="p-4 text-muted-foreground">{item.createdBy?.name ?? 'Unknown'}</td>
-                        {isAdmin(user) && (
-                          <td className="p-4 text-right">
-                            <Button variant="ghost" size="sm" className="text-destructive" onClick={() => handleDelete(item.id)}>Delete</Button>
-                          </td>
-                        )}
+                        <td className="p-4">
+                          <RowHoverActions
+                            onEdit={() => openEditForm(item)}
+                            onDelete={isAdmin(user) ? () => handleDelete(item.id) : undefined}
+                          />
+                        </td>
                       </tr>
                     ))}
                   </tbody>

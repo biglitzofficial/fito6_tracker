@@ -79,12 +79,20 @@ router.post(
 
 router.put(
   '/:id',
-  adminOnly,
   auditLog('UPDATE_EXPENSE', 'Expense'),
   upload.single('attachment'),
   asyncHandler(async (req, res) => {
     const body = { ...req.body };
     if (body.amount) body.amount = parseFloat(body.amount);
+    if (body.isRecurring !== undefined) {
+      body.isRecurring = body.isRecurring === 'true' || body.isRecurring === true;
+    }
+    if (body.isRecurring === false || body.isRecurring === 'false') {
+      body.isRecurring = false;
+      body.recurringDay = undefined;
+    } else if (body.recurringDay) {
+      body.recurringDay = parseInt(body.recurringDay);
+    }
     if (req.file) {
       const uploaded = await uploadFile(req.file.buffer, req.file.originalname, req.file.mimetype);
       body.attachment = uploaded.path;

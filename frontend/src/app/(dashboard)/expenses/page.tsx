@@ -14,6 +14,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { QueryState } from '@/components/ui/query-state';
+import { RowHoverActions } from '@/components/ui/row-hover-actions';
 import { CategorySelectField } from '@/components/forms/category-select-field';
 import { PartySelectField } from '@/components/forms/party-select-field';
 import Link from 'next/link';
@@ -52,12 +53,18 @@ function isSalaryCategory(name?: string) {
   return !!name && /salary|payroll|wage|staff|maid|cleaning/i.test(name);
 }
 
+function toTimeInputValue(iso: string) {
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
 function ExpenseContent() {
   const searchParams = useSearchParams();
   const { user } = useAuthStore();
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounce(search);
   const [showForm, setShowForm] = useState(searchParams.get('action') === 'add');
+  const [editingItem, setEditingItem] = useState<Expense | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [partyError, setPartyError] = useState('');
   const [attachment, setAttachment] = useState<File | null>(null);
@@ -110,6 +117,53 @@ function ExpenseContent() {
   );
   const items = expenseRes?.items ?? [];
 
+  const openAddForm = () => {
+    setEditingItem(null);
+    setAttachment(null);
+    setPartyError('');
+    reset({
+      date: today,
+      time: defaultTime,
+      periodMonth: suggestExpensePeriodMonth(today),
+      isRecurring: false,
+      recurringDay: '',
+    });
+    setShowForm(true);
+  };
+
+  const openEditForm = (item: Expense) => {
+    setEditingItem(item);
+    setAttachment(null);
+    setPartyError('');
+    reset({
+      amount: Number(item.amount),
+      categoryId: item.categoryId,
+      accountId: item.accountId || undefined,
+      partyId: item.partyId || undefined,
+      date: item.date.slice(0, 10),
+      time: toTimeInputValue(item.date),
+      periodMonth: item.periodMonth || item.date.slice(0, 7),
+      notes: item.notes || '',
+      isRecurring: item.isRecurring,
+      recurringDay: item.recurringDay ?? '',
+    });
+    setShowForm(true);
+  };
+
+  const closeForm = () => {
+    setShowForm(false);
+    setEditingItem(null);
+    setAttachment(null);
+    setPartyError('');
+    reset({
+      date: today,
+      time: defaultTime,
+      periodMonth: suggestExpensePeriodMonth(today),
+      isRecurring: false,
+      recurringDay: '',
+    });
+  };
+
   const categoryName = categories.find((c) => c.id === categoryId)?.name;
   const suggestPartyType = isSalaryCategory(categoryName) ? 'STAFF' as const : 'VENDOR' as const;
 
@@ -146,18 +200,17 @@ function ExpenseContent() {
       if (data.isRecurring) {
         formData.append('isRecurring', 'true');
         if (recurringDay) formData.append('recurringDay', String(recurringDay));
+      } else if (editingItem) {
+        formData.append('isRecurring', 'false');
       }
       if (fieldConfig.expense.attachment && attachment) formData.append('attachment', attachment);
 
-      await api.post('/expenses', formData);
-      reset({
-        date: today,
-        time: defaultTime,
-        periodMonth: suggestExpensePeriodMonth(today),
-        isRecurring: false,
-      });
-      setAttachment(null);
-      setShowForm(false);
+      if (editingItem) {
+        await api.put(`/expenses/${editingItem.id}`, formData);
+      } else {
+        await api.post('/expenses', formData);
+      }
+      closeForm();
       invalidate(queryKeys.expenses(debouncedSearch));
       invalidate(queryKeys.dashboard);
       invalidate(queryKeys.profitLoss(currentPeriodMonth()));
@@ -182,7 +235,9 @@ function ExpenseContent() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input className="pl-10" placeholder="Search expenses..." value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
-          <Button onClick={() => setShowForm(!showForm)}><Plus className="h-4 w-4" /> Add Expense</Button>
+          <Button onClick={() => (showForm && !editingItem ? closeForm() : openAddForm())}>
+            <Plus className="h-4 w-4" /> Add Expense
+          </Button>
           <Button variant="outline" asChild>
             <Link href="/entry-fields">Entry Fields</Link>
           </Button>
@@ -190,7 +245,11 @@ function ExpenseContent() {
 
         {showForm && (
           <Card className="animate-fade-in">
-            <CardHeader><CardTitle className="text-base">Add Expense Entry</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle className="text-base">
+                {editingItem ? 'Edit Expense Entry' : 'Add Expense Entry'}
+              </CardTitle>
+            </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit(onSubmit)} className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
@@ -325,9 +384,15 @@ function ExpenseContent() {
 
                 <div className="md:col-span-2 flex gap-3 pt-2">
                   <Button type="submit" disabled={submitting}>
-                    {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save Expense'}
+                    {submitting ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : editingItem ? (
+                      'Save Changes'
+                    ) : (
+                      'Save Expense'
+                    )}
                   </Button>
-                  <Button type="button" variant="ghost" onClick={() => setShowForm(false)}>Cancel</Button>
+                  <Button type="button" variant="ghost" onClick={closeForm}>Cancel</Button>
                 </div>
               </form>
             </CardContent>
@@ -354,12 +419,12 @@ function ExpenseContent() {
                       <th className="text-left p-4 font-medium">Party</th>
                       <th className="text-right p-4 font-medium">Amount</th>
                       <th className="text-left p-4 font-medium">Recurring</th>
-                      {isAdmin(user) && <th className="text-right p-4 font-medium">Actions</th>}
+                      <th className="text-right p-4 font-medium w-[140px]"> </th>
                     </tr>
                   </thead>
                   <tbody>
                     {items.map((item) => (
-                      <tr key={item.id} className="border-b border-border/50 hover:bg-accent/30">
+                      <tr key={item.id} className="group border-b border-border/50 hover:bg-accent/30">
                         <td className="p-4">{formatDate(item.date)}</td>
                         <td className="p-4">
                           <Badge variant="secondary">
@@ -373,11 +438,12 @@ function ExpenseContent() {
                         </td>
                         <td className="p-4 text-right font-medium text-destructive">{formatCurrency(Number(item.amount))}</td>
                         <td className="p-4">{item.isRecurring ? <Badge variant="warning">Yes</Badge> : '—'}</td>
-                        {isAdmin(user) && (
-                          <td className="p-4 text-right">
-                            <Button variant="ghost" size="sm" className="text-destructive" onClick={() => handleDelete(item.id)}>Delete</Button>
-                          </td>
-                        )}
+                        <td className="p-4">
+                          <RowHoverActions
+                            onEdit={() => openEditForm(item)}
+                            onDelete={isAdmin(user) ? () => handleDelete(item.id) : undefined}
+                          />
+                        </td>
                       </tr>
                     ))}
                   </tbody>

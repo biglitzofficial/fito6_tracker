@@ -175,6 +175,13 @@ export const expenseService = {
       }
       updatePayload.periodMonth = data.periodMonth;
     }
+    if (data.isRecurring === false) {
+      updatePayload.isRecurring = false;
+      updatePayload.recurringDay = undefined;
+    } else if (data.isRecurring) {
+      updatePayload.isRecurring = true;
+      updatePayload.recurringDay = data.recurringDay;
+    }
     const expense = await update<Expense>(COL.expenses, id, updatePayload);
     return (await withRelations([expense]))[0];
   },
