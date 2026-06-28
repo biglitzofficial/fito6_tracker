@@ -1,4 +1,4 @@
-import { Expense } from '../types/models';
+import { Expense, Party } from '../types/models';
 import {
   COL,
   create,
@@ -6,6 +6,7 @@ import {
   getById,
   getAccountMap,
   getCategoryMap,
+  getPartyMap,
   getUserMap,
   inDateRange,
   matchesSearch,
@@ -30,6 +31,7 @@ interface ExpenseFilters {
 async function withRelations(items: Expense[]) {
   const categoryMap = await getCategoryMap(items.map((e) => e.categoryId));
   const accountMap = await getAccountMap(items.map((e) => e.accountId || ''));
+  const partyMap = await getPartyMap(items.map((e) => e.partyId || ''));
   const userMap = await getUserMap(items.map((e) => e.createdById));
 
   return items.map((item) => ({
@@ -47,11 +49,31 @@ async function withRelations(items: Expense[]) {
           type: 'OTHER' as const,
         }
       : null,
+    party: item.partyId
+      ? partyMap.get(item.partyId) ?? {
+          id: item.partyId,
+          name: item.vendor || 'Unknown',
+          type: 'OTHER' as const,
+        }
+      : null,
     createdBy: {
       id: item.createdById,
       name: userMap.get(item.createdById)?.name || 'Unknown',
     },
   }));
+}
+
+async function resolvePartyFields(data: { partyId?: string; vendor?: string }) {
+  if (!data.partyId) {
+    return { partyId: null as string | null, vendor: data.vendor?.trim() || null };
+  }
+
+  const party = await getById<Party>(COL.parties, data.partyId);
+  if (!party || !party.isActive) {
+    throw new AppError(400, 'Invalid party selected');
+  }
+
+  return { partyId: party.id, vendor: party.name };
 }
 
 export const expenseService = {
@@ -83,6 +105,7 @@ export const expenseService = {
     amount: number;
     categoryId: string;
     accountId?: string;
+    partyId?: string;
     vendor?: string;
     date: string;
     periodMonth?: string;
@@ -96,12 +119,14 @@ export const expenseService = {
       data.periodMonth && isValidPeriodMonth(data.periodMonth)
         ? data.periodMonth
         : periodMonthFromDate(data.date);
+    const { partyId, vendor } = await resolvePartyFields(data);
 
     const expense = await create<Expense>(COL.expenses, {
       amount: data.amount,
       categoryId: data.categoryId,
       accountId: data.accountId || null,
-      vendor: data.vendor,
+      partyId,
+      vendor,
       date: new Date(data.date),
       periodMonth,
       notes: data.notes,
@@ -119,6 +144,7 @@ export const expenseService = {
       amount: number;
       categoryId: string;
       accountId: string | null;
+      partyId: string | null;
       vendor: string;
       date: string;
       periodMonth: string;
@@ -133,6 +159,16 @@ export const expenseService = {
       ...data,
       date: data.date ? new Date(data.date) : undefined,
     };
+
+    if (data.partyId !== undefined || data.vendor !== undefined) {
+      const resolved = await resolvePartyFields({
+        partyId: data.partyId ?? undefined,
+        vendor: data.vendor,
+      });
+      updatePayload.partyId = resolved.partyId;
+      updatePayload.vendor = resolved.vendor;
+    }
+
     if (data.periodMonth !== undefined) {
       if (!isValidPeriodMonth(data.periodMonth)) {
         throw new AppError(400, 'periodMonth must be in YYYY-MM format');

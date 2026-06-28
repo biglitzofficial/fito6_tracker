@@ -9,23 +9,40 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
 import { useAuthStore, isAdmin } from '@/stores/auth.store';
+
+type TransactionGroupBy = 'all' | 'day' | 'party' | 'category' | 'payment-mode';
+
+const TRANSACTION_GROUPS: { id: TransactionGroupBy; label: string }[] = [
+  { id: 'all', label: 'All Entries' },
+  { id: 'day', label: 'Day-wise' },
+  { id: 'party', label: 'Party-wise' },
+  { id: 'category', label: 'Category-wise' },
+  { id: 'payment-mode', label: 'Payment Mode-wise' },
+];
 
 export default function ReportsPage() {
   const { user } = useAuthStore();
   const [dateFrom, setDateFrom] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]);
   const [dateTo, setDateTo] = useState(new Date().toISOString().split('T')[0]);
   const [format, setFormat] = useState('CSV');
+  const [transactionGroup, setTransactionGroup] = useState<TransactionGroupBy>('all');
   const [loading, setLoading] = useState<string | null>(null);
   const [result, setResult] = useState<{ title: string; filename: string; mimeType: string; contentBase64: string; previewText?: string } | null>(null);
 
-  const generate = async (type: string) => {
+  const generate = async (type: string, extra?: { groupBy?: TransactionGroupBy }) => {
     setLoading(type);
     try {
       const endpoint = isAdmin(user) ? `/reports/${type}` : null;
       if (!endpoint) return;
-      const data = await api.post<{ report: { title: string }; filename: string; mimeType: string; contentBase64: string; previewText?: string }>(endpoint, { dateFrom, dateTo, format });
+      const data = await api.post<{ report: { title: string }; filename: string; mimeType: string; contentBase64: string; previewText?: string }>(endpoint, {
+        dateFrom,
+        dateTo,
+        format,
+        ...(extra?.groupBy ? { groupBy: extra.groupBy } : {}),
+      });
       setResult({ title: data.report.title, filename: data.filename, mimeType: data.mimeType, contentBase64: data.contentBase64, previewText: data.previewText });
     } finally {
       setLoading(null);
@@ -79,6 +96,43 @@ export default function ReportsPage() {
               </CardContent>
             </Card>
 
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between gap-4">
+                <CardTitle className="text-base">Export Transactions</CardTitle>
+                <Button
+                  onClick={() => generate('transactions', { groupBy: transactionGroup })}
+                  disabled={loading === 'transactions'}
+                >
+                  {loading === 'transactions' ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    'Generate Export'
+                  )}
+                </Button>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex flex-wrap gap-2">
+                  {TRANSACTION_GROUPS.map((group) => (
+                    <Button
+                      key={group.id}
+                      type="button"
+                      variant={transactionGroup === group.id ? 'default' : 'outline'}
+                      size="sm"
+                      className={cn(
+                        transactionGroup === group.id && 'shadow-lg shadow-primary/20'
+                      )}
+                      onClick={() => setTransactionGroup(group.id)}
+                    >
+                      {group.label}
+                    </Button>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Uses payment dates (same as Ledger). Party = source for income and vendor for expense.
+                </p>
+              </CardContent>
+            </Card>
+
             <div className="grid gap-4 md:grid-cols-2">
               {reports.map((report) => (
                 <Card key={report.id}>
@@ -111,8 +165,11 @@ export default function ReportsPage() {
         {result && (
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-base">{result.title}</CardTitle>
-              <Button variant="outline" onClick={download}><Download className="h-4 w-4" /> Download</Button>
+              <CardTitle className="text-base">Preview</CardTitle>
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-muted-foreground hidden sm:inline">{result.title}</span>
+                <Button variant="outline" onClick={download}><Download className="h-4 w-4" /> Download</Button>
+              </div>
             </CardHeader>
             <CardContent>
               {result.previewText ? (

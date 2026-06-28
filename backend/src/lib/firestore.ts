@@ -7,6 +7,7 @@ export const COL = {
   staff: 'staff',
   categories: 'categories',
   accounts: 'accounts',
+  parties: 'parties',
   income: 'income',
   expenses: 'expenses',
   attendance: 'attendance',
@@ -197,4 +198,12 @@ export async function getAccountMap(ids: string[]) {
     unique.map((id) => getById<{ name: string; type: string }>(COL.accounts, id))
   );
   return new Map(unique.map((id, i) => [id, accounts[i]]));
+}
+
+export async function getPartyMap(ids: string[]) {
+  const unique = [...new Set(ids.filter(Boolean))];
+  const parties = await Promise.all(
+    unique.map((id) => getById<{ name: string; type: string }>(COL.parties, id))
+  );
+  return new Map(unique.map((id, i) => [id, parties[i]]));
 }

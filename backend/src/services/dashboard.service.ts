@@ -18,6 +18,7 @@ export const dashboardService = {
     const now = new Date();
     const startOfDay = startOfDayDate(now);
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfYear = new Date(now.getFullYear(), 0, 1);
     const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
 
     const [incomes, expenses, staff, attendance] = await Promise.all([
@@ -29,9 +30,12 @@ export const dashboardService = {
 
     const todayRev = sumAmounts(incomes, startOfDay);
     const monthRev = sumAmounts(incomes, startOfMonth);
+    const yearRev = sumAmounts(incomes, startOfYear);
     const todayExp = sumAmounts(expenses, startOfDay);
     const monthExp = sumAmounts(expenses, startOfMonth);
+    const yearExp = sumAmounts(expenses, startOfYear);
     const netProfit = monthRev - monthExp;
+    const netExpense = monthExp;
     const cashFlow = todayRev - todayExp;
 
     const attendanceToday = attendance.filter(
@@ -48,9 +52,12 @@ export const dashboardService = {
       cards: {
         todayRevenue: todayRev,
         monthlyRevenue: monthRev,
+        yearlyRevenue: yearRev,
         todayExpense: todayExp,
         monthlyExpense: monthExp,
+        yearlyExpense: yearExp,
         netProfit,
+        netExpense,
         cashFlow,
         totalStaff: staff.length,
         attendanceToday,

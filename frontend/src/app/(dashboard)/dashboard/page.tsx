@@ -12,6 +12,8 @@ import {
   FileText,
   Sparkles,
   Activity,
+  CalendarRange,
+  CalendarDays,
 } from 'lucide-react';
 import { Header } from '@/components/layout/header';
 import { StatCard } from '@/components/dashboard/stat-card';
@@ -38,8 +40,8 @@ export default function DashboardPage() {
     return (
       <div>
         <Header title="Dashboard" subtitle="Loading..." />
-        <div className="p-6 grid gap-4 md:grid-cols-4">
-          {[...Array(4)].map((_, i) => (
+        <div className="p-6 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {[...Array(8)].map((_, i) => (
             <div key={i} className="glass rounded-2xl h-32 animate-pulse" />
           ))}
         </div>
@@ -56,14 +58,17 @@ export default function DashboardPage() {
         <Header title="Dashboard" subtitle="Business overview and insights" />
         <div className="p-6 space-y-6">
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <StatCard title="Today's Revenue" value={adminData.cards.todayRevenue} icon={DollarSign} format="currency" />
-            <StatCard title="Monthly Revenue" value={adminData.cards.monthlyRevenue} icon={TrendingUp} format="currency" />
+            <StatCard title="Today Collection" value={adminData.cards.todayRevenue} icon={DollarSign} format="currency" />
+            <StatCard title="Monthly Collection" value={adminData.cards.monthlyRevenue} icon={TrendingUp} format="currency" />
+            <StatCard title="Yearly Collection" value={adminData.cards.yearlyRevenue ?? 0} icon={CalendarRange} format="currency" />
+            <StatCard title="Net Profit" value={adminData.cards.netProfit} icon={TrendingUp} format="currency" />
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <StatCard title="Today's Expense" value={adminData.cards.todayExpense} icon={TrendingDown} format="currency" />
             <StatCard title="Monthly Expense" value={adminData.cards.monthlyExpense} icon={Wallet} format="currency" />
-            <StatCard title="Net Profit" value={adminData.cards.netProfit} icon={TrendingUp} format="currency" />
-            <StatCard title="Cash Flow" value={adminData.cards.cashFlow} icon={Activity} format="currency" />
-            <StatCard title="Total Staff" value={adminData.cards.totalStaff} icon={Users} />
-            <StatCard title="Attendance Today" value={adminData.cards.attendanceToday} icon={UserCheck} />
+            <StatCard title="Yearly Expense" value={adminData.cards.yearlyExpense ?? 0} icon={CalendarDays} format="currency" />
+            <StatCard title="Net Expense" value={adminData.cards.netExpense ?? adminData.cards.monthlyExpense} icon={TrendingDown} format="currency" />
           </div>
 
           <div className="grid gap-6 lg:grid-cols-3">

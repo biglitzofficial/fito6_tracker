@@ -3,6 +3,7 @@ import {
   CategoryType,
   DocumentType,
   NotificationType,
+  PartyType,
   ReportFormat,
   ReportType,
   Role,
@@ -55,6 +56,17 @@ export interface Account {
   updatedAt: Date;
 }
 
+export interface Party {
+  id: string;
+  name: string;
+  type: PartyType;
+  phone?: string | null;
+  notes?: string | null;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface Income {
   id: string;
   amount: number;
@@ -74,6 +86,7 @@ export interface Expense {
   amount: number;
   categoryId: string;
   accountId?: string | null;
+  partyId?: string | null;
   vendor?: string | null;
   date: Date;
   periodMonth?: string | null;

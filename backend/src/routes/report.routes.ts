@@ -60,6 +60,29 @@ router.post(
 );
 
 router.post(
+  '/transactions',
+  adminOnly,
+  auditLog('GENERATE_TRANSACTION_REPORT', 'Report'),
+  asyncHandler(async (req: AuthRequest, res) => {
+    const body = generateSchema
+      .extend({
+        groupBy: z
+          .enum(['all', 'day', 'party', 'category', 'payment-mode'])
+          .default('all'),
+      })
+      .parse(req.body);
+    const result = await reportService.generateTransactionExport(
+      body.dateFrom!,
+      body.dateTo!,
+      body.format,
+      body.groupBy,
+      req.user!.userId
+    );
+    sendSuccess(res, result);
+  })
+);
+
+router.post(
   '/attendance',
   adminOnly,
   auditLog('GENERATE_ATTENDANCE_REPORT', 'Report'),

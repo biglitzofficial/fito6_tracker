@@ -1,6 +1,6 @@
-import { ReportFormat, ReportType } from '../types/enums';
+import { AccountType, ReportFormat, ReportType } from '../types/enums';
 import { Attendance, Expense, Income, Report } from '../types/models';
-import { COL, create, findMany, getCategoryMap, getUserMap, inDateRange, sortBy, sumAmounts } from '../lib/firestore';
+import { COL, create, findMany, getAccountMap, getCategoryMap, getUserMap, inDateRange, sortBy, sumAmounts } from '../lib/firestore';
 import PDFDocument from 'pdfkit';
 import ExcelJS from 'exceljs';
 
@@ -61,6 +61,166 @@ async function generateExcel(sheetName: string, columns: string[], rows: Record<
   rows.forEach((r) => ws.addRow(r));
   ws.getRow(1).font = { bold: true };
   return Buffer.from(await wb.xlsx.writeBuffer());
+}
+
+export type TransactionGroupBy = 'all' | 'day' | 'party' | 'category' | 'payment-mode';
+
+const ACCOUNT_TYPE_LABELS: Record<AccountType, string> = {
+  BANK: 'Bank',
+  CASH: 'Cash',
+  UPI: 'UPI',
+  CARD: 'Card',
+  OTHER: 'Other',
+};
+
+interface UnifiedTransaction {
+  date: string;
+  type: 'INCOME' | 'EXPENSE';
+  party: string;
+  category: string;
+  paymentMode: string;
+  account: string;
+  amount: number;
+  notes: string;
+}
+
+async function loadTransactions(dateFrom: string, dateTo: string): Promise<UnifiedTransaction[]> {
+  const from = new Date(dateFrom);
+  const to = new Date(dateTo);
+  to.setHours(23, 59, 59, 999);
+
+  const [incomes, expenses] = await Promise.all([
+    findMany<Income>(COL.income, (i) => inDateRange(i.date, from, to)),
+    findMany<Expense>(COL.expenses, (e) => inDateRange(e.date, from, to)),
+  ]);
+
+  const categoryMap = await getCategoryMap([
+    ...incomes.map((i) => i.categoryId),
+    ...expenses.map((e) => e.categoryId),
+  ]);
+  const accountMap = await getAccountMap([
+    ...incomes.map((i) => i.accountId || ''),
+    ...expenses.map((e) => e.accountId || ''),
+  ]);
+
+  const incomeRows: UnifiedTransaction[] = incomes.map((i) => {
+    const account = i.accountId ? accountMap.get(i.accountId) : null;
+    return {
+      date: i.date.toISOString().split('T')[0],
+      type: 'INCOME',
+      party: i.source || '—',
+      category: categoryMap.get(i.categoryId)?.name || 'Unknown',
+      paymentMode: account ? ACCOUNT_TYPE_LABELS[account.type as AccountType] || account.type : '—',
+      account: account?.name || '—',
+      amount: Number(i.amount),
+      notes: i.notes || '',
+    };
+  });
+
+  const expenseRows: UnifiedTransaction[] = expenses.map((e) => {
+    const account = e.accountId ? accountMap.get(e.accountId) : null;
+    return {
+      date: e.date.toISOString().split('T')[0],
+      type: 'EXPENSE',
+      party: e.vendor || '—',
+      category: categoryMap.get(e.categoryId)?.name || 'Unknown',
+      paymentMode: account ? ACCOUNT_TYPE_LABELS[account.type as AccountType] || account.type : '—',
+      account: account?.name || '—',
+      amount: Number(e.amount),
+      notes: e.notes || '',
+    };
+  });
+
+  return [...incomeRows, ...expenseRows].sort((a, b) => a.date.localeCompare(b.date));
+}
+
+function groupTransactions(transactions: UnifiedTransaction[], groupBy: TransactionGroupBy) {
+  if (groupBy === 'all') {
+    return transactions.map((t) => ({
+      Date: t.date,
+      Type: t.type,
+      Party: t.party,
+      Category: t.category,
+      'Payment Mode': t.paymentMode,
+      Account: t.account,
+      Amount: t.amount,
+      Notes: t.notes,
+    }));
+  }
+
+  const grouped = new Map<string, UnifiedTransaction[]>();
+  for (const t of transactions) {
+    let key: string;
+    switch (groupBy) {
+      case 'day':
+        key = t.date;
+        break;
+      case 'party':
+        key = `${t.type}|${t.party}`;
+        break;
+      case 'category':
+        key = `${t.type}|${t.category}`;
+        break;
+      case 'payment-mode':
+        key = `${t.type}|${t.paymentMode}|${t.account}`;
+        break;
+      default:
+        key = t.date;
+    }
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key)!.push(t);
+  }
+
+  const rows: Record<string, unknown>[] = [];
+  for (const [key, items] of [...grouped.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+    const incomeTotal = items.filter((i) => i.type === 'INCOME').reduce((s, i) => s + i.amount, 0);
+    const expenseTotal = items.filter((i) => i.type === 'EXPENSE').reduce((s, i) => s + i.amount, 0);
+    const count = items.length;
+
+    if (groupBy === 'day') {
+      rows.push({
+        Date: key,
+        'Income Total': incomeTotal,
+        'Expense Total': expenseTotal,
+        Net: incomeTotal - expenseTotal,
+        Entries: count,
+      });
+      continue;
+    }
+
+    if (groupBy === 'party') {
+      const [type, party] = key.split('|');
+      rows.push({
+        Type: type,
+        Party: party,
+        'Total Amount': type === 'INCOME' ? incomeTotal : expenseTotal,
+        Entries: count,
+      });
+      continue;
+    }
+
+    if (groupBy === 'category') {
+      const [type, category] = key.split('|');
+      rows.push({
+        Type: type,
+        Category: category,
+        'Total Amount': type === 'INCOME' ? incomeTotal : expenseTotal,
+        Entries: count,
+      });
+      continue;
+    }
+
+    const [type, paymentMode, account] = key.split('|');
+    rows.push({
+      Type: type,
+      'Payment Mode': paymentMode,
+      Account: account,
+      'Total Amount': type === 'INCOME' ? incomeTotal : expenseTotal,
+      Entries: count,
+    });
+  }
+
+  return rows;
 }
 
 async function buildReportBlob(args: {
@@ -213,6 +373,44 @@ export const reportService = {
     });
 
     return { report, ...blob, ...data };
+  },
+
+  async generateTransactionExport(
+    dateFrom: string,
+    dateTo: string,
+    format: ReportFormat,
+    groupBy: TransactionGroupBy,
+    userId: string
+  ) {
+    const transactions = await loadTransactions(dateFrom, dateTo);
+    const rows = groupTransactions(transactions, groupBy);
+
+    const groupLabels: Record<TransactionGroupBy, string> = {
+      all: 'All Entries',
+      day: 'Day-wise',
+      party: 'Party-wise',
+      category: 'Category-wise',
+      'payment-mode': 'Payment Mode-wise',
+    };
+
+    const label = groupLabels[groupBy];
+    const blob = await buildReportBlob({
+      title: `Transactions (${label}) ${dateFrom} to ${dateTo}`,
+      format,
+      rows,
+      filenameBase: `Transactions_${groupBy}_${dateFrom}_to_${dateTo}`,
+    });
+
+    const report = await create<Report>(COL.reports, {
+      type: ReportType.TRANSACTIONS,
+      format,
+      title: `Transactions (${label}) ${dateFrom} to ${dateTo}`,
+      dateFrom: new Date(dateFrom),
+      dateTo: new Date(dateTo),
+      generatedById: userId,
+    });
+
+    return { report, ...blob, rows, groupBy, label };
   },
 
   async generateAttendanceReport(month: number, year: number, format: ReportFormat, userId: string) {

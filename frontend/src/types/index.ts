@@ -37,6 +37,7 @@ export interface Category {
 }
 
 export type AccountType = 'BANK' | 'CASH' | 'UPI' | 'CARD' | 'OTHER';
+export type PartyType = 'STAFF' | 'VENDOR' | 'CUSTOMER' | 'OTHER';
 
 export interface Account {
   id: string;
@@ -45,6 +46,15 @@ export interface Account {
   bankName?: string | null;
   lastFour?: string | null;
   openingBalance?: number;
+  isActive: boolean;
+}
+
+export interface Party {
+  id: string;
+  name: string;
+  type: PartyType;
+  phone?: string | null;
+  notes?: string | null;
   isActive: boolean;
 }
 
@@ -69,6 +79,8 @@ export interface Expense {
   category: Category;
   accountId?: string | null;
   account?: Account | null;
+  partyId?: string | null;
+  party?: Party | null;
   vendor?: string;
   date: string;
   periodMonth?: string | null;
@@ -103,9 +115,12 @@ export interface AdminDashboard {
   cards: {
     todayRevenue: number;
     monthlyRevenue: number;
+    yearlyRevenue: number;
     todayExpense: number;
     monthlyExpense: number;
+    yearlyExpense: number;
     netProfit: number;
+    netExpense: number;
     cashFlow: number;
     totalStaff: number;
     attendanceToday: number;

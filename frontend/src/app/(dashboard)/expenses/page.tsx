@@ -16,9 +16,11 @@ import { Badge } from '@/components/ui/badge';
 import { QueryState } from '@/components/ui/query-state';
 import { CategorySelectField } from '@/components/forms/category-select-field';
 import { CategoryManager } from '@/components/forms/category-manager';
+import { PartySelectField } from '@/components/forms/party-select-field';
+import { PartyManager } from '@/components/forms/party-manager';
 import { AccountSelectField } from '@/components/forms/account-select-field';
 import { api } from '@/lib/api';
-import { useApiQuery, useCategories, useAccounts, useInvalidate } from '@/hooks/use-api-query';
+import { useApiQuery, useCategories, useAccounts, useParties, useInvalidate } from '@/hooks/use-api-query';
 import { useDebounce } from '@/hooks/use-debounce';
 import { queryKeys } from '@/lib/query-keys';
 import { useAuthStore, isAdmin } from '@/stores/auth.store';
@@ -29,13 +31,17 @@ const schema = z.object({
   amount: z.coerce.number().positive(),
   categoryId: z.string().min(1),
   accountId: z.string().min(1, 'Select an account'),
-  vendor: z.string().optional(),
+  partyId: z.string().optional(),
   date: z.string().min(1),
   periodMonth: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Select bill-for month'),
   notes: z.string().optional(),
   isRecurring: z.boolean().optional(),
   recurringDay: z.coerce.number().min(1).max(31).optional(),
 });
+
+function isSalaryCategory(name?: string) {
+  return !!name && /salary|payroll|wage|staff|maid|cleaning/i.test(name);
+}
 
 function ExpenseContent() {
   const searchParams = useSearchParams();
@@ -44,6 +50,7 @@ function ExpenseContent() {
   const debouncedSearch = useDebounce(search);
   const [showForm, setShowForm] = useState(searchParams.get('action') === 'add');
   const [submitting, setSubmitting] = useState(false);
+  const [partyError, setPartyError] = useState('');
   const invalidate = useInvalidate();
 
   const today = new Date().toISOString().split('T')[0];
@@ -64,11 +71,15 @@ function ExpenseContent() {
   const parentGroups = allCategories.filter((c) => !c.parentId);
   const categories = allCategories.filter((c) => c.parentId);
   const { data: accounts = [] } = useAccounts();
+  const { data: parties = [] } = useParties();
   const { data: expenseRes, isLoading, isError, error, refetch } = useApiQuery<PaginatedResponse<Expense>>(
     queryKeys.expenses(debouncedSearch),
     `/expenses?search=${debouncedSearch}`
   );
   const items = expenseRes?.items ?? [];
+
+  const categoryName = categories.find((c) => c.id === categoryId)?.name;
+  const suggestPartyType = isSalaryCategory(categoryName) ? 'STAFF' as const : 'VENDOR' as const;
 
   useEffect(() => {
     if (!paymentDate) return;
@@ -77,6 +88,12 @@ function ExpenseContent() {
   }, [paymentDate, categoryId, categories, setValue]);
 
   const onSubmit = async (data: z.infer<typeof schema>) => {
+    const catName = categories.find((c) => c.id === data.categoryId)?.name;
+    if (isSalaryCategory(catName) && !data.partyId) {
+      setPartyError('Select a party for salary and staff expenses');
+      return;
+    }
+    setPartyError('');
     setSubmitting(true);
     try {
       await api.post('/expenses', data);
@@ -118,6 +135,8 @@ function ExpenseContent() {
           categories={allCategories}
           onUpdated={() => invalidate(queryKeys.categories('EXPENSE'))}
         />
+
+        <PartyManager parties={parties} onUpdated={() => invalidate(queryKeys.parties())} />
 
         {showForm && (
           <Card className="animate-fade-in">
@@ -163,9 +182,28 @@ function ExpenseContent() {
                     )}
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label>Vendor</Label>
-                  <Input {...register('vendor')} />
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Party Name (Contact)</Label>
+                  <Controller
+                    name="partyId"
+                    control={control}
+                    render={({ field }) => (
+                      <PartySelectField
+                        value={field.value}
+                        onChange={(id) => {
+                          field.onChange(id);
+                          setPartyError('');
+                        }}
+                        parties={parties}
+                        defaultType={suggestPartyType}
+                        onPartyAdded={() => invalidate(queryKeys.parties())}
+                        error={partyError}
+                      />
+                    )}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Required for salary/staff expenses. Select staff like KASTHURI-MAID or add a new party.
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <Label>Payment Date</Label>
@@ -222,7 +260,7 @@ function ExpenseContent() {
                       <th className="text-left p-4 font-medium">Bill Month</th>
                       <th className="text-left p-4 font-medium">Category</th>
                       <th className="text-left p-4 font-medium">Account</th>
-                      <th className="text-left p-4 font-medium">Vendor</th>
+                      <th className="text-left p-4 font-medium">Party</th>
                       <th className="text-right p-4 font-medium">Amount</th>
                       <th className="text-left p-4 font-medium">Recurring</th>
                       {isAdmin(user) && <th className="text-right p-4 font-medium">Actions</th>}
@@ -239,7 +277,9 @@ function ExpenseContent() {
                         </td>
                         <td className="p-4"><Badge variant="secondary">{item.category?.name ?? 'Unknown'}</Badge></td>
                         <td className="p-4 text-muted-foreground">{item.account?.name ?? '—'}</td>
-                        <td className="p-4 text-muted-foreground">{item.vendor || '—'}</td>
+                        <td className="p-4 text-muted-foreground">
+                          {item.party?.name || item.vendor || '—'}
+                        </td>
                         <td className="p-4 text-right font-medium text-destructive">{formatCurrency(Number(item.amount))}</td>
                         <td className="p-4">{item.isRecurring ? <Badge variant="warning">Yes</Badge> : '—'}</td>
                         {isAdmin(user) && (

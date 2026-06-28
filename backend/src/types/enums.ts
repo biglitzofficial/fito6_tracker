@@ -28,6 +28,13 @@ export enum AccountType {
   OTHER = 'OTHER',
 }
 
+export enum PartyType {
+  STAFF = 'STAFF',
+  VENDOR = 'VENDOR',
+  CUSTOMER = 'CUSTOMER',
+  OTHER = 'OTHER',
+}
+
 export enum DocumentType {
   BILL = 'BILL',
   INVOICE = 'INVOICE',
@@ -49,6 +56,7 @@ export enum ReportType {
   EXPENSE = 'EXPENSE',
   PROFIT_LOSS = 'PROFIT_LOSS',
   ATTENDANCE = 'ATTENDANCE',
+  TRANSACTIONS = 'TRANSACTIONS',
 }
 
 export enum ReportFormat {

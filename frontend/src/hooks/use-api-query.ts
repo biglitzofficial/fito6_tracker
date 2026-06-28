@@ -36,6 +36,15 @@ export function useAccounts(type?: import('@/types').AccountType) {
   );
 }
 
+export function useParties(type?: import('@/types').PartyType) {
+  const endpoint = type ? `/parties?type=${type}` : '/parties';
+  return useApiQuery<import('@/types').Party[]>(
+    queryKeys.parties(type),
+    endpoint,
+    { staleTime: 10 * 60_000 }
+  );
+}
+
 export function useInvalidate() {
   const queryClient = useQueryClient();
   return (queryKey: readonly unknown[]) =>

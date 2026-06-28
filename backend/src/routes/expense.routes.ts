@@ -14,6 +14,7 @@ const createSchema = z.object({
   amount: z.number().positive(),
   categoryId: z.string(),
   accountId: z.string().optional(),
+  partyId: z.string().optional(),
   vendor: z.string().optional(),
   date: z.string(),
   periodMonth: z
