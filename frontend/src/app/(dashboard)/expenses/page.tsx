@@ -233,7 +233,7 @@ function ExpenseContent() {
                       <tr key={item.id} className="border-b border-border/50 hover:bg-accent/30">
                         <td className="p-4">{formatDate(item.date)}</td>
                         <td className="p-4">
-                          <Badge variant="outline">
+                          <Badge variant="secondary">
                             {formatPeriodMonth(item.periodMonth || item.date.slice(0, 7))}
                           </Badge>
                         </td>
