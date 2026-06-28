@@ -22,6 +22,7 @@ import {
   BookOpen,
   Wallet,
   Scale,
+  UserRound,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { prefetchRoute } from '@/hooks/use-api-query';
@@ -33,6 +34,7 @@ const adminNav = [
   { href: '/income', label: 'Income', icon: TrendingUp },
   { href: '/expenses', label: 'Expenses', icon: TrendingDown },
   { href: '/accounts', label: 'Accounts', icon: Wallet },
+  { href: '/parties', label: 'Parties', icon: UserRound },
   { href: '/ledger', label: 'Ledger', icon: BookOpen },
   { href: '/profit-loss', label: 'P&L', icon: Scale },
   { href: '/staff', label: 'Staff', icon: Users },
@@ -51,6 +53,7 @@ const staffNav = [
   { href: '/income', label: 'Income', icon: TrendingUp },
   { href: '/expenses', label: 'Expenses', icon: TrendingDown },
   { href: '/accounts', label: 'Accounts', icon: Wallet },
+  { href: '/parties', label: 'Parties', icon: UserRound },
   { href: '/attendance', label: 'Attendance', icon: Calendar },
   { href: '/tasks', label: 'My Tasks', icon: CheckSquare },
   { href: '/documents', label: 'Documents', icon: FolderOpen },

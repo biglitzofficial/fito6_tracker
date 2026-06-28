@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Plus, Search, Loader2 } from 'lucide-react';
+import { Plus, Search, Loader2, Paperclip } from 'lucide-react';
 import { Header } from '@/components/layout/header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,7 +17,7 @@ import { QueryState } from '@/components/ui/query-state';
 import { CategorySelectField } from '@/components/forms/category-select-field';
 import { CategoryManager } from '@/components/forms/category-manager';
 import { PartySelectField } from '@/components/forms/party-select-field';
-import { PartyManager } from '@/components/forms/party-manager';
+import Link from 'next/link';
 import { AccountSelectField } from '@/components/forms/account-select-field';
 import { api } from '@/lib/api';
 import { useApiQuery, useCategories, useAccounts, useParties, useInvalidate } from '@/hooks/use-api-query';
@@ -33,6 +33,7 @@ const schema = z.object({
   accountId: z.string().min(1, 'Select an account'),
   partyId: z.string().optional(),
   date: z.string().min(1),
+  time: z.string().optional(),
   periodMonth: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Select bill-for month'),
   notes: z.string().optional(),
   isRecurring: z.boolean().optional(),
@@ -51,14 +52,18 @@ function ExpenseContent() {
   const [showForm, setShowForm] = useState(searchParams.get('action') === 'add');
   const [submitting, setSubmitting] = useState(false);
   const [partyError, setPartyError] = useState('');
+  const [attachment, setAttachment] = useState<File | null>(null);
   const invalidate = useInvalidate();
 
-  const today = new Date().toISOString().split('T')[0];
+  const now = new Date();
+  const today = now.toISOString().split('T')[0];
+  const defaultTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
   const { register, handleSubmit, reset, control, watch, setValue, formState: { errors } } = useForm<z.infer<typeof schema>>({
     resolver: zodResolver(schema),
     defaultValues: {
       date: today,
+      time: defaultTime,
       periodMonth: suggestExpensePeriodMonth(today),
       isRecurring: false,
     },
@@ -96,12 +101,26 @@ function ExpenseContent() {
     setPartyError('');
     setSubmitting(true);
     try {
-      await api.post('/expenses', data);
+      const formData = new FormData();
+      formData.append('amount', String(data.amount));
+      formData.append('categoryId', data.categoryId);
+      formData.append('accountId', data.accountId);
+      formData.append('date', `${data.date}T${data.time || '00:00'}:00`);
+      formData.append('periodMonth', data.periodMonth);
+      if (data.partyId) formData.append('partyId', data.partyId);
+      if (data.notes) formData.append('notes', data.notes);
+      if (data.isRecurring) formData.append('isRecurring', 'true');
+      if (data.recurringDay) formData.append('recurringDay', String(data.recurringDay));
+      if (attachment) formData.append('attachment', attachment);
+
+      await api.post('/expenses', formData);
       reset({
         date: today,
+        time: defaultTime,
         periodMonth: suggestExpensePeriodMonth(today),
         isRecurring: false,
       });
+      setAttachment(null);
       setShowForm(false);
       invalidate(queryKeys.expenses(debouncedSearch));
       invalidate(queryKeys.dashboard);
@@ -136,52 +155,27 @@ function ExpenseContent() {
           onUpdated={() => invalidate(queryKeys.categories('EXPENSE'))}
         />
 
-        <PartyManager parties={parties} onUpdated={() => invalidate(queryKeys.parties())} />
-
         {showForm && (
           <Card className="animate-fade-in">
-            <CardHeader><CardTitle className="text-base">New Expense Entry</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-base">Add Expense Entry</CardTitle></CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit(onSubmit)} className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
+                  <Label>Date</Label>
+                  <Input type="date" {...register('date')} />
+                  {errors.date && <p className="text-xs text-destructive">{errors.date.message}</p>}
+                </div>
+                <div className="space-y-2">
+                  <Label>Time</Label>
+                  <Input type="time" {...register('time')} />
+                </div>
+
+                <div className="space-y-2 md:col-span-2">
                   <Label>Amount</Label>
-                  <Input type="number" step="0.01" {...register('amount')} />
+                  <Input type="number" step="0.01" placeholder="e.g. 890" {...register('amount')} />
                   {errors.amount && <p className="text-xs text-destructive">{errors.amount.message}</p>}
                 </div>
-                <div className="space-y-2">
-                  <Label>Category</Label>
-                  <Controller
-                    name="categoryId"
-                    control={control}
-                    render={({ field }) => (
-                      <CategorySelectField
-                        type="EXPENSE"
-                        value={field.value}
-                        onChange={field.onChange}
-                        categories={categories}
-                        parentGroups={parentGroups}
-                        onCategoryAdded={() => invalidate(queryKeys.categories('EXPENSE'))}
-                        error={errors.categoryId?.message}
-                      />
-                    )}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Paid From</Label>
-                  <Controller
-                    name="accountId"
-                    control={control}
-                    render={({ field }) => (
-                      <AccountSelectField
-                        value={field.value}
-                        onChange={field.onChange}
-                        accounts={accounts}
-                        onAccountAdded={() => invalidate(queryKeys.accounts())}
-                        error={errors.accountId?.message}
-                      />
-                    )}
-                  />
-                </div>
+
                 <div className="space-y-2 md:col-span-2">
                   <Label>Party Name (Contact)</Label>
                   <Controller
@@ -202,37 +196,90 @@ function ExpenseContent() {
                     )}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Required for salary/staff expenses. Select staff like KASTHURI-MAID or add a new party.
+                    Required for salary/staff expenses.{' '}
+                    <Link href="/parties" className="text-primary hover:underline">
+                      Manage parties
+                    </Link>
                   </p>
                 </div>
-                <div className="space-y-2">
-                  <Label>Payment Date</Label>
-                  <Input type="date" {...register('date')} />
-                  <p className="text-xs text-muted-foreground">When money left your account (used in Ledger)</p>
+
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Remarks</Label>
+                  <Textarea
+                    {...register('notes')}
+                    placeholder="e.g. Enter details (name, bill no, item name, quantity etc.)"
+                    rows={3}
+                  />
                 </div>
+
+                <div className="space-y-2">
+                  <Label>Category</Label>
+                  <Controller
+                    name="categoryId"
+                    control={control}
+                    render={({ field }) => (
+                      <CategorySelectField
+                        type="EXPENSE"
+                        value={field.value}
+                        onChange={field.onChange}
+                        categories={categories}
+                        parentGroups={parentGroups}
+                        onCategoryAdded={() => invalidate(queryKeys.categories('EXPENSE'))}
+                        error={errors.categoryId?.message}
+                      />
+                    )}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Payment Mode</Label>
+                  <Controller
+                    name="accountId"
+                    control={control}
+                    render={({ field }) => (
+                      <AccountSelectField
+                        value={field.value}
+                        onChange={field.onChange}
+                        accounts={accounts}
+                        onAccountAdded={() => invalidate(queryKeys.accounts())}
+                        error={errors.accountId?.message}
+                      />
+                    )}
+                  />
+                </div>
+
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Attach Bills</Label>
+                  <Input
+                    type="file"
+                    accept="image/*,.pdf"
+                    onChange={(e) => setAttachment(e.target.files?.[0] ?? null)}
+                  />
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Paperclip className="h-3 w-3" />
+                    Attach an image or PDF bill (optional)
+                  </p>
+                </div>
+
                 <div className="space-y-2">
                   <Label>Bill For Month</Label>
                   <Input type="month" {...register('periodMonth')} />
                   {errors.periodMonth && (
                     <p className="text-xs text-destructive">{errors.periodMonth.message}</p>
                   )}
-                  <p className="text-xs text-muted-foreground">
-                    Which month this expense belongs to (used in P&L). Rent/salary defaults to previous month.
-                  </p>
+                  <p className="text-xs text-muted-foreground">Used in P&L (rent/salary defaults to previous month)</p>
                 </div>
-                <div className="space-y-2 flex items-center gap-2 pt-6">
-                  <input type="checkbox" {...register('isRecurring')} className="rounded" />
-                  <Label>Recurring Expense</Label>
+                <div className="space-y-2 flex items-end gap-4 pb-2">
+                  <label className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" {...register('isRecurring')} className="rounded" />
+                    Recurring Expense
+                  </label>
                 </div>
                 <div className="space-y-2">
                   <Label>Recurring Day (1-31)</Label>
                   <Input type="number" min={1} max={31} {...register('recurringDay')} />
                 </div>
-                <div className="space-y-2 md:col-span-2">
-                  <Label>Notes</Label>
-                  <Textarea {...register('notes')} />
-                </div>
-                <div className="md:col-span-2 flex gap-3">
+
+                <div className="md:col-span-2 flex gap-3 pt-2">
                   <Button type="submit" disabled={submitting}>
                     {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save Expense'}
                   </Button>

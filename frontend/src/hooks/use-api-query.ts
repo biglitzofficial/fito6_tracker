@@ -68,6 +68,8 @@ export function prefetchRoute(queryClient: ReturnType<typeof useQueryClient>, hr
       return prefetch(queryKeys.expenses(''), '/expenses?search=');
     case '/accounts':
       return prefetch(queryKeys.accounts(), '/accounts');
+    case '/parties':
+      return prefetch(queryKeys.parties(), '/parties');
     case '/staff':
       return prefetch(queryKeys.staffList, '/staff?includeInactive=true');
     case '/tasks':
