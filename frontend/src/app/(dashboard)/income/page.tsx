@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, Suspense } from 'react';
+import { useState, Suspense, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -15,20 +15,21 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { QueryState } from '@/components/ui/query-state';
 import { CategorySelectField } from '@/components/forms/category-select-field';
-import { CategoryManager } from '@/components/forms/category-manager';
 import { AccountSelectField } from '@/components/forms/account-select-field';
+import Link from 'next/link';
 import { api } from '@/lib/api';
-import { useApiQuery, useCategories, useAccounts, useInvalidate } from '@/hooks/use-api-query';
+import { useApiQuery, useCategories, useAccounts, useInvalidate, useEntryFields } from '@/hooks/use-api-query';
 import { useDebounce } from '@/hooks/use-debounce';
 import { queryKeys } from '@/lib/query-keys';
 import { useAuthStore, isAdmin } from '@/stores/auth.store';
 import type { Income, PaginatedResponse } from '@/types';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import { mergeEntryFields } from '@/lib/entry-fields';
 
-const schema = z.object({
+const baseSchema = z.object({
   amount: z.coerce.number().positive(),
-  categoryId: z.string().min(1),
-  accountId: z.string().min(1, 'Select an account'),
+  categoryId: z.string().optional(),
+  accountId: z.string().optional(),
   source: z.string().optional(),
   date: z.string().min(1),
   notes: z.string().optional(),
@@ -42,8 +43,23 @@ function IncomeContent() {
   const [showForm, setShowForm] = useState(searchParams.get('action') === 'add');
   const [submitting, setSubmitting] = useState(false);
   const invalidate = useInvalidate();
+  const { data: entryFieldsData } = useEntryFields();
+  const fieldConfig = mergeEntryFields(entryFieldsData);
 
-  const { register, handleSubmit, reset, control, formState: { errors } } = useForm<z.infer<typeof schema>>({
+  const schema = useMemo(
+    () =>
+      baseSchema.superRefine((data, ctx) => {
+        if (!data.categoryId) {
+          ctx.addIssue({ code: 'custom', message: 'Select a category', path: ['categoryId'] });
+        }
+        if (fieldConfig.income.paymentMode && !data.accountId) {
+          ctx.addIssue({ code: 'custom', message: 'Select an account', path: ['accountId'] });
+        }
+      }),
+    [fieldConfig]
+  );
+
+  const { register, handleSubmit, reset, control, formState: { errors } } = useForm<z.infer<typeof baseSchema>>({
     resolver: zodResolver(schema),
     defaultValues: { date: new Date().toISOString().split('T')[0] },
   });
@@ -57,10 +73,14 @@ function IncomeContent() {
   );
   const items = incomeRes?.items ?? [];
 
-  const onSubmit = async (data: z.infer<typeof schema>) => {
+  const onSubmit = async (data: z.infer<typeof baseSchema>) => {
     setSubmitting(true);
     try {
-      await api.post('/income', data);
+      await api.post('/income', {
+        ...data,
+        categoryId: data.categoryId,
+        accountId: fieldConfig.income.paymentMode ? data.accountId : undefined,
+      });
       reset();
       setShowForm(false);
       invalidate(queryKeys.income(debouncedSearch));
@@ -87,13 +107,10 @@ function IncomeContent() {
             <Input className="pl-10" placeholder="Search income..." value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
           <Button onClick={() => setShowForm(!showForm)}><Plus className="h-4 w-4" /> Add Income</Button>
+          <Button variant="outline" asChild>
+            <Link href="/entry-fields">Entry Fields</Link>
+          </Button>
         </div>
-
-        <CategoryManager
-          type="INCOME"
-          categories={allCategories}
-          onUpdated={() => invalidate(queryKeys.categories('INCOME'))}
-        />
 
         {showForm && (
           <Card className="animate-fade-in">
@@ -122,22 +139,24 @@ function IncomeContent() {
                     )}
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label>Received In</Label>
-                  <Controller
-                    name="accountId"
-                    control={control}
-                    render={({ field }) => (
-                      <AccountSelectField
-                        value={field.value}
-                        onChange={field.onChange}
-                        accounts={accounts}
-                        onAccountAdded={() => invalidate(queryKeys.accounts())}
-                        error={errors.accountId?.message}
-                      />
-                    )}
-                  />
-                </div>
+                {fieldConfig.income.paymentMode && (
+                  <div className="space-y-2">
+                    <Label>Payment Mode</Label>
+                    <Controller
+                      name="accountId"
+                      control={control}
+                      render={({ field }) => (
+                        <AccountSelectField
+                          value={field.value}
+                          onChange={field.onChange}
+                          accounts={accounts}
+                          onAccountAdded={() => invalidate(queryKeys.accounts())}
+                          error={errors.accountId?.message}
+                        />
+                      )}
+                    />
+                  </div>
+                )}
                 <div className="space-y-2">
                   <Label>Source</Label>
                   <Input {...register('source')} placeholder="e.g. Monthly members" />

@@ -15,6 +15,7 @@ interface CategoryManagerProps {
   type: 'INCOME' | 'EXPENSE';
   categories: Category[];
   onUpdated: () => void;
+  embedded?: boolean;
 }
 
 function CategoryRow({
@@ -145,8 +146,8 @@ function CategoryRow({
   );
 }
 
-export function CategoryManager({ type, categories, onUpdated }: CategoryManagerProps) {
-  const [expanded, setExpanded] = useState(false);
+export function CategoryManager({ type, categories, onUpdated, embedded }: CategoryManagerProps) {
+  const [expanded, setExpanded] = useState(embedded ?? false);
 
   const parentGroups = categories.filter((c) => !c.parentId);
   const childCategories = categories.filter((c) => c.parentId);
@@ -158,20 +159,22 @@ export function CategoryManager({ type, categories, onUpdated }: CategoryManager
           <CardTitle className="text-base">
             {type === 'INCOME' ? 'Income Categories' : 'Expense Categories'}
           </CardTitle>
-          <Button type="button" variant="outline" size="sm" onClick={() => setExpanded(!expanded)}>
-            {expanded ? (
-              <>
-                <ChevronUp className="h-4 w-4" /> Hide
-              </>
-            ) : (
-              <>
-                <ChevronDown className="h-4 w-4" /> Manage
-              </>
-            )}
-          </Button>
+          {!embedded && (
+            <Button type="button" variant="outline" size="sm" onClick={() => setExpanded(!expanded)}>
+              {expanded ? (
+                <>
+                  <ChevronUp className="h-4 w-4" /> Hide
+                </>
+              ) : (
+                <>
+                  <ChevronDown className="h-4 w-4" /> Manage
+                </>
+              )}
+            </Button>
+          )}
         </div>
       </CardHeader>
-      {expanded && (
+      {(embedded || expanded) && (
         <CardContent className="space-y-4">
           {type === 'INCOME' && (
             <div className="space-y-2">

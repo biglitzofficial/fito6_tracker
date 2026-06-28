@@ -15,5 +15,6 @@ export const queryKeys = {
   notifications: ['notifications'] as const,
   auditLogs: ['audit-logs'] as const,
   settings: ['settings'] as const,
+  entryFields: ['entry-fields'] as const,
   analytics: (query: string) => ['analytics', query] as const,
 };

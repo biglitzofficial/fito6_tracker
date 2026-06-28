@@ -16,7 +16,7 @@ import {
   Settings,
   BookOpen,
   Scale,
-  UserRound,
+  ListChecks,
 } from 'lucide-react';
 
 interface CommandPaletteProps {
@@ -33,8 +33,8 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
     { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
     { label: 'Add Income', href: '/income?action=add', icon: TrendingUp },
     { label: 'Add Expense', href: '/expenses?action=add', icon: TrendingDown },
-    { label: 'Parties', href: '/parties', icon: UserRound },
-    { label: 'Add Party', href: '/parties?action=add', icon: UserRound },
+    { label: 'Entry Fields', href: '/entry-fields', icon: ListChecks },
+    { label: 'Add Party', href: '/entry-fields?tab=parties&action=add', icon: ListChecks },
     { label: 'Mark Attendance', href: '/attendance', icon: Calendar },
     { label: 'Tasks', href: '/tasks', icon: CheckSquare },
     ...(admin

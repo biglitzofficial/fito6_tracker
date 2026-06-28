@@ -23,6 +23,20 @@ export default router;
 
 const settingsRouter = Router();
 settingsRouter.use(authenticate);
+
+const DEFAULT_ENTRY_FIELDS = {
+  income: { category: true, paymentMode: true },
+  expense: { party: true, category: true, paymentMode: true, attachment: true },
+};
+
+settingsRouter.get(
+  '/entry-fields',
+  asyncHandler(async (_req, res) => {
+    const value = await settingsService.get('entry_fields');
+    sendSuccess(res, value ?? DEFAULT_ENTRY_FIELDS);
+  })
+);
+
 settingsRouter.use(adminOnly);
 
 settingsRouter.get(

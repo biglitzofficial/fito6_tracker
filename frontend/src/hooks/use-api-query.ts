@@ -51,6 +51,14 @@ export function useInvalidate() {
     queryClient.invalidateQueries({ queryKey });
 }
 
+export function useEntryFields() {
+  return useApiQuery<import('@/lib/entry-fields').EntryFieldsConfig>(
+    queryKeys.entryFields,
+    '/settings/entry-fields',
+    { staleTime: 5 * 60_000 }
+  );
+}
+
 export function prefetchRoute(queryClient: ReturnType<typeof useQueryClient>, href: string) {
   const prefetch = <T,>(key: readonly unknown[], endpoint: string) =>
     queryClient.prefetchQuery({
@@ -66,6 +74,13 @@ export function prefetchRoute(queryClient: ReturnType<typeof useQueryClient>, hr
       return prefetch(queryKeys.income(''), '/income?search=');
     case '/expenses':
       return prefetch(queryKeys.expenses(''), '/expenses?search=');
+    case '/entry-fields':
+      prefetch(queryKeys.entryFields, '/settings/entry-fields');
+      prefetch(queryKeys.accounts(), '/accounts');
+      prefetch(queryKeys.parties(), '/parties');
+      prefetch(queryKeys.categories('INCOME'), '/categories?type=INCOME');
+      prefetch(queryKeys.categories('EXPENSE'), '/categories?type=EXPENSE');
+      return;
     case '/accounts':
       return prefetch(queryKeys.accounts(), '/accounts');
     case '/parties':

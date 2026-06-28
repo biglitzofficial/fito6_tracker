@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, Suspense } from 'react';
+import { useEffect, useMemo, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -15,22 +15,22 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { QueryState } from '@/components/ui/query-state';
 import { CategorySelectField } from '@/components/forms/category-select-field';
-import { CategoryManager } from '@/components/forms/category-manager';
 import { PartySelectField } from '@/components/forms/party-select-field';
 import Link from 'next/link';
 import { AccountSelectField } from '@/components/forms/account-select-field';
 import { api } from '@/lib/api';
-import { useApiQuery, useCategories, useAccounts, useParties, useInvalidate } from '@/hooks/use-api-query';
+import { useApiQuery, useCategories, useAccounts, useParties, useInvalidate, useEntryFields } from '@/hooks/use-api-query';
 import { useDebounce } from '@/hooks/use-debounce';
 import { queryKeys } from '@/lib/query-keys';
 import { useAuthStore, isAdmin } from '@/stores/auth.store';
 import type { Expense, PaginatedResponse } from '@/types';
 import { currentPeriodMonth, formatCurrency, formatDate, formatPeriodMonth, suggestExpensePeriodMonth } from '@/lib/utils';
+import { mergeEntryFields } from '@/lib/entry-fields';
 
-const schema = z.object({
+const baseSchema = z.object({
   amount: z.coerce.number().positive(),
   categoryId: z.string().min(1),
-  accountId: z.string().min(1, 'Select an account'),
+  accountId: z.string().optional(),
   partyId: z.string().optional(),
   date: z.string().min(1),
   time: z.string().optional(),
@@ -54,12 +54,24 @@ function ExpenseContent() {
   const [partyError, setPartyError] = useState('');
   const [attachment, setAttachment] = useState<File | null>(null);
   const invalidate = useInvalidate();
+  const { data: entryFieldsData } = useEntryFields();
+  const fieldConfig = mergeEntryFields(entryFieldsData);
 
   const now = new Date();
   const today = now.toISOString().split('T')[0];
   const defaultTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
-  const { register, handleSubmit, reset, control, watch, setValue, formState: { errors } } = useForm<z.infer<typeof schema>>({
+  const schema = useMemo(
+    () =>
+      baseSchema.superRefine((data, ctx) => {
+        if (fieldConfig.expense.paymentMode && !data.accountId) {
+          ctx.addIssue({ code: 'custom', message: 'Select an account', path: ['accountId'] });
+        }
+      }),
+    [fieldConfig]
+  );
+
+  const { register, handleSubmit, reset, control, watch, setValue, formState: { errors } } = useForm<z.infer<typeof baseSchema>>({
     resolver: zodResolver(schema),
     defaultValues: {
       date: today,
@@ -92,9 +104,9 @@ function ExpenseContent() {
     setValue('periodMonth', suggestExpensePeriodMonth(paymentDate, categoryName));
   }, [paymentDate, categoryId, categories, setValue]);
 
-  const onSubmit = async (data: z.infer<typeof schema>) => {
+  const onSubmit = async (data: z.infer<typeof baseSchema>) => {
     const catName = categories.find((c) => c.id === data.categoryId)?.name;
-    if (isSalaryCategory(catName) && !data.partyId) {
+    if (fieldConfig.expense.party && isSalaryCategory(catName) && !data.partyId) {
       setPartyError('Select a party for salary and staff expenses');
       return;
     }
@@ -104,14 +116,16 @@ function ExpenseContent() {
       const formData = new FormData();
       formData.append('amount', String(data.amount));
       formData.append('categoryId', data.categoryId);
-      formData.append('accountId', data.accountId);
+      if (fieldConfig.expense.paymentMode && data.accountId) {
+        formData.append('accountId', data.accountId);
+      }
       formData.append('date', `${data.date}T${data.time || '00:00'}:00`);
       formData.append('periodMonth', data.periodMonth);
       if (data.partyId) formData.append('partyId', data.partyId);
       if (data.notes) formData.append('notes', data.notes);
       if (data.isRecurring) formData.append('isRecurring', 'true');
       if (data.recurringDay) formData.append('recurringDay', String(data.recurringDay));
-      if (attachment) formData.append('attachment', attachment);
+      if (fieldConfig.expense.attachment && attachment) formData.append('attachment', attachment);
 
       await api.post('/expenses', formData);
       reset({
@@ -147,13 +161,10 @@ function ExpenseContent() {
             <Input className="pl-10" placeholder="Search expenses..." value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
           <Button onClick={() => setShowForm(!showForm)}><Plus className="h-4 w-4" /> Add Expense</Button>
+          <Button variant="outline" asChild>
+            <Link href="/entry-fields">Entry Fields</Link>
+          </Button>
         </div>
-
-        <CategoryManager
-          type="EXPENSE"
-          categories={allCategories}
-          onUpdated={() => invalidate(queryKeys.categories('EXPENSE'))}
-        />
 
         {showForm && (
           <Card className="animate-fade-in">
@@ -176,32 +187,34 @@ function ExpenseContent() {
                   {errors.amount && <p className="text-xs text-destructive">{errors.amount.message}</p>}
                 </div>
 
-                <div className="space-y-2 md:col-span-2">
-                  <Label>Party Name (Contact)</Label>
-                  <Controller
-                    name="partyId"
-                    control={control}
-                    render={({ field }) => (
-                      <PartySelectField
-                        value={field.value}
-                        onChange={(id) => {
-                          field.onChange(id);
-                          setPartyError('');
-                        }}
-                        parties={parties}
-                        defaultType={suggestPartyType}
-                        onPartyAdded={() => invalidate(queryKeys.parties())}
-                        error={partyError}
-                      />
-                    )}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Required for salary/staff expenses.{' '}
-                    <Link href="/parties" className="text-primary hover:underline">
-                      Manage parties
-                    </Link>
-                  </p>
-                </div>
+                {fieldConfig.expense.party && (
+                  <div className="space-y-2 md:col-span-2">
+                    <Label>Party Name (Contact)</Label>
+                    <Controller
+                      name="partyId"
+                      control={control}
+                      render={({ field }) => (
+                        <PartySelectField
+                          value={field.value}
+                          onChange={(id) => {
+                            field.onChange(id);
+                            setPartyError('');
+                          }}
+                          parties={parties}
+                          defaultType={suggestPartyType}
+                          onPartyAdded={() => invalidate(queryKeys.parties())}
+                          error={partyError}
+                        />
+                      )}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Required for salary/staff expenses.{' '}
+                      <Link href="/entry-fields?tab=parties" className="text-primary hover:underline">
+                        Manage parties
+                      </Link>
+                    </p>
+                  </div>
+                )}
 
                 <div className="space-y-2 md:col-span-2">
                   <Label>Remarks</Label>
@@ -230,35 +243,39 @@ function ExpenseContent() {
                     )}
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label>Payment Mode</Label>
-                  <Controller
-                    name="accountId"
-                    control={control}
-                    render={({ field }) => (
-                      <AccountSelectField
-                        value={field.value}
-                        onChange={field.onChange}
-                        accounts={accounts}
-                        onAccountAdded={() => invalidate(queryKeys.accounts())}
-                        error={errors.accountId?.message}
-                      />
-                    )}
-                  />
-                </div>
+                {fieldConfig.expense.paymentMode && (
+                  <div className="space-y-2">
+                    <Label>Payment Mode</Label>
+                    <Controller
+                      name="accountId"
+                      control={control}
+                      render={({ field }) => (
+                        <AccountSelectField
+                          value={field.value}
+                          onChange={field.onChange}
+                          accounts={accounts}
+                          onAccountAdded={() => invalidate(queryKeys.accounts())}
+                          error={errors.accountId?.message}
+                        />
+                      )}
+                    />
+                  </div>
+                )}
 
-                <div className="space-y-2 md:col-span-2">
-                  <Label>Attach Bills</Label>
-                  <Input
-                    type="file"
-                    accept="image/*,.pdf"
-                    onChange={(e) => setAttachment(e.target.files?.[0] ?? null)}
-                  />
-                  <p className="text-xs text-muted-foreground flex items-center gap-1">
-                    <Paperclip className="h-3 w-3" />
-                    Attach an image or PDF bill (optional)
-                  </p>
-                </div>
+                {fieldConfig.expense.attachment && (
+                  <div className="space-y-2 md:col-span-2">
+                    <Label>Attach Bills</Label>
+                    <Input
+                      type="file"
+                      accept="image/*,.pdf"
+                      onChange={(e) => setAttachment(e.target.files?.[0] ?? null)}
+                    />
+                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Paperclip className="h-3 w-3" />
+                      Attach an image or PDF bill (optional)
+                    </p>
+                  </div>
+                )}
 
                 <div className="space-y-2">
                   <Label>Bill For Month</Label>
