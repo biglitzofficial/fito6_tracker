@@ -199,6 +199,7 @@ export default function DashboardPage() {
               {staffData.recentIncome.map((item) => (
                 <div key={item.id} className="flex justify-between text-sm py-2 border-b border-border last:border-0">
                   <span>
+                    {item.receiptNumber ? `${item.receiptNumber} · ` : ''}
                     {item.category?.name ?? 'Unknown'}
                     {item.account?.name ? ` · ${item.account.name}` : ''}
                   </span>

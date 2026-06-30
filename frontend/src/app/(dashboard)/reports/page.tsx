@@ -62,7 +62,7 @@ export default function ReportsPage() {
 
   const reports = isAdmin(user)
     ? [
-        { id: 'income', label: 'Income Report', desc: 'All income entries for date range' },
+        { id: 'income', label: 'Income Report', desc: 'All income entries with receipt numbers for date range' },
         { id: 'expense', label: 'Expense Report', desc: 'All expense entries for date range' },
         { id: 'profit-loss', label: 'Profit & Loss', desc: 'P&L summary for period' },
         { id: 'attendance', label: 'Attendance Report', desc: 'Staff attendance for month' },

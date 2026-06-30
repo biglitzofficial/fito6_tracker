@@ -19,6 +19,7 @@ export const COL = {
   reports: 'reports',
   auditLogs: 'audit_logs',
   settings: 'settings',
+  counters: 'counters',
 } as const;
 
 const DATE_FIELDS = new Set([

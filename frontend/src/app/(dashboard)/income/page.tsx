@@ -130,12 +130,12 @@ function IncomeContent() {
 
   return (
     <div>
-      <Header title="Income Management" subtitle="Track and manage all income records" />
+      <Header title="Income Management" subtitle="Track income with auto-generated receipt voucher numbers" />
       <div className="p-6 space-y-6">
         <div className="flex flex-wrap items-center gap-4">
           <div className="relative flex-1 min-w-[200px] max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input className="pl-10" placeholder="Search income..." value={search} onChange={(e) => setSearch(e.target.value)} />
+            <Input className="pl-10" placeholder="Search by receipt no., source..." value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
           <Button onClick={() => (showForm && !editingItem ? closeForm() : openAddForm())}>
             <Plus className="h-4 w-4" /> Add Income
@@ -153,6 +153,11 @@ function IncomeContent() {
               </CardTitle>
             </CardHeader>
             <CardContent>
+              {editingItem?.receiptNumber && (
+                <p className="mb-4 text-sm text-muted-foreground">
+                  Receipt No: <span className="font-mono font-medium text-foreground">{editingItem.receiptNumber}</span>
+                </p>
+              )}
               <form onSubmit={handleSubmit(onSubmit)} className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Amount</Label>
@@ -236,6 +241,7 @@ function IncomeContent() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border text-muted-foreground">
+                      <th className="text-left p-4 font-medium">Receipt No</th>
                       <th className="text-left p-4 font-medium">Date</th>
                       <th className="text-left p-4 font-medium">Category</th>
                       <th className="text-left p-4 font-medium">Account</th>
@@ -248,6 +254,7 @@ function IncomeContent() {
                   <tbody>
                     {items.map((item) => (
                       <tr key={item.id} className="group border-b border-border/50 hover:bg-accent/30 transition-colors">
+                        <td className="p-4 font-mono text-xs">{item.receiptNumber || '—'}</td>
                         <td className="p-4">{formatDate(item.date)}</td>
                         <td className="p-4"><Badge variant="secondary">{item.category?.name ?? 'Unknown'}</Badge></td>
                         <td className="p-4 text-muted-foreground">{item.account?.name ?? '—'}</td>

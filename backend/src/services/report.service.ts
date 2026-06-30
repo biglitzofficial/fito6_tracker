@@ -74,6 +74,7 @@ const ACCOUNT_TYPE_LABELS: Record<AccountType, string> = {
 };
 
 interface UnifiedTransaction {
+  receiptNumber: string;
   date: string;
   type: 'INCOME' | 'EXPENSE';
   party: string;
@@ -110,6 +111,7 @@ async function loadTransactions(
   const incomeRows: UnifiedTransaction[] = incomes.map((i) => {
     const account = i.accountId ? accountMap.get(i.accountId) : null;
     return {
+      receiptNumber: i.receiptNumber || '—',
       date: i.date.toISOString().split('T')[0],
       type: 'INCOME',
       party: i.source || '—',
@@ -124,6 +126,7 @@ async function loadTransactions(
   const expenseRows: UnifiedTransaction[] = expenses.map((e) => {
     const account = e.accountId ? accountMap.get(e.accountId) : null;
     return {
+      receiptNumber: '—',
       date: e.date.toISOString().split('T')[0],
       type: 'EXPENSE',
       party: e.vendor || '—',
@@ -141,6 +144,7 @@ async function loadTransactions(
 function groupTransactions(transactions: UnifiedTransaction[], groupBy: TransactionGroupBy) {
   if (groupBy === 'all') {
     return transactions.map((t) => ({
+      'Receipt No': t.receiptNumber,
       Date: t.date,
       Type: t.type,
       Party: t.party,
@@ -284,6 +288,7 @@ export const reportService = {
     const userMap = await getUserMap(sorted.map((i) => i.createdById));
 
     const rows = sorted.map((i) => ({
+      receiptNumber: i.receiptNumber || '',
       date: i.date.toISOString().split('T')[0],
       amount: Number(i.amount),
       category: categoryMap.get(i.categoryId)?.name || 'Unknown',

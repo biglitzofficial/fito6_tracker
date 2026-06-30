@@ -20,6 +20,7 @@ import { formatCurrency, formatDate } from '@/lib/utils';
 interface LedgerEntry {
   id: string;
   referenceId: string;
+  receiptNumber?: string | null;
   date: string;
   type: 'INCOME' | 'EXPENSE';
   description: string;
@@ -112,7 +113,7 @@ export default function LedgerPage() {
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
                       className="pl-10"
-                      placeholder="Search description, category..."
+                      placeholder="Search receipt no., description, category..."
                       value={search}
                       onChange={(e) => { setSearch(e.target.value); setPage(1); }}
                     />
@@ -157,6 +158,7 @@ export default function LedgerPage() {
                       <tr className="border-b border-border text-muted-foreground bg-secondary/30">
                         <th className="text-left p-4 font-medium">Date</th>
                         <th className="text-left p-4 font-medium">Type</th>
+                        <th className="text-left p-4 font-medium">Receipt No</th>
                         <th className="text-left p-4 font-medium">Description</th>
                         <th className="text-left p-4 font-medium">Category</th>
                         <th className="text-right p-4 font-medium">Debit</th>
@@ -173,6 +175,9 @@ export default function LedgerPage() {
                             <Badge variant={entry.type === 'INCOME' ? 'success' : 'destructive'}>
                               {entry.type}
                             </Badge>
+                          </td>
+                          <td className="p-4 font-mono text-xs whitespace-nowrap">
+                            {entry.receiptNumber || '—'}
                           </td>
                           <td className="p-4 max-w-[200px] truncate">{entry.description}</td>
                           <td className="p-4"><Badge variant="secondary">{entry.category}</Badge></td>

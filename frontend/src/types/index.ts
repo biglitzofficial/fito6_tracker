@@ -60,6 +60,7 @@ export interface Party {
 
 export interface Income {
   id: string;
+  receiptNumber?: string;
   amount: number;
   categoryId: string;
   category: Category;

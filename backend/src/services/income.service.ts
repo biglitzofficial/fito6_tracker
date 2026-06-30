@@ -15,7 +15,7 @@ import {
   update,
 } from '../lib/firestore';
 import { assertBusinessAccess } from '../lib/business-scope';
-import { AppError } from '../utils/response';
+import { nextIncomeReceiptNumber } from '../lib/receipt-number';
 
 interface IncomeFilters {
   search?: string;
@@ -62,7 +62,7 @@ export const incomeService = {
     let items = await findManyForBusiness<Income>(COL.income, businessId, (item) => {
       if (categoryId && item.categoryId !== categoryId) return false;
       if (!inDateRange(item.date, from, to)) return false;
-      if (!matchesSearch(search, item.source, item.notes)) return false;
+      if (!matchesSearch(search, item.receiptNumber, item.source, item.notes)) return false;
       return true;
     });
 
@@ -87,13 +87,16 @@ export const incomeService = {
     attachment?: string;
     createdById: string;
   }) {
+    const entryDate = new Date(data.date);
+    const receiptNumber = await nextIncomeReceiptNumber(data.businessId, entryDate);
     const income = await create<Income>(COL.income, {
       businessId: data.businessId,
+      receiptNumber,
       amount: data.amount,
       categoryId: data.categoryId,
       accountId: data.accountId || null,
       source: data.source,
-      date: new Date(data.date),
+      date: entryDate,
       notes: data.notes,
       attachment: data.attachment,
       createdById: data.createdById,

@@ -73,6 +73,7 @@ export interface Party {
 export interface Income {
   id: string;
   businessId?: string | null;
+  receiptNumber?: string | null;
   amount: number;
   categoryId: string;
   accountId?: string | null;
