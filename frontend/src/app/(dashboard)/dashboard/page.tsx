@@ -214,6 +214,7 @@ export default function DashboardPage() {
               {staffData.recentExpense.map((item) => (
                 <div key={item.id} className="flex justify-between text-sm py-2 border-b border-border last:border-0">
                   <span>
+                    {item.voucherNumber ? `${item.voucherNumber} · ` : ''}
                     {item.category?.name ?? 'Unknown'}
                     {item.account?.name ? ` · ${item.account.name}` : ''}
                   </span>

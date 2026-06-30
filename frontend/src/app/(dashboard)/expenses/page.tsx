@@ -228,12 +228,12 @@ function ExpenseContent() {
 
   return (
     <div>
-      <Header title="Expense Management" subtitle="Track bills, payroll, and operational costs" />
+      <Header title="Expense Management" subtitle="Track expenses with auto-generated payment voucher numbers" />
       <div className="p-6 space-y-6">
         <div className="flex flex-wrap items-center gap-4">
           <div className="relative flex-1 min-w-[200px] max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input className="pl-10" placeholder="Search expenses..." value={search} onChange={(e) => setSearch(e.target.value)} />
+            <Input className="pl-10" placeholder="Search by voucher no., party..." value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
           <Button onClick={() => (showForm && !editingItem ? closeForm() : openAddForm())}>
             <Plus className="h-4 w-4" /> Add Expense
@@ -251,6 +251,11 @@ function ExpenseContent() {
               </CardTitle>
             </CardHeader>
             <CardContent>
+              {editingItem?.voucherNumber && (
+                <p className="mb-4 text-sm text-muted-foreground">
+                  Voucher No: <span className="font-mono font-medium text-foreground">{editingItem.voucherNumber}</span>
+                </p>
+              )}
               <form onSubmit={handleSubmit(onSubmit)} className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Date</Label>
@@ -412,6 +417,7 @@ function ExpenseContent() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border text-muted-foreground">
+                      <th className="text-left p-4 font-medium">Voucher No</th>
                       <th className="text-left p-4 font-medium">Payment Date</th>
                       <th className="text-left p-4 font-medium">Bill Month</th>
                       <th className="text-left p-4 font-medium">Category</th>
@@ -425,6 +431,7 @@ function ExpenseContent() {
                   <tbody>
                     {items.map((item) => (
                       <tr key={item.id} className="group border-b border-border/50 hover:bg-accent/30">
+                        <td className="p-4 font-mono text-xs">{item.voucherNumber || '—'}</td>
                         <td className="p-4">{formatDate(item.date)}</td>
                         <td className="p-4">
                           <Badge variant="secondary">

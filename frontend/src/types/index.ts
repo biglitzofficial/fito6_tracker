@@ -75,6 +75,7 @@ export interface Income {
 
 export interface Expense {
   id: string;
+  voucherNumber?: string;
   amount: number;
   categoryId: string;
   category: Category;

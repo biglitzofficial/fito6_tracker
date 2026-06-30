@@ -89,6 +89,7 @@ export interface Income {
 export interface Expense {
   id: string;
   businessId?: string | null;
+  voucherNumber?: string | null;
   amount: number;
   categoryId: string;
   accountId?: string | null;

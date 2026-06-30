@@ -16,6 +16,7 @@ import {
   update,
 } from '../lib/firestore';
 import { assertBusinessAccess } from '../lib/business-scope';
+import { nextExpenseVoucherNumber } from '../lib/receipt-number';
 import { isValidPeriodMonth, periodMonthFromDate } from '../utils/period';
 import { AppError } from '../utils/response';
 
@@ -94,7 +95,7 @@ export const expenseService = {
       if (categoryId && item.categoryId !== categoryId) return false;
       if (isRecurring !== undefined && item.isRecurring !== isRecurring) return false;
       if (!inDateRange(item.date, from, to)) return false;
-      if (!matchesSearch(search, item.vendor, item.notes)) return false;
+      if (!matchesSearch(search, item.voucherNumber, item.vendor, item.notes)) return false;
       return true;
     });
 
@@ -127,6 +128,8 @@ export const expenseService = {
     recurringDay?: number;
     createdById: string;
   }) {
+    const entryDate = new Date(data.date);
+    const voucherNumber = await nextExpenseVoucherNumber(data.businessId, entryDate);
     const periodMonth =
       data.periodMonth && isValidPeriodMonth(data.periodMonth)
         ? data.periodMonth
@@ -135,12 +138,13 @@ export const expenseService = {
 
     const expense = await create<Expense>(COL.expenses, {
       businessId: data.businessId,
+      voucherNumber,
       amount: data.amount,
       categoryId: data.categoryId,
       accountId: data.accountId || null,
       partyId,
       vendor,
-      date: new Date(data.date),
+      date: entryDate,
       periodMonth,
       notes: data.notes,
       attachment: data.attachment,

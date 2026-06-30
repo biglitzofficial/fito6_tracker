@@ -74,7 +74,7 @@ const ACCOUNT_TYPE_LABELS: Record<AccountType, string> = {
 };
 
 interface UnifiedTransaction {
-  receiptNumber: string;
+  voucherNumber: string;
   date: string;
   type: 'INCOME' | 'EXPENSE';
   party: string;
@@ -111,7 +111,7 @@ async function loadTransactions(
   const incomeRows: UnifiedTransaction[] = incomes.map((i) => {
     const account = i.accountId ? accountMap.get(i.accountId) : null;
     return {
-      receiptNumber: i.receiptNumber || '—',
+      voucherNumber: i.receiptNumber || '—',
       date: i.date.toISOString().split('T')[0],
       type: 'INCOME',
       party: i.source || '—',
@@ -126,7 +126,7 @@ async function loadTransactions(
   const expenseRows: UnifiedTransaction[] = expenses.map((e) => {
     const account = e.accountId ? accountMap.get(e.accountId) : null;
     return {
-      receiptNumber: '—',
+      voucherNumber: e.voucherNumber || '—',
       date: e.date.toISOString().split('T')[0],
       type: 'EXPENSE',
       party: e.vendor || '—',
@@ -144,7 +144,7 @@ async function loadTransactions(
 function groupTransactions(transactions: UnifiedTransaction[], groupBy: TransactionGroupBy) {
   if (groupBy === 'all') {
     return transactions.map((t) => ({
-      'Receipt No': t.receiptNumber,
+      'Voucher No': t.voucherNumber,
       Date: t.date,
       Type: t.type,
       Party: t.party,
@@ -335,6 +335,7 @@ export const reportService = {
     const userMap = await getUserMap(sorted.map((e) => e.createdById));
 
     const rows = sorted.map((e) => ({
+      voucherNumber: e.voucherNumber || '',
       date: e.date.toISOString().split('T')[0],
       amount: Number(e.amount),
       category: categoryMap.get(e.categoryId)?.name || 'Unknown',

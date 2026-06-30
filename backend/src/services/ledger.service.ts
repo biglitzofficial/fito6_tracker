@@ -25,7 +25,7 @@ export interface LedgerFilters {
 export interface LedgerEntry {
   id: string;
   referenceId: string;
-  receiptNumber?: string | null;
+  voucherNumber?: string | null;
   date: string;
   type: 'INCOME' | 'EXPENSE';
   description: string;
@@ -82,7 +82,7 @@ export const ledgerService = {
         if (!inDateRange(e.date, dateFromStart, dateToEnd)) return false;
       }
       const cat = cats.get(e.categoryId) as Category | undefined;
-      if (!matchesSearch(search, e.vendor, e.notes, cat?.name)) return false;
+      if (!matchesSearch(search, e.voucherNumber, e.vendor, e.notes, cat?.name)) return false;
       return true;
     });
 
@@ -90,7 +90,7 @@ export const ledgerService = {
       ...filteredIncomes.map((i) => ({
         id: `income-${i.id}`,
         referenceId: i.id,
-        receiptNumber: i.receiptNumber,
+        voucherNumber: i.receiptNumber,
         date: i.date.toISOString(),
         type: 'INCOME' as const,
         description: i.source || i.notes || cats.get(i.categoryId)?.name || '',
@@ -103,6 +103,7 @@ export const ledgerService = {
       ...filteredExpenses.map((e) => ({
         id: `expense-${e.id}`,
         referenceId: e.id,
+        voucherNumber: e.voucherNumber,
         date: e.date.toISOString(),
         type: 'EXPENSE' as const,
         description: e.vendor || e.notes || cats.get(e.categoryId)?.name || '',
@@ -149,12 +150,12 @@ export const ledgerService = {
       limit: 100000,
     });
     const lines = [
-      'Date,Type,Receipt No,Description,Category,Debit,Credit,Balance,Created By',
+      'Date,Type,Voucher No,Description,Category,Debit,Credit,Balance,Created By',
       ...entries.map((e) =>
         [
           e.date.split('T')[0],
           e.type,
-          JSON.stringify(e.receiptNumber || ''),
+          JSON.stringify(e.voucherNumber || ''),
           JSON.stringify(e.description),
           JSON.stringify(e.category),
           e.debit,
