@@ -5,6 +5,8 @@ export const queryKeys = {
   categories: (type: string) => ['categories', type] as const,
   accounts: (type?: string) => ['accounts', type ?? 'all'] as const,
   parties: (type?: string) => ['parties', type ?? 'all'] as const,
+  membershipPlans: (kind?: string) => ['membership-plans', kind ?? 'all'] as const,
+  subscriptions: (kind?: string) => ['subscriptions', kind ?? 'all'] as const,
   staff: ['staff'] as const,
   staffList: ['staff', 'all'] as const,
   tasks: ['tasks'] as const,

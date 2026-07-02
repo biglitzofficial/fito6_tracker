@@ -2,13 +2,14 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { ListChecks, Tags, UserRound, Wallet, Loader2 } from 'lucide-react';
+import { ListChecks, Tags, UserRound, Wallet, Loader2, CreditCard } from 'lucide-react';
 import { Header } from '@/components/layout/header';
 import { Button } from '@/components/ui/button';
 import { FieldToggleCard } from '@/components/entry-fields/field-toggle-card';
 import { CategoriesPanel } from '@/components/entry-fields/categories-panel';
 import { PartiesPanel } from '@/components/entry-fields/parties-panel';
 import { PaymentModesPanel } from '@/components/entry-fields/payment-modes-panel';
+import { MembershipPlansPanel } from '@/components/entry-fields/membership-plans-panel';
 import { api } from '@/lib/api';
 import { useApiQuery, useInvalidate } from '@/hooks/use-api-query';
 import { queryKeys } from '@/lib/query-keys';
@@ -16,13 +17,14 @@ import { useAuthStore, isAdmin } from '@/stores/auth.store';
 import { DEFAULT_ENTRY_FIELDS, mergeEntryFields, type EntryFieldsConfig } from '@/lib/entry-fields';
 import { cn } from '@/lib/utils';
 
-type TabId = 'overview' | 'categories' | 'parties' | 'payment-modes';
+type TabId = 'overview' | 'categories' | 'parties' | 'payment-modes' | 'membership-plans';
 
 const SECTIONS: { id: TabId; label: string; description: string; icon: typeof ListChecks }[] = [
   { id: 'overview', label: 'Entry Fields', description: 'Show or hide fields on forms', icon: ListChecks },
   { id: 'categories', label: 'Categories', description: 'Rename, add, or disable categories', icon: Tags },
-  { id: 'parties', label: 'Parties', description: 'Staff, vendors & contacts', icon: UserRound },
+  { id: 'parties', label: 'Parties', description: 'Client personal & emergency details', icon: UserRound },
   { id: 'payment-modes', label: 'Payment Modes', description: 'Bank, cash, UPI accounts', icon: Wallet },
+  { id: 'membership-plans', label: 'Membership Plans', description: 'Plans, GST pricing & duration', icon: CreditCard },
 ];
 
 function EntryFieldsContent() {
@@ -187,6 +189,9 @@ function EntryFieldsContent() {
             {activeTab === 'parties' && <PartiesPanel autoOpenAdd={autoOpenAdd && activeTab === 'parties'} />}
             {activeTab === 'payment-modes' && (
               <PaymentModesPanel autoOpenAdd={autoOpenAdd && activeTab === 'payment-modes'} />
+            )}
+            {activeTab === 'membership-plans' && (
+              <MembershipPlansPanel autoOpenAdd={autoOpenAdd && activeTab === 'membership-plans'} />
             )}
           </main>
         </div>

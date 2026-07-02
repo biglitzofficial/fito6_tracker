@@ -10,6 +10,8 @@ export const COL = {
   categories: 'categories',
   accounts: 'accounts',
   parties: 'parties',
+  membershipPlans: 'membership_plans',
+  subscriptions: 'subscriptions',
   income: 'income',
   expenses: 'expenses',
   attendance: 'attendance',
@@ -33,6 +35,8 @@ const DATE_FIELDS = new Set([
   'dateFrom',
   'dateTo',
   'resetTokenExp',
+  'startDate',
+  'endDate',
 ]);
 
 function toDate(value: unknown): Date {

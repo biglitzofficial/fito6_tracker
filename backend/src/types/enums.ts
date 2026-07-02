@@ -35,6 +35,17 @@ export enum PartyType {
   OTHER = 'OTHER',
 }
 
+export enum PlanKind {
+  MEMBERSHIP = 'MEMBERSHIP',
+  PERSONAL_TRAINING = 'PERSONAL_TRAINING',
+}
+
+export enum SubscriptionStatus {
+  ACTIVE = 'ACTIVE',
+  EXPIRED = 'EXPIRED',
+  CANCELLED = 'CANCELLED',
+}
+
 export enum DocumentType {
   BILL = 'BILL',
   INVOICE = 'INVOICE',

@@ -4,6 +4,8 @@ import {
   DocumentType,
   NotificationType,
   PartyType,
+  PlanKind,
+  SubscriptionStatus,
   ReportFormat,
   ReportType,
   Role,
@@ -63,9 +65,63 @@ export interface Party {
   businessId?: string | null;
   name: string;
   type: PartyType;
+  email?: string | null;
   phone?: string | null;
+  promotionSource?: string | null;
+  address?: string | null;
+  emergencyContactName?: string | null;
+  emergencyContactPhone?: string | null;
+  emergencyContactRelation?: string | null;
   notes?: string | null;
   isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface MembershipPlan {
+  id: string;
+  businessId: string;
+  name: string;
+  kind: PlanKind;
+  description?: string | null;
+  durationDays: number;
+  sessionsTotal?: number | null;
+  priceExGst: number;
+  priceInclGst: number;
+  gstRate: number;
+  gstAmount: number;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface Subscription {
+  id: string;
+  businessId: string;
+  kind: PlanKind;
+  partyId: string;
+  planId: string;
+  planName: string;
+  startDate: Date;
+  endDate: Date;
+  status: SubscriptionStatus;
+  priceExGst: number;
+  priceInclGst: number;
+  gstRate: number;
+  gstAmount: number;
+  amountPaid: number;
+  billRepId?: string | null;
+  billRepName?: string | null;
+  trainerStaffId?: string | null;
+  trainerName?: string | null;
+  sessionsTotal?: number | null;
+  sessionsUsed?: number | null;
+  accountId?: string | null;
+  incomeId?: string | null;
+  receiptNumber?: string | null;
+  renewedFromId?: string | null;
+  notes?: string | null;
+  createdById: string;
   createdAt: Date;
   updatedAt: Date;
 }

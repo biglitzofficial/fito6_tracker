@@ -25,8 +25,14 @@ export const partyService = {
     businessId: string;
     name: string;
     type: PartyType;
-    phone?: string;
-    notes?: string;
+    email?: string | null;
+    phone?: string | null;
+    promotionSource?: string | null;
+    address?: string | null;
+    emergencyContactName?: string | null;
+    emergencyContactPhone?: string | null;
+    emergencyContactRelation?: string | null;
+    notes?: string | null;
   }) {
     const name = data.name.trim();
     const existing = (await findManyForBusiness<Party>(COL.parties, data.businessId)).find(
@@ -38,7 +44,13 @@ export const partyService = {
       businessId: data.businessId,
       name,
       type: data.type,
+      email: data.email?.trim() || null,
       phone: data.phone?.trim() || null,
+      promotionSource: data.promotionSource?.trim() || null,
+      address: data.address?.trim() || null,
+      emergencyContactName: data.emergencyContactName?.trim() || null,
+      emergencyContactPhone: data.emergencyContactPhone?.trim() || null,
+      emergencyContactRelation: data.emergencyContactRelation?.trim() || null,
       notes: data.notes?.trim() || null,
       isActive: true,
     });
@@ -50,7 +62,13 @@ export const partyService = {
     data: {
       name?: string;
       type?: PartyType;
+      email?: string | null;
       phone?: string | null;
+      promotionSource?: string | null;
+      address?: string | null;
+      emergencyContactName?: string | null;
+      emergencyContactPhone?: string | null;
+      emergencyContactRelation?: string | null;
       notes?: string | null;
       isActive?: boolean;
     }
@@ -67,10 +85,19 @@ export const partyService = {
       data.name = name;
     }
 
+    const nullable = (value: string | null | undefined) =>
+      value === undefined ? undefined : value?.trim() || null;
+
     return update<Party>(COL.parties, id, {
       ...data,
-      phone: data.phone === undefined ? undefined : data.phone?.trim() || null,
-      notes: data.notes === undefined ? undefined : data.notes?.trim() || null,
+      email: nullable(data.email),
+      phone: nullable(data.phone),
+      promotionSource: nullable(data.promotionSource),
+      address: nullable(data.address),
+      emergencyContactName: nullable(data.emergencyContactName),
+      emergencyContactPhone: nullable(data.emergencyContactPhone),
+      emergencyContactRelation: nullable(data.emergencyContactRelation),
+      notes: nullable(data.notes),
     });
   },
 

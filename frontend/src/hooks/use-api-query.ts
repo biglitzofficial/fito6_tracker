@@ -45,6 +45,24 @@ export function useParties(type?: import('@/types').PartyType) {
   );
 }
 
+export function useMembershipPlans(kind?: import('@/types').PlanKind) {
+  const endpoint = kind ? `/membership-plans?kind=${kind}` : '/membership-plans';
+  return useApiQuery<import('@/types').MembershipPlan[]>(
+    queryKeys.membershipPlans(kind),
+    endpoint,
+    { staleTime: 10 * 60_000 }
+  );
+}
+
+export function useSubscriptions(kind?: import('@/types').PlanKind) {
+  const endpoint = kind ? `/subscriptions?kind=${kind}` : '/subscriptions';
+  return useApiQuery<import('@/types').Subscription[]>(
+    queryKeys.subscriptions(kind),
+    endpoint,
+    { staleTime: 30_000 }
+  );
+}
+
 export function useInvalidate() {
   const queryClient = useQueryClient();
   return (queryKey: readonly unknown[]) =>
@@ -78,6 +96,7 @@ export function prefetchRoute(queryClient: ReturnType<typeof useQueryClient>, hr
       prefetch(queryKeys.entryFields, '/settings/entry-fields');
       prefetch(queryKeys.accounts(), '/accounts');
       prefetch(queryKeys.parties(), '/parties');
+      prefetch(queryKeys.membershipPlans(), '/membership-plans');
       prefetch(queryKeys.categories('INCOME'), '/categories?type=INCOME');
       prefetch(queryKeys.categories('EXPENSE'), '/categories?type=EXPENSE');
       return;
@@ -85,6 +104,20 @@ export function prefetchRoute(queryClient: ReturnType<typeof useQueryClient>, hr
       return prefetch(queryKeys.accounts(), '/accounts');
     case '/parties':
       return prefetch(queryKeys.parties(), '/parties');
+    case '/subscriptions':
+      prefetch(queryKeys.membershipPlans('MEMBERSHIP'), '/membership-plans?kind=MEMBERSHIP');
+      prefetch(queryKeys.subscriptions('MEMBERSHIP'), '/subscriptions?kind=MEMBERSHIP');
+      prefetch(queryKeys.parties('CUSTOMER'), '/parties?type=CUSTOMER');
+      prefetch(queryKeys.accounts(), '/accounts');
+      prefetch(queryKeys.staffList, '/staff?includeInactive=true');
+      return;
+    case '/personal-training':
+      prefetch(queryKeys.membershipPlans('PERSONAL_TRAINING'), '/membership-plans?kind=PERSONAL_TRAINING');
+      prefetch(queryKeys.subscriptions('PERSONAL_TRAINING'), '/subscriptions?kind=PERSONAL_TRAINING');
+      prefetch(queryKeys.parties('CUSTOMER'), '/parties?type=CUSTOMER');
+      prefetch(queryKeys.accounts(), '/accounts');
+      prefetch(queryKeys.staffList, '/staff?includeInactive=true');
+      return;
     case '/staff':
       return prefetch(queryKeys.staffList, '/staff?includeInactive=true');
     case '/tasks':
