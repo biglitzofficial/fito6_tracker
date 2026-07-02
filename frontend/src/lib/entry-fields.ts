@@ -1,5 +1,6 @@
 export interface EntryFieldsConfig {
   income: {
+    party: boolean;
     category: boolean;
     paymentMode: boolean;
   };
@@ -12,7 +13,7 @@ export interface EntryFieldsConfig {
 }
 
 export const DEFAULT_ENTRY_FIELDS: EntryFieldsConfig = {
-  income: { category: true, paymentMode: true },
+  income: { party: true, category: true, paymentMode: true },
   expense: { party: true, category: true, paymentMode: true, attachment: true },
 };
 

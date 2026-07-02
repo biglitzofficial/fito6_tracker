@@ -1,4 +1,4 @@
-import { Income } from '../types/models';
+import { Income, Party } from '../types/models';
 import {
   COL,
   create,
@@ -6,6 +6,7 @@ import {
   getById,
   getAccountMap,
   getCategoryMap,
+  getPartyMap,
   getUserMap,
   inDateRange,
   matchesSearch,
@@ -16,6 +17,7 @@ import {
 } from '../lib/firestore';
 import { assertBusinessAccess } from '../lib/business-scope';
 import { nextIncomeReceiptNumber } from '../lib/receipt-number';
+import { AppError } from '../utils/response';
 
 interface IncomeFilters {
   search?: string;
@@ -29,6 +31,7 @@ interface IncomeFilters {
 async function withRelations(items: Income[]) {
   const categoryMap = await getCategoryMap(items.map((i) => i.categoryId));
   const accountMap = await getAccountMap(items.map((i) => i.accountId || ''));
+  const partyMap = await getPartyMap(items.map((i) => i.partyId || ''));
   const userMap = await getUserMap(items.map((i) => i.createdById));
 
   return items.map((item) => ({
@@ -46,11 +49,38 @@ async function withRelations(items: Income[]) {
           type: 'OTHER' as const,
         }
       : null,
+    party: item.partyId
+      ? partyMap.get(item.partyId) ?? {
+          id: item.partyId,
+          name: item.source || 'Unknown',
+          type: 'CUSTOMER' as const,
+        }
+      : null,
     createdBy: {
       id: item.createdById,
       name: userMap.get(item.createdById)?.name || 'Unknown',
     },
   }));
+}
+
+async function resolvePartyFields(
+  businessId: string,
+  data: { partyId?: string; source?: string }
+) {
+  if (!data.partyId) {
+    return { partyId: null as string | null, source: data.source?.trim() || null };
+  }
+
+  const party = assertBusinessAccess(
+    await getById<Party>(COL.parties, data.partyId),
+    businessId,
+    'Party'
+  );
+  if (!party.isActive) {
+    throw new AppError(400, 'Invalid party selected');
+  }
+
+  return { partyId: party.id, source: party.name };
 }
 
 export const incomeService = {
@@ -81,6 +111,7 @@ export const incomeService = {
     amount: number;
     categoryId: string;
     accountId?: string;
+    partyId?: string;
     source?: string;
     date: string;
     notes?: string;
@@ -89,13 +120,15 @@ export const incomeService = {
   }) {
     const entryDate = new Date(data.date);
     const receiptNumber = await nextIncomeReceiptNumber(data.businessId, entryDate);
+    const { partyId, source } = await resolvePartyFields(data.businessId, data);
     const income = await create<Income>(COL.income, {
       businessId: data.businessId,
       receiptNumber,
       amount: data.amount,
       categoryId: data.categoryId,
       accountId: data.accountId || null,
-      source: data.source,
+      partyId,
+      source,
       date: entryDate,
       notes: data.notes,
       attachment: data.attachment,
@@ -111,6 +144,7 @@ export const incomeService = {
       amount: number;
       categoryId: string;
       accountId: string | null;
+      partyId: string | null;
       source: string;
       date: string;
       notes: string;
@@ -118,10 +152,21 @@ export const incomeService = {
     }>
   ) {
     await incomeService.getById(businessId, id);
-    const income = await update<Income>(COL.income, id, {
+    const updatePayload: Partial<Income> = {
       ...data,
       date: data.date ? new Date(data.date) : undefined,
-    });
+    };
+
+    if (data.partyId !== undefined || data.source !== undefined) {
+      const resolved = await resolvePartyFields(businessId, {
+        partyId: data.partyId ?? undefined,
+        source: data.source,
+      });
+      updatePayload.partyId = resolved.partyId;
+      updatePayload.source = resolved.source;
+    }
+
+    const income = await update<Income>(COL.income, id, updatePayload);
     return (await withRelations([income]))[0];
   },
 

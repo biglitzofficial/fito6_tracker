@@ -17,9 +17,10 @@ import { QueryState } from '@/components/ui/query-state';
 import { RowHoverActions } from '@/components/ui/row-hover-actions';
 import { CategorySelectField } from '@/components/forms/category-select-field';
 import { AccountSelectField } from '@/components/forms/account-select-field';
+import { PartySelectField } from '@/components/forms/party-select-field';
 import Link from 'next/link';
 import { api } from '@/lib/api';
-import { useApiQuery, useCategories, useAccounts, useInvalidate, useEntryFields } from '@/hooks/use-api-query';
+import { useApiQuery, useCategories, useAccounts, useParties, useInvalidate, useEntryFields } from '@/hooks/use-api-query';
 import { useDebounce } from '@/hooks/use-debounce';
 import { queryKeys } from '@/lib/query-keys';
 import { useAuthStore, isAdmin } from '@/stores/auth.store';
@@ -31,6 +32,7 @@ const baseSchema = z.object({
   amount: z.coerce.number().positive(),
   categoryId: z.string().optional(),
   accountId: z.string().optional(),
+  partyId: z.string().optional(),
   source: z.string().optional(),
   date: z.string().min(1),
   notes: z.string().optional(),
@@ -44,6 +46,7 @@ function IncomeContent() {
   const [showForm, setShowForm] = useState(searchParams.get('action') === 'add');
   const [editingItem, setEditingItem] = useState<Income | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [partyError, setPartyError] = useState('');
   const invalidate = useInvalidate();
   const { data: entryFieldsData } = useEntryFields();
   const fieldConfig = mergeEntryFields(entryFieldsData);
@@ -69,6 +72,7 @@ function IncomeContent() {
   const { data: allCategories = [] } = useCategories('INCOME');
   const categories = allCategories.filter((c) => !c.parentId);
   const { data: accounts = [] } = useAccounts();
+  const { data: parties = [] } = useParties();
   const { data: incomeRes, isLoading, isError, error, refetch } = useApiQuery<PaginatedResponse<Income>>(
     queryKeys.income(debouncedSearch),
     `/income?search=${debouncedSearch}`
@@ -87,6 +91,7 @@ function IncomeContent() {
       amount: Number(item.amount),
       categoryId: item.categoryId,
       accountId: item.accountId || undefined,
+      partyId: item.partyId || undefined,
       source: item.source || '',
       date: item.date.slice(0, 10),
       notes: item.notes || '',
@@ -107,6 +112,8 @@ function IncomeContent() {
         ...data,
         categoryId: data.categoryId,
         accountId: fieldConfig.income.paymentMode ? data.accountId : undefined,
+        partyId: fieldConfig.income.party ? data.partyId : undefined,
+        source: fieldConfig.income.party ? undefined : data.source,
       };
       if (editingItem) {
         await api.put(`/income/${editingItem.id}`, payload);
@@ -135,7 +142,7 @@ function IncomeContent() {
         <div className="flex flex-wrap items-center gap-4">
           <div className="relative flex-1 min-w-[200px] max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input className="pl-10" placeholder="Search by receipt no., source..." value={search} onChange={(e) => setSearch(e.target.value)} />
+            <Input className="pl-10" placeholder="Search by receipt no., party..." value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
           <Button onClick={() => (showForm && !editingItem ? closeForm() : openAddForm())}>
             <Plus className="h-4 w-4" /> Add Income
@@ -199,10 +206,39 @@ function IncomeContent() {
                     />
                   </div>
                 )}
-                <div className="space-y-2">
-                  <Label>Source</Label>
-                  <Input {...register('source')} placeholder="e.g. Monthly members" />
-                </div>
+                {fieldConfig.income.party && (
+                  <div className="space-y-2 md:col-span-2">
+                    <Label>Party Name (Contact)</Label>
+                    <Controller
+                      name="partyId"
+                      control={control}
+                      render={({ field }) => (
+                        <PartySelectField
+                          value={field.value}
+                          onChange={(id) => {
+                            field.onChange(id);
+                            setPartyError('');
+                          }}
+                          parties={parties}
+                          defaultType="CUSTOMER"
+                          onPartyAdded={() => invalidate(queryKeys.parties())}
+                          error={partyError}
+                        />
+                      )}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      <Link href="/entry-fields?tab=parties" className="text-primary hover:underline">
+                        Manage parties
+                      </Link>
+                    </p>
+                  </div>
+                )}
+                {!fieldConfig.income.party && (
+                  <div className="space-y-2">
+                    <Label>Source</Label>
+                    <Input {...register('source')} placeholder="e.g. Monthly members" />
+                  </div>
+                )}
                 <div className="space-y-2">
                   <Label>Date</Label>
                   <Input type="date" {...register('date')} />
@@ -245,7 +281,7 @@ function IncomeContent() {
                       <th className="text-left p-4 font-medium">Date</th>
                       <th className="text-left p-4 font-medium">Category</th>
                       <th className="text-left p-4 font-medium">Account</th>
-                      <th className="text-left p-4 font-medium">Source</th>
+                      <th className="text-left p-4 font-medium">Party</th>
                       <th className="text-right p-4 font-medium">Amount</th>
                       <th className="text-left p-4 font-medium">By</th>
                       <th className="text-right p-4 font-medium w-[140px]"> </th>
@@ -258,7 +294,7 @@ function IncomeContent() {
                         <td className="p-4">{formatDate(item.date)}</td>
                         <td className="p-4"><Badge variant="secondary">{item.category?.name ?? 'Unknown'}</Badge></td>
                         <td className="p-4 text-muted-foreground">{item.account?.name ?? '—'}</td>
-                        <td className="p-4 text-muted-foreground">{item.source || '—'}</td>
+                        <td className="p-4 text-muted-foreground">{item.party?.name || item.source || '—'}</td>
                         <td className="p-4 text-right font-medium text-success">{formatCurrency(Number(item.amount))}</td>
                         <td className="p-4 text-muted-foreground">{item.createdBy?.name ?? 'Unknown'}</td>
                         <td className="p-4">

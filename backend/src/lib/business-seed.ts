@@ -29,7 +29,7 @@ const DEFAULT_ACCOUNTS: { name: string; type: AccountType }[] = [
 ];
 
 const DEFAULT_ENTRY_FIELDS = {
-  income: { category: true, paymentMode: true },
+  income: { party: true, category: true, paymentMode: true },
   expense: { party: true, category: true, paymentMode: true, attachment: true },
 };
 

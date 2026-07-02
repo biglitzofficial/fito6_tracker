@@ -115,6 +115,14 @@ function EntryFieldsContent() {
                 <div className="space-y-3">
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Income Entry</p>
                   <FieldToggleCard
+                    title="Party field"
+                    description="Rename, delete, reorder, add new or hide"
+                    enabled={fields.income.party}
+                    onToggle={admin ? (v) => setFields({ ...fields, income: { ...fields.income, party: v } }) : undefined}
+                    onManage={() => setTab('parties')}
+                    readOnly={!admin}
+                  />
+                  <FieldToggleCard
                     title="Category field"
                     description="Rename, delete, reorder, add new or hide"
                     enabled={fields.income.category}

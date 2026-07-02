@@ -77,6 +77,7 @@ export interface Income {
   amount: number;
   categoryId: string;
   accountId?: string | null;
+  partyId?: string | null;
   source?: string | null;
   date: Date;
   notes?: string | null;
