@@ -1,4 +1,5 @@
 export type Role = 'ADMIN' | 'STAFF';
+export type StaffJobType = 'SALES' | 'TRAINER' | 'BOTH' | 'GENERAL';
 
 export interface User {
   id: string;
@@ -11,6 +12,7 @@ export interface User {
     phone?: string;
     salary: number;
     joiningDate: string;
+    jobType?: StaffJobType;
   };
 }
 
@@ -121,6 +123,8 @@ export interface Income {
   partyId?: string | null;
   party?: Party | null;
   source?: string;
+  creditedToId?: string | null;
+  creditedTo?: { id: string; name: string } | null;
   date: string;
   notes?: string;
   attachment?: string;
@@ -145,6 +149,16 @@ export interface Expense {
   isRecurring: boolean;
   recurringDay?: number;
   createdBy: { id: string; name: string };
+}
+
+export interface StaffTargetRow {
+  userId: string;
+  name: string;
+  periodMonth: string;
+  salesTarget: number;
+  ptTarget: number;
+  salesActual: number;
+  ptActual: number;
 }
 
 export interface Task {

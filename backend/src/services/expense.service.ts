@@ -26,6 +26,7 @@ interface ExpenseFilters {
   dateFrom?: string;
   dateTo?: string;
   isRecurring?: boolean;
+  createdById?: string;
   page?: number;
   limit?: number;
 }
@@ -92,6 +93,7 @@ export const expenseService = {
     const to = dateTo ? new Date(dateTo) : undefined;
 
     let items = await findManyForBusiness<Expense>(COL.expenses, businessId, (item) => {
+      if (filters.createdById && item.createdById !== filters.createdById) return false;
       if (categoryId && item.categoryId !== categoryId) return false;
       if (isRecurring !== undefined && item.isRecurring !== isRecurring) return false;
       if (!inDateRange(item.date, from, to)) return false;

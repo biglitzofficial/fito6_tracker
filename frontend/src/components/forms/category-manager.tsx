@@ -177,13 +177,32 @@ export function CategoryManager({ type, categories, onUpdated, embedded }: Categ
       {(embedded || expanded) && (
         <CardContent className="space-y-4">
           {type === 'INCOME' && (
-            <div className="space-y-2">
-              {parentGroups.length === 0 && (
+            <div className="space-y-4">
+              {parentGroups.map((group) => (
+                <div key={group.id} className="space-y-2">
+                  <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+                    Group
+                  </Label>
+                  <CategoryRow category={group} onUpdated={onUpdated} />
+                  <div className="ml-4 space-y-2">
+                    {childCategories
+                      .filter((c) => c.parentId === group.id)
+                      .map((category) => (
+                        <CategoryRow
+                          key={category.id}
+                          category={category}
+                          parentGroups={parentGroups}
+                          groupName={group.name}
+                          showParentSelect
+                          onUpdated={onUpdated}
+                        />
+                      ))}
+                  </div>
+                </div>
+              ))}
+              {!parentGroups.length && (
                 <p className="text-sm text-muted-foreground">No categories yet.</p>
               )}
-              {parentGroups.map((category) => (
-                <CategoryRow key={category.id} category={category} onUpdated={onUpdated} />
-              ))}
             </div>
           )}
 

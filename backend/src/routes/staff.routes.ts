@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import { StaffJobType } from '../types/enums';
 import { authenticate, adminOnly } from '../middleware/auth';
 import { auditLog } from '../middleware/auditLog';
 import { staffService } from '../services/staff.service';
@@ -16,6 +17,7 @@ const createSchema = z.object({
   salary: z.number().min(0),
   joiningDate: z.string(),
   password: z.string().min(8),
+  jobType: z.nativeEnum(StaffJobType).optional(),
   sendWelcomeEmail: z.boolean().optional(),
 });
 

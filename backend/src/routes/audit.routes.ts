@@ -3,6 +3,7 @@ import { authenticate, adminOnly } from '../middleware/auth';
 import { requireBusiness, BusinessRequest } from '../middleware/business';
 import { auditService, settingsService } from '../services/audit.service';
 import { asyncHandler, sendSuccess } from '../utils/response';
+import { DEFAULT_STAFF_ACCESS, mergeStaffAccess } from '../lib/staff-access';
 
 const router = Router();
 router.use(authenticate);
@@ -27,7 +28,7 @@ settingsRouter.use(authenticate);
 settingsRouter.use(requireBusiness);
 
 const DEFAULT_ENTRY_FIELDS = {
-  income: { category: true, paymentMode: true },
+  income: { party: true, category: true, paymentMode: true, staff: true },
   expense: { party: true, category: true, paymentMode: true, attachment: true },
 };
 
@@ -36,6 +37,14 @@ settingsRouter.get(
   asyncHandler(async (req: BusinessRequest, res) => {
     const value = await settingsService.get('entry_fields', req.businessId!);
     sendSuccess(res, value ?? DEFAULT_ENTRY_FIELDS);
+  })
+);
+
+settingsRouter.get(
+  '/staff-access',
+  asyncHandler(async (req: BusinessRequest, res) => {
+    const value = await settingsService.get('staff_access', req.businessId!);
+    sendSuccess(res, mergeStaffAccess(value ?? DEFAULT_STAFF_ACCESS));
   })
 );
 

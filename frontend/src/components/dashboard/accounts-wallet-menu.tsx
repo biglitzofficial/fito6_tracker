@@ -18,6 +18,8 @@ const ACCOUNT_TYPE_LABELS: Record<AccountType, string> = {
   OTHER: 'Other',
 };
 
+const PANEL_WIDTH = 288;
+
 export function AccountsWalletMenu() {
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
@@ -35,7 +37,7 @@ export function AccountsWalletMenu() {
       setMenuStyle({
         top: rect.bottom + 8,
         right: window.innerWidth - rect.right,
-        width: 288,
+        width: PANEL_WIDTH,
       });
     };
 
@@ -125,6 +127,7 @@ export function AccountsWalletMenu() {
         className="rounded-xl"
         onClick={() => setOpen((v) => !v)}
         title="Payment accounts"
+        aria-expanded={open}
       >
         <Wallet className="h-4 w-4" />
       </Button>

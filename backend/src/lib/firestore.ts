@@ -7,6 +7,7 @@ export const COL = {
   businesses: 'businesses',
   businessMembers: 'business_members',
   staff: 'staff',
+  staffTargets: 'staff_targets',
   categories: 'categories',
   accounts: 'accounts',
   parties: 'parties',

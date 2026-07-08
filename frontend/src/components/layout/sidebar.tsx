@@ -26,9 +26,10 @@ import {
   UserCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { prefetchRoute } from '@/hooks/use-api-query';
+import { prefetchRoute, useStaffAccess } from '@/hooks/use-api-query';
 import { useAuthStore, isAdmin } from '@/stores/auth.store';
 import { useBusinessStore } from '@/stores/business.store';
+import { mergeStaffAccess } from '@/lib/staff-access';
 import { Button } from '@/components/ui/button';
 
 const adminNav = [
@@ -76,7 +77,13 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const activeBusiness = useBusinessStore((s) =>
     s.businesses.find((b) => b.id === s.activeBusinessId)
   );
-  const nav = isAdmin(user) ? adminNav : staffNav;
+  const { data: staffAccessData } = useStaffAccess();
+  const staffAccess = mergeStaffAccess(staffAccessData);
+  const nav = isAdmin(user)
+    ? adminNav
+    : staffNav.filter((item) =>
+        item.href === '/reports' ? !staffAccess.hideNetBalanceAndReports : true
+      );
 
   return (
     <aside

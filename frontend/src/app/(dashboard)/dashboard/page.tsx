@@ -66,7 +66,7 @@ export default function DashboardPage() {
             <StatCard title="Today Collection" value={adminData.cards.todayRevenue} icon={DollarSign} format="currency" />
             <StatCard title="Monthly Collection" value={adminData.cards.monthlyRevenue} icon={TrendingUp} format="currency" />
             <StatCard title="Yearly Collection" value={adminData.cards.yearlyRevenue ?? 0} icon={CalendarRange} format="currency" />
-            <StatCard title="Net Revenue" value={adminData.cards.netProfit} icon={TrendingUp} format="currency" />
+            <StatCard title="Net Collection" value={adminData.cards.netProfit} icon={TrendingUp} format="currency" />
           </div>
 
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

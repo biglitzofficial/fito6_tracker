@@ -12,6 +12,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
 import { useAuthStore, isAdmin } from '@/stores/auth.store';
+import { useStaffAccess } from '@/hooks/use-api-query';
+import { mergeStaffAccess } from '@/lib/staff-access';
 
 type TransactionGroupBy = 'all' | 'day' | 'party' | 'category' | 'payment-mode';
 
@@ -25,6 +27,9 @@ const TRANSACTION_GROUPS: { id: TransactionGroupBy; label: string }[] = [
 
 export default function ReportsPage() {
   const { user } = useAuthStore();
+  const { data: staffAccessData } = useStaffAccess();
+  const staffAccess = mergeStaffAccess(staffAccessData);
+  const admin = isAdmin(user);
   const [dateFrom, setDateFrom] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]);
   const [dateTo, setDateTo] = useState(new Date().toISOString().split('T')[0]);
   const [format, setFormat] = useState('CSV');
@@ -68,6 +73,21 @@ export default function ReportsPage() {
         { id: 'attendance', label: 'Attendance Report', desc: 'Staff attendance for month' },
       ]
     : [{ id: 'income', label: 'My Income Report', desc: 'Your income entries' }];
+
+  if (!admin && staffAccess.hideNetBalanceAndReports) {
+    return (
+      <div>
+        <Header title="Reports" subtitle="Access restricted" />
+        <div className="p-6">
+          <Card>
+            <CardContent className="py-10 text-center text-sm text-muted-foreground">
+              Reports are disabled for staff in this business. Contact an admin if you need access.
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   const content = (
     <div>
@@ -184,5 +204,5 @@ export default function ReportsPage() {
     </div>
   );
 
-  return isAdmin(user) ? <AdminGuard>{content}</AdminGuard> : content;
+  return admin ? <AdminGuard>{content}</AdminGuard> : content;
 }

@@ -9,6 +9,7 @@ import {
   ReportFormat,
   ReportType,
   Role,
+  StaffJobType,
   TaskPriority,
   TaskStatus,
 } from './enums';
@@ -32,6 +33,18 @@ export interface Staff {
   phone?: string | null;
   salary: number;
   joiningDate: Date;
+  jobType?: StaffJobType | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface StaffTarget {
+  id: string;
+  businessId: string;
+  userId: string;
+  periodMonth: string;
+  salesTarget: number;
+  ptTarget: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -135,6 +148,7 @@ export interface Income {
   accountId?: string | null;
   partyId?: string | null;
   source?: string | null;
+  creditedToId?: string | null;
   date: Date;
   notes?: string | null;
   attachment?: string | null;

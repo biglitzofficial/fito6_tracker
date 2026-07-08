@@ -1,11 +1,18 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { authenticate, AuthRequest, adminOnly } from '../middleware/auth';
+import { Role } from '../types/enums';
+import { authenticate, adminOnly } from '../middleware/auth';
 import { requireBusiness, BusinessRequest } from '../middleware/business';
 import { auditLog } from '../middleware/auditLog';
 import { upload } from '../middleware/upload';
 import { uploadFile } from '../lib/storage';
 import { incomeService } from '../services/income.service';
+import {
+  assertBackdatedEntryAllowed,
+  assertStaffCanEditEntry,
+  assertStaffCanViewEntry,
+  getStaffAccess,
+} from '../lib/staff-access';
 import { asyncHandler, sendSuccess } from '../utils/response';
 
 const router = Router();
@@ -18,6 +25,7 @@ const createSchema = z.object({
   accountId: z.string().optional(),
   partyId: z.string().optional(),
   source: z.string().optional(),
+  creditedToId: z.string().optional(),
   date: z.string(),
   notes: z.string().optional(),
 });
@@ -25,6 +33,8 @@ const createSchema = z.object({
 router.get(
   '/',
   asyncHandler(async (req: BusinessRequest, res) => {
+    const isStaff = req.user!.role === Role.STAFF;
+    const staffAccess = isStaff ? await getStaffAccess(req.businessId!) : null;
     const result = await incomeService.list(req.businessId!, {
       search: req.query.search as string,
       categoryId: req.query.categoryId as string,
@@ -32,6 +42,8 @@ router.get(
       dateTo: req.query.dateTo as string,
       page: parseInt(req.query.page as string) || 1,
       limit: parseInt(req.query.limit as string) || 20,
+      createdById:
+        isStaff && staffAccess?.hideOtherMembersEntries ? req.user!.userId : undefined,
     });
     sendSuccess(res, result);
   })
@@ -41,6 +53,10 @@ router.get(
   '/:id',
   asyncHandler(async (req: BusinessRequest, res) => {
     const item = await incomeService.getById(req.businessId!, String(req.params.id));
+    if (req.user!.role === Role.STAFF) {
+      const staffAccess = await getStaffAccess(req.businessId!);
+      assertStaffCanViewEntry(staffAccess, req.user!.userId, item.createdById);
+    }
     sendSuccess(res, item);
   })
 );
@@ -50,6 +66,10 @@ router.post(
   upload.single('attachment'),
   asyncHandler(async (req: BusinessRequest, res) => {
     const data = createSchema.parse({ ...req.body, amount: parseFloat(req.body.amount) });
+    if (req.user!.role === Role.STAFF) {
+      const staffAccess = await getStaffAccess(req.businessId!);
+      assertBackdatedEntryAllowed(data.date, staffAccess.backdatedEntries);
+    }
     let attachment: string | undefined;
     if (req.file) {
       const uploaded = await uploadFile(req.file.buffer, req.file.originalname, req.file.mimetype);
@@ -70,6 +90,14 @@ router.put(
   auditLog('UPDATE_INCOME', 'Income'),
   upload.single('attachment'),
   asyncHandler(async (req: BusinessRequest, res) => {
+    const existing = await incomeService.getById(req.businessId!, String(req.params.id));
+    if (req.user!.role === Role.STAFF) {
+      const staffAccess = await getStaffAccess(req.businessId!);
+      assertStaffCanEditEntry(staffAccess, req.user!.userId, existing.createdById);
+      if (req.body.date) {
+        assertBackdatedEntryAllowed(String(req.body.date), staffAccess.backdatedEntries);
+      }
+    }
     const body = { ...req.body };
     if (body.amount) body.amount = parseFloat(body.amount);
     if (req.file) {

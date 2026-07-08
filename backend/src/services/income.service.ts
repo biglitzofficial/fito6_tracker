@@ -24,6 +24,7 @@ interface IncomeFilters {
   categoryId?: string;
   dateFrom?: string;
   dateTo?: string;
+  createdById?: string;
   page?: number;
   limit?: number;
 }
@@ -32,7 +33,10 @@ async function withRelations(items: Income[]) {
   const categoryMap = await getCategoryMap(items.map((i) => i.categoryId));
   const accountMap = await getAccountMap(items.map((i) => i.accountId || ''));
   const partyMap = await getPartyMap(items.map((i) => i.partyId || ''));
-  const userMap = await getUserMap(items.map((i) => i.createdById));
+  const userMap = await getUserMap([
+    ...items.map((i) => i.createdById),
+    ...items.map((i) => i.creditedToId || ''),
+  ]);
 
   return items.map((item) => ({
     ...item,
@@ -60,6 +64,12 @@ async function withRelations(items: Income[]) {
       id: item.createdById,
       name: userMap.get(item.createdById)?.name || 'Unknown',
     },
+    creditedTo: item.creditedToId
+      ? {
+          id: item.creditedToId,
+          name: userMap.get(item.creditedToId)?.name || 'Unknown',
+        }
+      : null,
   }));
 }
 
@@ -90,6 +100,7 @@ export const incomeService = {
     const to = dateTo ? new Date(dateTo) : undefined;
 
     let items = await findManyForBusiness<Income>(COL.income, businessId, (item) => {
+      if (filters.createdById && item.createdById !== filters.createdById) return false;
       if (categoryId && item.categoryId !== categoryId) return false;
       if (!inDateRange(item.date, from, to)) return false;
       if (!matchesSearch(search, item.receiptNumber, item.source, item.notes)) return false;
@@ -113,6 +124,7 @@ export const incomeService = {
     accountId?: string;
     partyId?: string;
     source?: string;
+    creditedToId?: string;
     date: string;
     notes?: string;
     attachment?: string;
@@ -129,6 +141,7 @@ export const incomeService = {
       accountId: data.accountId || null,
       partyId,
       source,
+      creditedToId: data.creditedToId || null,
       date: entryDate,
       notes: data.notes,
       attachment: data.attachment,
@@ -146,6 +159,7 @@ export const incomeService = {
       accountId: string | null;
       partyId: string | null;
       source: string;
+      creditedToId: string | null;
       date: string;
       notes: string;
       attachment: string;

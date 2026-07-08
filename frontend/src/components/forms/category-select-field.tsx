@@ -40,7 +40,7 @@ export function CategorySelectField({
       setAddError('Name must be at least 2 characters');
       return;
     }
-    if (type === 'EXPENSE' && !parentId) {
+    if (parentGroups.length > 0 && !parentId) {
       setAddError('Select a category group');
       return;
     }
@@ -51,7 +51,7 @@ export function CategorySelectField({
       const created = await api.post<Category>('/categories', {
         name,
         type,
-        ...(type === 'EXPENSE' ? { parentId } : {}),
+        ...(parentGroups.length > 0 ? { parentId } : {}),
       });
       onCategoryAdded();
       onChange(created.id);
@@ -68,7 +68,7 @@ export function CategorySelectField({
     return (
       <div className="space-y-2 rounded-lg border border-border p-3 bg-muted/30">
         <Label className="text-xs text-muted-foreground">New {type === 'INCOME' ? 'income' : 'expense'} category</Label>
-        {type === 'EXPENSE' && parentGroups.length > 0 && (
+        {parentGroups.length > 0 && (
           <Select value={parentId} onValueChange={setParentId}>
             <SelectTrigger>
               <SelectValue placeholder="Category group" />
@@ -107,7 +107,7 @@ export function CategorySelectField({
         <SelectContent>
           {categories.map((c) => (
             <SelectItem key={c.id} value={c.id}>
-              {type === 'EXPENSE' && c.parentId
+              {c.parentId
                 ? `${parentGroups.find((p) => p.id === c.parentId)?.name ?? ''} › ${c.name}`
                 : c.name}
             </SelectItem>

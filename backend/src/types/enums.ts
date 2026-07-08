@@ -28,6 +28,13 @@ export enum AccountType {
   OTHER = 'OTHER',
 }
 
+export enum StaffJobType {
+  SALES = 'SALES',
+  TRAINER = 'TRAINER',
+  BOTH = 'BOTH',
+  GENERAL = 'GENERAL',
+}
+
 export enum PartyType {
   STAFF = 'STAFF',
   VENDOR = 'VENDOR',

@@ -2,34 +2,27 @@ import { CategoryType, AccountType } from '../types/enums';
 import { Category, Account } from '../types/models';
 import { COL, create, findMany } from './firestore';
 import { settingsService } from '../services/audit.service';
-
-const INCOME_CATEGORIES = [
-  'Membership Fees',
-  'Personal Training',
-  'Product Sales',
-  'Merchandise',
-  'Online Coaching',
-  'Events',
-  'Other Income',
-];
+import { INCOME_CATEGORY_GROUPS } from './income-category-groups';
 
 const EXPENSE_CATEGORIES: { name: string; children?: string[] }[] = [
-  { name: 'Payroll', children: ['Salary', 'Bonus', 'Incentive'] },
-  { name: 'Operations', children: ['Rent', 'Electricity', 'Water', 'Internet'] },
-  { name: 'Marketing', children: ['Ads', 'Promotion'] },
-  { name: 'Equipment', children: ['Purchase', 'Maintenance'] },
-  { name: 'Other', children: ['Miscellaneous'] },
+  { name: 'Labour', children: ['Electrician and Plumber'] },
+  { name: 'Purchase', children: ['Electrical and Plumbing Spare'] },
+  { name: 'Office', children: ['Printing', 'Stationary'] },
+  { name: 'Incentives', children: ['PT Incentive', 'Sales Incentive'] },
+  { name: 'Finance', children: ['Loan EMI'] },
+  { name: 'Assets', children: ['Assets Purchase'] },
+  { name: 'Utilities', children: ['Phone Bills', 'Internet'] },
+  { name: 'Maintenance', children: ['Machine Service'] },
 ];
 
 const DEFAULT_ACCOUNTS: { name: string; type: AccountType }[] = [
   { name: 'Cash', type: AccountType.CASH },
-  { name: 'Main Bank Account', type: AccountType.BANK },
-  { name: 'UPI', type: AccountType.UPI },
   { name: 'Card', type: AccountType.CARD },
+  { name: 'Bank', type: AccountType.BANK },
 ];
 
 const DEFAULT_ENTRY_FIELDS = {
-  income: { party: true, category: true, paymentMode: true },
+  income: { party: true, category: true, paymentMode: true, staff: true },
   expense: { party: true, category: true, paymentMode: true, attachment: true },
 };
 
@@ -59,8 +52,11 @@ async function ensureAccount(businessId: string, name: string, type: AccountType
 }
 
 export async function seedBusinessDefaults(businessId: string, businessName: string) {
-  for (const name of INCOME_CATEGORIES) {
-    await ensureCategory(businessId, name, CategoryType.INCOME);
+  for (const group of INCOME_CATEGORY_GROUPS) {
+    const parent = await ensureCategory(businessId, group.name, CategoryType.INCOME);
+    for (const child of group.children) {
+      await ensureCategory(businessId, child, CategoryType.INCOME, parent.id);
+    }
   }
 
   for (const group of EXPENSE_CATEGORIES) {
@@ -81,4 +77,14 @@ export async function seedBusinessDefaults(businessId: string, businessName: str
   await settingsService.set('late_threshold', { hour: 9, minute: 30 }, businessId);
   await settingsService.set('fiscal_year_start', { month: 4 }, businessId);
   await settingsService.set('entry_fields', DEFAULT_ENTRY_FIELDS, businessId);
+  await settingsService.set(
+    'staff_access',
+    {
+      backdatedEntries: 'always',
+      allowEditOwnEntries: true,
+      hideNetBalanceAndReports: false,
+      hideOtherMembersEntries: false,
+    },
+    businessId
+  );
 }

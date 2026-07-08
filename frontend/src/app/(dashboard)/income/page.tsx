@@ -18,22 +18,24 @@ import { RowHoverActions } from '@/components/ui/row-hover-actions';
 import { CategorySelectField } from '@/components/forms/category-select-field';
 import { AccountSelectField } from '@/components/forms/account-select-field';
 import { PartySelectField } from '@/components/forms/party-select-field';
+import { StaffSelectField } from '@/components/forms/staff-select-field';
 import Link from 'next/link';
 import { api } from '@/lib/api';
-import { useApiQuery, useCategories, useAccounts, useParties, useInvalidate, useEntryFields } from '@/hooks/use-api-query';
+import { useApiQuery, useCategories, useAccounts, useParties, useInvalidate, useEntryFields, useStaffAccess } from '@/hooks/use-api-query';
 import { useDebounce } from '@/hooks/use-debounce';
 import { queryKeys } from '@/lib/query-keys';
 import { useAuthStore, isAdmin } from '@/stores/auth.store';
-import type { Income, PaginatedResponse } from '@/types';
+import type { Income, PaginatedResponse, User } from '@/types';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { mergeEntryFields } from '@/lib/entry-fields';
+import { mergeStaffAccess, earliestAllowedEntryDate, staffCanEditEntry } from '@/lib/staff-access';
 
 const baseSchema = z.object({
   amount: z.coerce.number().positive(),
   categoryId: z.string().optional(),
   accountId: z.string().optional(),
   partyId: z.string().optional(),
-  source: z.string().optional(),
+  creditedToId: z.string().optional(),
   date: z.string().min(1),
   notes: z.string().optional(),
 });
@@ -50,6 +52,10 @@ function IncomeContent() {
   const invalidate = useInvalidate();
   const { data: entryFieldsData } = useEntryFields();
   const fieldConfig = mergeEntryFields(entryFieldsData);
+  const { data: staffAccessData } = useStaffAccess();
+  const staffAccess = mergeStaffAccess(staffAccessData);
+  const admin = isAdmin(user);
+  const minEntryDate = !admin ? earliestAllowedEntryDate(staffAccess.backdatedEntries) : undefined;
 
   const schema = useMemo(
     () =>
@@ -70,9 +76,15 @@ function IncomeContent() {
   });
 
   const { data: allCategories = [] } = useCategories('INCOME');
-  const categories = allCategories.filter((c) => !c.parentId);
+  const parentGroups = allCategories.filter((c) => !c.parentId);
+  const categories = allCategories.filter((c) => c.parentId);
   const { data: accounts = [] } = useAccounts();
   const { data: parties = [] } = useParties();
+  const { data: staffList = [] } = useApiQuery<User[]>(
+    queryKeys.staffList,
+    '/staff?includeInactive=false',
+    { staleTime: 5 * 60_000 }
+  );
   const { data: incomeRes, isLoading, isError, error, refetch } = useApiQuery<PaginatedResponse<Income>>(
     queryKeys.income(debouncedSearch),
     `/income?search=${debouncedSearch}`
@@ -81,18 +93,20 @@ function IncomeContent() {
 
   const openAddForm = () => {
     setEditingItem(null);
+    setPartyError('');
     reset({ date: new Date().toISOString().split('T')[0] });
     setShowForm(true);
   };
 
   const openEditForm = (item: Income) => {
     setEditingItem(item);
+    setPartyError('');
     reset({
       amount: Number(item.amount),
       categoryId: item.categoryId,
       accountId: item.accountId || undefined,
       partyId: item.partyId || undefined,
-      source: item.source || '',
+      creditedToId: item.creditedToId || undefined,
       date: item.date.slice(0, 10),
       notes: item.notes || '',
     });
@@ -113,7 +127,7 @@ function IncomeContent() {
         categoryId: data.categoryId,
         accountId: fieldConfig.income.paymentMode ? data.accountId : undefined,
         partyId: fieldConfig.income.party ? data.partyId : undefined,
-        source: fieldConfig.income.party ? undefined : data.source,
+        creditedToId: fieldConfig.income.staff ? data.creditedToId : undefined,
       };
       if (editingItem) {
         await api.put(`/income/${editingItem.id}`, payload);
@@ -142,7 +156,7 @@ function IncomeContent() {
         <div className="flex flex-wrap items-center gap-4">
           <div className="relative flex-1 min-w-[200px] max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input className="pl-10" placeholder="Search by receipt no., party..." value={search} onChange={(e) => setSearch(e.target.value)} />
+            <Input className="pl-10" placeholder="Search by receipt no., client..." value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
           <Button onClick={() => (showForm && !editingItem ? closeForm() : openAddForm())}>
             <Plus className="h-4 w-4" /> Add Income
@@ -182,6 +196,7 @@ function IncomeContent() {
                         value={field.value}
                         onChange={field.onChange}
                         categories={categories}
+                        parentGroups={parentGroups}
                         onCategoryAdded={() => invalidate(queryKeys.categories('INCOME'))}
                         error={errors.categoryId?.message}
                       />
@@ -208,7 +223,7 @@ function IncomeContent() {
                 )}
                 {fieldConfig.income.party && (
                   <div className="space-y-2 md:col-span-2">
-                    <Label>Party Name (Contact)</Label>
+                    <Label>Client Name</Label>
                     <Controller
                       name="partyId"
                       control={control}
@@ -221,6 +236,7 @@ function IncomeContent() {
                           }}
                           parties={parties}
                           defaultType="CUSTOMER"
+                          variant="client"
                           onPartyAdded={() => invalidate(queryKeys.parties())}
                           error={partyError}
                         />
@@ -228,20 +244,36 @@ function IncomeContent() {
                     />
                     <p className="text-xs text-muted-foreground">
                       <Link href="/entry-fields?tab=parties" className="text-primary hover:underline">
-                        Manage parties
+                        Manage clients
                       </Link>
                     </p>
                   </div>
                 )}
-                {!fieldConfig.income.party && (
-                  <div className="space-y-2">
-                    <Label>Source</Label>
-                    <Input {...register('source')} placeholder="e.g. Monthly members" />
+                {fieldConfig.income.staff && (
+                  <div className="space-y-2 md:col-span-2">
+                    <Label>Staff / Trainer</Label>
+                    <Controller
+                      name="creditedToId"
+                      control={control}
+                      render={({ field }) => (
+                        <StaffSelectField
+                          value={field.value}
+                          onChange={field.onChange}
+                          staff={staffList}
+                        />
+                      )}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Assign sales or PT credit for target tracking.{' '}
+                      <Link href="/staff" className="text-primary hover:underline">
+                        Manage staff & targets
+                      </Link>
+                    </p>
                   </div>
                 )}
                 <div className="space-y-2">
                   <Label>Date</Label>
-                  <Input type="date" {...register('date')} />
+                  <Input type="date" {...register('date')} min={minEntryDate} />
                 </div>
                 <div className="space-y-2 md:col-span-2">
                   <Label>Notes</Label>
@@ -281,7 +313,8 @@ function IncomeContent() {
                       <th className="text-left p-4 font-medium">Date</th>
                       <th className="text-left p-4 font-medium">Category</th>
                       <th className="text-left p-4 font-medium">Account</th>
-                      <th className="text-left p-4 font-medium">Party</th>
+                      <th className="text-left p-4 font-medium">Client</th>
+                      <th className="text-left p-4 font-medium">Staff / Trainer</th>
                       <th className="text-right p-4 font-medium">Amount</th>
                       <th className="text-left p-4 font-medium">By</th>
                       <th className="text-right p-4 font-medium w-[140px]"> </th>
@@ -292,15 +325,30 @@ function IncomeContent() {
                       <tr key={item.id} className="group border-b border-border/50 hover:bg-accent/30 transition-colors">
                         <td className="p-4 font-mono text-xs">{item.receiptNumber || '—'}</td>
                         <td className="p-4">{formatDate(item.date)}</td>
-                        <td className="p-4"><Badge variant="secondary">{item.category?.name ?? 'Unknown'}</Badge></td>
+                        <td className="p-4"><Badge variant="secondary">
+                          {(() => {
+                            const leaf = allCategories.find((c) => c.id === item.categoryId);
+                            const parent = leaf?.parentId
+                              ? parentGroups.find((p) => p.id === leaf.parentId)
+                              : null;
+                            return parent
+                              ? `${parent.name} › ${item.category?.name ?? leaf?.name ?? 'Unknown'}`
+                              : (item.category?.name ?? leaf?.name ?? 'Unknown');
+                          })()}
+                        </Badge></td>
                         <td className="p-4 text-muted-foreground">{item.account?.name ?? '—'}</td>
                         <td className="p-4 text-muted-foreground">{item.party?.name || item.source || '—'}</td>
+                        <td className="p-4 text-muted-foreground">{item.creditedTo?.name ?? '—'}</td>
                         <td className="p-4 text-right font-medium text-success">{formatCurrency(Number(item.amount))}</td>
                         <td className="p-4 text-muted-foreground">{item.createdBy?.name ?? 'Unknown'}</td>
                         <td className="p-4">
                           <RowHoverActions
-                            onEdit={() => openEditForm(item)}
-                            onDelete={isAdmin(user) ? () => handleDelete(item.id) : undefined}
+                            onEdit={
+                              admin || staffCanEditEntry(staffAccess, user!.id, item.createdBy?.id ?? '')
+                                ? () => openEditForm(item)
+                                : undefined
+                            }
+                            onDelete={admin ? () => handleDelete(item.id) : undefined}
                           />
                         </td>
                       </tr>

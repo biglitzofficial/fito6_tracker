@@ -1,4 +1,4 @@
-import { Role } from '../types/enums';
+import { Role, StaffJobType } from '../types/enums';
 import { User, Staff } from '../types/models';
 import { COL, create, findMany, findOne, getById, sortBy, update } from '../lib/firestore';
 import { hashPassword, validatePassword } from '../utils/password';
@@ -34,6 +34,7 @@ export const staffService = {
     salary: number;
     joiningDate: string;
     password: string;
+    jobType?: StaffJobType;
     sendWelcomeEmail?: boolean;
   }) {
     const existing = await findOne<User>(COL.users, 'email', data.email.toLowerCase());
@@ -59,6 +60,7 @@ export const staffService = {
       phone: data.phone,
       salary: data.salary,
       joiningDate: new Date(data.joiningDate),
+      jobType: data.jobType || StaffJobType.GENERAL,
     });
 
     if (data.sendWelcomeEmail && config.email.configured) {
@@ -91,10 +93,11 @@ export const staffService = {
       phone: string;
       salary: number;
       joiningDate: string;
+      jobType: StaffJobType;
     }>
   ) {
     await staffService.getById(id);
-    const { phone, salary, joiningDate, ...userData } = data;
+    const { phone, salary, joiningDate, jobType, ...userData } = data;
 
     if (Object.keys(userData).length) {
       await update<User>(COL.users, id, {
@@ -104,11 +107,12 @@ export const staffService = {
     }
 
     const staff = await findOne<Staff>(COL.staff, 'userId', id);
-    if (staff && (phone !== undefined || salary !== undefined || joiningDate !== undefined)) {
+    if (staff && (phone !== undefined || salary !== undefined || joiningDate !== undefined || jobType !== undefined)) {
       await update<Staff>(COL.staff, staff.id, {
         phone,
         salary,
         joiningDate: joiningDate ? new Date(joiningDate) : undefined,
+        jobType,
       });
     }
 

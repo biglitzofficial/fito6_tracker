@@ -1,11 +1,12 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { ReportFormat } from '../types/enums';
+import { Role, ReportFormat } from '../types/enums';
 import { authenticate, AuthRequest, adminOnly } from '../middleware/auth';
 import { requireBusiness, BusinessRequest } from '../middleware/business';
 import { auditLog } from '../middleware/auditLog';
 import { reportService } from '../services/report.service';
-import { asyncHandler, sendSuccess } from '../utils/response';
+import { getStaffAccess } from '../lib/staff-access';
+import { AppError, asyncHandler, sendSuccess } from '../utils/response';
 
 const router = Router();
 router.use(authenticate);
@@ -22,6 +23,12 @@ router.get(
   '/',
   requireBusiness,
   asyncHandler(async (req: AuthRequest & BusinessRequest, res) => {
+    if (req.user!.role === Role.STAFF) {
+      const staffAccess = await getStaffAccess(req.businessId!);
+      if (staffAccess.hideNetBalanceAndReports) {
+        throw new AppError(403, 'Reports are not available for staff');
+      }
+    }
     const userId = req.user!.role === 'STAFF' ? req.user!.userId : undefined;
     const reports = await reportService.list(req.businessId!, userId);
     sendSuccess(res, reports);

@@ -34,6 +34,28 @@ export const categoryService = {
     type: CategoryType;
     parentId?: string;
   }) {
+    if (data.parentId && data.type === CategoryType.INCOME) {
+      const parent = assertBusinessAccess(
+        await getById<Category>(COL.categories, data.parentId),
+        data.businessId,
+        'Category'
+      );
+      if (parent.type !== CategoryType.INCOME || parent.parentId) {
+        throw new AppError(400, 'Invalid income category group');
+      }
+    }
+
+    if (data.parentId && data.type === CategoryType.EXPENSE) {
+      const parent = assertBusinessAccess(
+        await getById<Category>(COL.categories, data.parentId),
+        data.businessId,
+        'Category'
+      );
+      if (parent.type !== CategoryType.EXPENSE || parent.parentId) {
+        throw new AppError(400, 'Invalid expense category group');
+      }
+    }
+
     const existing = (await findManyForBusiness<Category>(COL.categories, data.businessId)).find(
       (c) =>
         c.name === data.name &&
@@ -59,7 +81,14 @@ export const categoryService = {
       data.parentId !== undefined ? data.parentId || null : cat.parentId || null;
 
     if (cat.type === CategoryType.INCOME && nextParentId) {
-      throw new AppError(400, 'Income categories cannot have a parent group');
+      const parent = assertBusinessAccess(
+        await getById<Category>(COL.categories, nextParentId),
+        businessId,
+        'Category'
+      );
+      if (parent.type !== CategoryType.INCOME || parent.parentId) {
+        throw new AppError(400, 'Invalid income category group');
+      }
     }
 
     if (data.parentId && cat.type === CategoryType.EXPENSE) {

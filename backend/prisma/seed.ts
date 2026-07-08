@@ -2,22 +2,40 @@ import { PrismaClient, CategoryType } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-const INCOME_CATEGORIES = [
-  'Membership Fees',
-  'Personal Training',
-  'Product Sales',
-  'Merchandise',
-  'Online Coaching',
-  'Events',
-  'Other Income',
+const INCOME_CATEGORIES: { name: string; children: string[] }[] = [
+  {
+    name: 'Member Subscription Plan',
+    children: [
+      'Zumba',
+      'INBODY ASSESSMENT',
+      'Daily Package',
+      'Basic Monthly',
+      'Basic Quarterly',
+      'Basic Half Yearly',
+      'Basic Yearly',
+    ],
+  },
+  {
+    name: 'Personal Training Subscription Plan',
+    children: [
+      'Personal Training - 1 Month',
+      'Personal Training - 2 Months',
+      'Personal Training - 3 Months',
+      'Couple Personal Training - 1 Month',
+      'Couple Personal Training - 2 Months',
+    ],
+  },
 ];
 
 const EXPENSE_CATEGORIES: { name: string; children?: string[] }[] = [
-  { name: 'Payroll', children: ['Salary', 'Bonus', 'Incentive'] },
-  { name: 'Operations', children: ['Rent', 'Electricity', 'Water', 'Internet'] },
-  { name: 'Marketing', children: ['Ads', 'Promotion'] },
-  { name: 'Equipment', children: ['Purchase', 'Maintenance'] },
-  { name: 'Other', children: ['Miscellaneous'] },
+  { name: 'Labour', children: ['Electrician and Plumber'] },
+  { name: 'Purchase', children: ['Electrical and Plumbing Spare'] },
+  { name: 'Office', children: ['Printing', 'Stationary'] },
+  { name: 'Incentives', children: ['PT Incentive', 'Sales Incentive'] },
+  { name: 'Finance', children: ['Loan EMI'] },
+  { name: 'Assets', children: ['Assets Purchase'] },
+  { name: 'Utilities', children: ['Phone Bills', 'Internet'] },
+  { name: 'Maintenance', children: ['Machine Service'] },
 ];
 
 const DEFAULT_SETTINGS: { key: string; value: Record<string, unknown> }[] = [
@@ -39,8 +57,11 @@ async function ensureCategory(name: string, type: CategoryType, parentId?: strin
 }
 
 async function seedCategories() {
-  for (const name of INCOME_CATEGORIES) {
-    await ensureCategory(name, CategoryType.INCOME);
+  for (const group of INCOME_CATEGORIES) {
+    const parent = await ensureCategory(group.name, CategoryType.INCOME);
+    for (const child of group.children) {
+      await ensureCategory(child, CategoryType.INCOME, parent.id);
+    }
   }
 
   for (const group of EXPENSE_CATEGORIES) {

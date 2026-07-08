@@ -20,13 +20,14 @@ import { PartySelectField } from '@/components/forms/party-select-field';
 import Link from 'next/link';
 import { AccountSelectField } from '@/components/forms/account-select-field';
 import { api } from '@/lib/api';
-import { useApiQuery, useCategories, useAccounts, useParties, useInvalidate, useEntryFields } from '@/hooks/use-api-query';
+import { useApiQuery, useCategories, useAccounts, useParties, useInvalidate, useEntryFields, useStaffAccess } from '@/hooks/use-api-query';
 import { useDebounce } from '@/hooks/use-debounce';
 import { queryKeys } from '@/lib/query-keys';
 import { useAuthStore, isAdmin } from '@/stores/auth.store';
 import type { Expense, PaginatedResponse } from '@/types';
 import { currentPeriodMonth, formatCurrency, formatDate, formatPeriodMonth, suggestExpensePeriodMonth } from '@/lib/utils';
 import { mergeEntryFields } from '@/lib/entry-fields';
+import { mergeStaffAccess, earliestAllowedEntryDate, staffCanEditEntry } from '@/lib/staff-access';
 
 const baseSchema = z.object({
   amount: z.coerce.number().positive(),
@@ -71,6 +72,10 @@ function ExpenseContent() {
   const invalidate = useInvalidate();
   const { data: entryFieldsData } = useEntryFields();
   const fieldConfig = mergeEntryFields(entryFieldsData);
+  const { data: staffAccessData } = useStaffAccess();
+  const staffAccess = mergeStaffAccess(staffAccessData);
+  const admin = isAdmin(user);
+  const minEntryDate = !admin ? earliestAllowedEntryDate(staffAccess.backdatedEntries) : undefined;
 
   const now = new Date();
   const today = now.toISOString().split('T')[0];
@@ -180,7 +185,7 @@ function ExpenseContent() {
   const onSubmit = async (data: ExpenseFormValues) => {
     const catName = categories.find((c) => c.id === data.categoryId)?.name;
     if (fieldConfig.expense.party && isSalaryCategory(catName) && !data.partyId) {
-      setPartyError('Select a party for salary and staff expenses');
+      setPartyError('Select a client for salary and staff expenses');
       return;
     }
     setPartyError('');
@@ -259,7 +264,7 @@ function ExpenseContent() {
               <form onSubmit={handleSubmit(onSubmit)} className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Date</Label>
-                  <Input type="date" {...register('date')} />
+                  <Input type="date" {...register('date')} min={minEntryDate} />
                   {errors.date && <p className="text-xs text-destructive">{errors.date.message}</p>}
                 </div>
                 <div className="space-y-2">
@@ -275,7 +280,7 @@ function ExpenseContent() {
 
                 {fieldConfig.expense.party && (
                   <div className="space-y-2 md:col-span-2">
-                    <Label>Party Name (Contact)</Label>
+                    <Label>Client Name</Label>
                     <Controller
                       name="partyId"
                       control={control}
@@ -288,6 +293,7 @@ function ExpenseContent() {
                           }}
                           parties={parties}
                           defaultType={suggestPartyType}
+                          variant="client"
                           onPartyAdded={() => invalidate(queryKeys.parties())}
                           error={partyError}
                         />
@@ -296,7 +302,7 @@ function ExpenseContent() {
                     <p className="text-xs text-muted-foreground">
                       Required for salary/staff expenses.{' '}
                       <Link href="/entry-fields?tab=parties" className="text-primary hover:underline">
-                        Manage parties
+                        Manage clients
                       </Link>
                     </p>
                   </div>
@@ -422,7 +428,7 @@ function ExpenseContent() {
                       <th className="text-left p-4 font-medium">Bill Month</th>
                       <th className="text-left p-4 font-medium">Category</th>
                       <th className="text-left p-4 font-medium">Account</th>
-                      <th className="text-left p-4 font-medium">Party</th>
+                      <th className="text-left p-4 font-medium">Client</th>
                       <th className="text-right p-4 font-medium">Amount</th>
                       <th className="text-left p-4 font-medium">Recurring</th>
                       <th className="text-right p-4 font-medium w-[140px]"> </th>
@@ -447,8 +453,12 @@ function ExpenseContent() {
                         <td className="p-4">{item.isRecurring ? <Badge variant="warning">Yes</Badge> : '—'}</td>
                         <td className="p-4">
                           <RowHoverActions
-                            onEdit={() => openEditForm(item)}
-                            onDelete={isAdmin(user) ? () => handleDelete(item.id) : undefined}
+                            onEdit={
+                              admin || staffCanEditEntry(staffAccess, user!.id, item.createdBy?.id ?? '')
+                                ? () => openEditForm(item)
+                                : undefined
+                            }
+                            onDelete={admin ? () => handleDelete(item.id) : undefined}
                           />
                         </td>
                       </tr>

@@ -1,4 +1,8 @@
 import { z } from 'zod';
+import { Party } from '../types/models';
+import { COL, getById } from './firestore';
+import { assertBusinessAccess } from './business-scope';
+import { AppError } from '../utils/response';
 
 export const partyDetailsSchema = z.object({
   name: z.string().trim().min(2, 'Party name must be at least 2 characters'),
@@ -28,4 +32,24 @@ export function normalizePartyPayload(data: PartyDetailsInput) {
     emergencyContactRelation: data.emergencyContactRelation?.trim() || null,
     notes: data.notes?.trim() || null,
   };
+}
+
+export async function resolvePartyLink(
+  businessId: string,
+  partyId?: string
+): Promise<{ partyId: string | null; displayName: string | null }> {
+  if (!partyId) {
+    return { partyId: null, displayName: null };
+  }
+
+  const party = assertBusinessAccess(
+    await getById<Party>(COL.parties, partyId),
+    businessId,
+    'Party'
+  );
+  if (!party.isActive) {
+    throw new AppError(400, 'Invalid client selected');
+  }
+
+  return { partyId: party.id, displayName: party.name };
 }

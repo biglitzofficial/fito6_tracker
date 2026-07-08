@@ -2,30 +2,23 @@ import { CategoryType, AccountType } from '../src/types/enums';
 import { Category, Account } from '../src/types/models';
 import { COL, create, findMany } from '../src/lib/firestore';
 import { settingsService } from '../src/services/audit.service';
-
-const INCOME_CATEGORIES = [
-  'Membership Fees',
-  'Personal Training',
-  'Product Sales',
-  'Merchandise',
-  'Online Coaching',
-  'Events',
-  'Other Income',
-];
+import { INCOME_CATEGORY_GROUPS } from '../src/lib/income-category-groups';
 
 const EXPENSE_CATEGORIES: { name: string; children?: string[] }[] = [
-  { name: 'Payroll', children: ['Salary', 'Bonus', 'Incentive'] },
-  { name: 'Operations', children: ['Rent', 'Electricity', 'Water', 'Internet'] },
-  { name: 'Marketing', children: ['Ads', 'Promotion'] },
-  { name: 'Equipment', children: ['Purchase', 'Maintenance'] },
-  { name: 'Other', children: ['Miscellaneous'] },
+  { name: 'Labour', children: ['Electrician and Plumber'] },
+  { name: 'Purchase', children: ['Electrical and Plumbing Spare'] },
+  { name: 'Office', children: ['Printing', 'Stationary'] },
+  { name: 'Incentives', children: ['PT Incentive', 'Sales Incentive'] },
+  { name: 'Finance', children: ['Loan EMI'] },
+  { name: 'Assets', children: ['Assets Purchase'] },
+  { name: 'Utilities', children: ['Phone Bills', 'Internet'] },
+  { name: 'Maintenance', children: ['Machine Service'] },
 ];
 
 const DEFAULT_ACCOUNTS: { name: string; type: AccountType }[] = [
   { name: 'Cash', type: AccountType.CASH },
-  { name: 'Main Bank Account', type: AccountType.BANK },
-  { name: 'UPI', type: AccountType.UPI },
   { name: 'Card', type: AccountType.CARD },
+  { name: 'Bank', type: AccountType.BANK },
 ];
 
 const DEFAULT_SETTINGS: { key: string; value: Record<string, unknown> }[] = [
@@ -44,8 +37,11 @@ async function ensureCategory(name: string, type: CategoryType, parentId?: strin
 }
 
 async function seedCategories() {
-  for (const name of INCOME_CATEGORIES) {
-    await ensureCategory(name, CategoryType.INCOME);
+  for (const group of INCOME_CATEGORY_GROUPS) {
+    const parent = await ensureCategory(group.name, CategoryType.INCOME);
+    for (const child of group.children) {
+      await ensureCategory(child, CategoryType.INCOME, parent.id);
+    }
   }
 
   for (const group of EXPENSE_CATEGORIES) {

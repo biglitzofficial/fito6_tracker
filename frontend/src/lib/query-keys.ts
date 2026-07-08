@@ -9,6 +9,7 @@ export const queryKeys = {
   subscriptions: (kind?: string) => ['subscriptions', kind ?? 'all'] as const,
   staff: ['staff'] as const,
   staffList: ['staff', 'all'] as const,
+  staffTargets: (periodMonth: string) => ['staff-targets', periodMonth] as const,
   tasks: ['tasks'] as const,
   attendance: (isAdmin: boolean) => ['attendance', isAdmin] as const,
   documents: (search: string) => ['documents', search] as const,
@@ -18,5 +19,6 @@ export const queryKeys = {
   auditLogs: ['audit-logs'] as const,
   settings: ['settings'] as const,
   entryFields: ['entry-fields'] as const,
+  staffAccess: ['staff-access'] as const,
   analytics: (query: string) => ['analytics', query] as const,
 };

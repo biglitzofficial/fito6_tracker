@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { ListChecks, Tags, UserRound, Wallet, Loader2, CreditCard } from 'lucide-react';
+import { ListChecks, Tags, UserRound, Wallet, Loader2, CreditCard, Shield } from 'lucide-react';
 import { Header } from '@/components/layout/header';
 import { Button } from '@/components/ui/button';
 import { FieldToggleCard } from '@/components/entry-fields/field-toggle-card';
@@ -10,19 +10,22 @@ import { CategoriesPanel } from '@/components/entry-fields/categories-panel';
 import { PartiesPanel } from '@/components/entry-fields/parties-panel';
 import { PaymentModesPanel } from '@/components/entry-fields/payment-modes-panel';
 import { MembershipPlansPanel } from '@/components/entry-fields/membership-plans-panel';
+import { StaffAccessPanel } from '@/components/entry-fields/staff-access-panel';
 import { api } from '@/lib/api';
 import { useApiQuery, useInvalidate } from '@/hooks/use-api-query';
 import { queryKeys } from '@/lib/query-keys';
 import { useAuthStore, isAdmin } from '@/stores/auth.store';
 import { DEFAULT_ENTRY_FIELDS, mergeEntryFields, type EntryFieldsConfig } from '@/lib/entry-fields';
+import { DEFAULT_STAFF_ACCESS, mergeStaffAccess, type StaffAccessConfig } from '@/lib/staff-access';
 import { cn } from '@/lib/utils';
 
-type TabId = 'overview' | 'categories' | 'parties' | 'payment-modes' | 'membership-plans';
+type TabId = 'overview' | 'staff-access' | 'categories' | 'parties' | 'payment-modes' | 'membership-plans';
 
 const SECTIONS: { id: TabId; label: string; description: string; icon: typeof ListChecks }[] = [
   { id: 'overview', label: 'Entry Fields', description: 'Show or hide fields on forms', icon: ListChecks },
+  { id: 'staff-access', label: 'Staff Access', description: 'Permissions for data operators', icon: Shield },
   { id: 'categories', label: 'Categories', description: 'Rename, add, or disable categories', icon: Tags },
-  { id: 'parties', label: 'Parties', description: 'Client personal & emergency details', icon: UserRound },
+  { id: 'parties', label: 'Clients', description: 'Client personal & emergency details', icon: UserRound },
   { id: 'payment-modes', label: 'Payment Modes', description: 'Bank, cash, UPI accounts', icon: Wallet },
   { id: 'membership-plans', label: 'Membership Plans', description: 'Plans, GST pricing & duration', icon: CreditCard },
 ];
@@ -35,6 +38,7 @@ function EntryFieldsContent() {
   const tabParam = searchParams.get('tab') as TabId | null;
   const [activeTab, setActiveTab] = useState<TabId>(tabParam && SECTIONS.some((s) => s.id === tabParam) ? tabParam : 'overview');
   const [fields, setFields] = useState<EntryFieldsConfig>(DEFAULT_ENTRY_FIELDS);
+  const [staffAccess, setStaffAccess] = useState<StaffAccessConfig>(DEFAULT_STAFF_ACCESS);
   const [saving, setSaving] = useState(false);
 
   const { data: loadedFields } = useApiQuery<EntryFieldsConfig>(
@@ -43,9 +47,19 @@ function EntryFieldsContent() {
     { staleTime: 5 * 60_000 }
   );
 
+  const { data: loadedStaffAccess } = useApiQuery<StaffAccessConfig>(
+    queryKeys.staffAccess,
+    '/settings/staff-access',
+    { staleTime: 5 * 60_000 }
+  );
+
   useEffect(() => {
     if (loadedFields) setFields(mergeEntryFields(loadedFields));
   }, [loadedFields]);
+
+  useEffect(() => {
+    if (loadedStaffAccess) setStaffAccess(mergeStaffAccess(loadedStaffAccess));
+  }, [loadedStaffAccess]);
 
   useEffect(() => {
     if (tabParam && SECTIONS.some((s) => s.id === tabParam)) {
@@ -70,13 +84,23 @@ function EntryFieldsContent() {
     }
   };
 
+  const saveStaffAccess = async () => {
+    setSaving(true);
+    try {
+      await api.put('/settings/staff_access', { value: staffAccess });
+      invalidate(queryKeys.staffAccess);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const autoOpenAdd = searchParams.get('action') === 'add';
 
   return (
     <div>
       <Header
         title="Entry Fields"
-        subtitle="Party, category, payment mode & form settings"
+        subtitle="Client, category, payment mode & form settings"
       />
       <div className="p-6">
         <div className="flex flex-col lg:flex-row gap-6">
@@ -117,8 +141,8 @@ function EntryFieldsContent() {
                 <div className="space-y-3">
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Income Entry</p>
                   <FieldToggleCard
-                    title="Party field"
-                    description="Rename, delete, reorder, add new or hide"
+                    title="Client field"
+                    description="Show client name on income entries"
                     enabled={fields.income.party}
                     onToggle={admin ? (v) => setFields({ ...fields, income: { ...fields.income, party: v } }) : undefined}
                     onManage={() => setTab('parties')}
@@ -140,13 +164,20 @@ function EntryFieldsContent() {
                     onManage={() => setTab('payment-modes')}
                     readOnly={!admin}
                   />
+                  <FieldToggleCard
+                    title="Staff / Trainer field"
+                    description="Assign sales or PT credit on income entries"
+                    enabled={fields.income.staff}
+                    onToggle={admin ? (v) => setFields({ ...fields, income: { ...fields.income, staff: v } }) : undefined}
+                    readOnly={!admin}
+                  />
                 </div>
 
                 <div className="space-y-3">
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Expense Entry</p>
                   <FieldToggleCard
-                    title="Party field"
-                    description="Rename, delete, reorder, add new or hide"
+                    title="Client field"
+                    description="Show client name on expense entries"
                     enabled={fields.expense.party}
                     onToggle={admin ? (v) => setFields({ ...fields, expense: { ...fields.expense, party: v } }) : undefined}
                     onManage={() => setTab('parties')}
@@ -180,6 +211,21 @@ function EntryFieldsContent() {
                 {admin && (
                   <Button onClick={saveFields} disabled={saving}>
                     {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save Field Settings'}
+                  </Button>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'staff-access' && (
+              <div className="space-y-6">
+                <StaffAccessPanel
+                  access={staffAccess}
+                  onChange={setStaffAccess}
+                  readOnly={!admin}
+                />
+                {admin && (
+                  <Button onClick={saveStaffAccess} disabled={saving}>
+                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save Access Settings'}
                   </Button>
                 )}
               </div>

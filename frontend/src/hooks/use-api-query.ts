@@ -77,6 +77,14 @@ export function useEntryFields() {
   );
 }
 
+export function useStaffAccess() {
+  return useApiQuery<import('@/lib/staff-access').StaffAccessConfig>(
+    queryKeys.staffAccess,
+    '/settings/staff-access',
+    { staleTime: 5 * 60_000 }
+  );
+}
+
 export function prefetchRoute(queryClient: ReturnType<typeof useQueryClient>, href: string) {
   const prefetch = <T,>(key: readonly unknown[], endpoint: string) =>
     queryClient.prefetchQuery({
@@ -94,6 +102,7 @@ export function prefetchRoute(queryClient: ReturnType<typeof useQueryClient>, hr
       return prefetch(queryKeys.expenses(''), '/expenses?search=');
     case '/entry-fields':
       prefetch(queryKeys.entryFields, '/settings/entry-fields');
+      prefetch(queryKeys.staffAccess, '/settings/staff-access');
       prefetch(queryKeys.accounts(), '/accounts');
       prefetch(queryKeys.parties(), '/parties');
       prefetch(queryKeys.membershipPlans(), '/membership-plans');

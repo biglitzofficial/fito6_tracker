@@ -23,6 +23,7 @@ interface PartySelectFieldProps {
   onPartyAdded: () => void;
   defaultType?: PartyType;
   error?: string;
+  variant?: 'party' | 'client';
 }
 
 export function PartySelectField({
@@ -32,7 +33,17 @@ export function PartySelectField({
   onPartyAdded,
   defaultType = 'STAFF',
   error,
+  variant = 'party',
 }: PartySelectFieldProps) {
+  const isClient = variant === 'client';
+  const newLabel = isClient ? 'New client' : 'New party (contact)';
+  const typePlaceholder = isClient ? 'Client type' : 'Party type';
+  const namePlaceholder = isClient
+    ? 'Client name (e.g. Rahul Sharma)'
+    : 'Party name (e.g. KASTHURI-MAID)';
+  const selectPlaceholder = isClient ? 'Search or select client' : 'Search or select party';
+  const addLabel = isClient ? 'Add client' : 'Add party';
+  const saveLabel = isClient ? 'Save client' : 'Save party';
   const [showAdd, setShowAdd] = useState(false);
   const [newName, setNewName] = useState('');
   const [newType, setNewType] = useState<PartyType>(defaultType);
@@ -70,10 +81,10 @@ export function PartySelectField({
   if (showAdd) {
     return (
       <div className="space-y-2 rounded-lg border border-border p-3 bg-muted/30">
-        <Label className="text-xs text-muted-foreground">New party (contact)</Label>
+        <Label className="text-xs text-muted-foreground">{newLabel}</Label>
         <Select value={newType} onValueChange={(v) => setNewType(v as PartyType)}>
           <SelectTrigger>
-            <SelectValue placeholder="Party type" />
+            <SelectValue placeholder={typePlaceholder} />
           </SelectTrigger>
           <SelectContent>
             {(Object.keys(PARTY_TYPE_LABELS) as PartyType[]).map((type) => (
@@ -84,7 +95,7 @@ export function PartySelectField({
           </SelectContent>
         </Select>
         <Input
-          placeholder="Party name (e.g. KASTHURI-MAID)"
+          placeholder={namePlaceholder}
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
         />
@@ -96,7 +107,7 @@ export function PartySelectField({
         {addError && <p className="text-xs text-destructive">{addError}</p>}
         <div className="flex gap-2">
           <Button type="button" size="sm" onClick={handleAddParty} disabled={saving}>
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save party'}
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : saveLabel}
           </Button>
           <Button type="button" size="sm" variant="ghost" onClick={() => setShowAdd(false)}>
             Cancel
@@ -110,7 +121,7 @@ export function PartySelectField({
     <div className="space-y-2">
       <Select value={value} onValueChange={onChange}>
         <SelectTrigger>
-          <SelectValue placeholder="Search or select party" />
+          <SelectValue placeholder={selectPlaceholder} />
         </SelectTrigger>
         <SelectContent>
           {parties.map((party) => (
@@ -131,7 +142,7 @@ export function PartySelectField({
           setShowAdd(true);
         }}
       >
-        <Plus className="h-3 w-3" /> Add party
+        <Plus className="h-3 w-3" /> {addLabel}
       </Button>
     </div>
   );
