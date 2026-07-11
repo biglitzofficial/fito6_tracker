@@ -38,6 +38,7 @@ router.get(
     const result = await incomeService.list(req.businessId!, {
       search: req.query.search as string,
       categoryId: req.query.categoryId as string,
+      partyId: req.query.partyId as string,
       dateFrom: req.query.dateFrom as string,
       dateTo: req.query.dateTo as string,
       page: parseInt(req.query.page as string) || 1,

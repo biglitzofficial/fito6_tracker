@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { PartyType } from '../types/enums';
 import { normalizePartyPayload, partyDetailsSchema } from '../lib/party-fields';
+import { PROMOTION_SOURCES } from '../lib/promotion-sources';
+import { GENDERS } from '../lib/genders';
 import { authenticate, adminOnly, AuthRequest } from '../middleware/auth';
 import { requireBusiness, BusinessRequest } from '../middleware/business';
 import { auditLog } from '../middleware/auditLog';
@@ -21,12 +23,26 @@ router.get(
   })
 );
 
+router.get(
+  '/:id',
+  asyncHandler(async (req: BusinessRequest, res) => {
+    const party = await partyService.getById(req.businessId!, String(req.params.id));
+    sendSuccess(res, party);
+  })
+);
+
 const partyUpdateSchema = z.object({
   name: z.string().trim().min(2).optional(),
   type: z.nativeEnum(PartyType).optional(),
   email: z.string().trim().email('Invalid email').optional().or(z.literal('')).nullable(),
   phone: z.string().trim().nullable().optional(),
-  promotionSource: z.string().trim().nullable().optional(),
+  dateOfBirth: z.string().trim().nullable().optional(),
+  gender: z.enum(GENDERS).or(z.literal('')).nullable().optional(),
+  promotionSource: z
+    .union([z.enum(PROMOTION_SOURCES), z.string().trim().min(1)])
+    .or(z.literal(''))
+    .nullable()
+    .optional(),
   address: z.string().trim().nullable().optional(),
   emergencyContactName: z.string().trim().nullable().optional(),
   emergencyContactPhone: z.string().trim().nullable().optional(),
@@ -39,6 +55,8 @@ function normalizeOptionalPartyFields(data: z.infer<typeof partyUpdateSchema>) {
   const out: Record<string, string | null | undefined> = {};
   if (data.email !== undefined) out.email = data.email?.trim() || null;
   if (data.phone !== undefined) out.phone = data.phone?.trim() || null;
+  if (data.dateOfBirth !== undefined) out.dateOfBirth = data.dateOfBirth?.trim() || null;
+  if (data.gender !== undefined) out.gender = data.gender?.trim() || null;
   if (data.promotionSource !== undefined) out.promotionSource = data.promotionSource?.trim() || null;
   if (data.address !== undefined) out.address = data.address?.trim() || null;
   if (data.emergencyContactName !== undefined) out.emergencyContactName = data.emergencyContactName?.trim() || null;

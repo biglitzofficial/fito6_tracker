@@ -8,6 +8,7 @@ import { SubscriptionManager } from '@/components/subscriptions/subscription-man
 function PersonalTrainingContent() {
   const searchParams = useSearchParams();
   const autoOpenAdd = searchParams.get('action') === 'add';
+  const renewId = searchParams.get('renew');
 
   return (
     <div>
@@ -18,6 +19,7 @@ function PersonalTrainingContent() {
           title="Personal Training"
           subtitle="Assign PT plans to clients with trainer, GST pricing, and bill rep."
           autoOpenAdd={autoOpenAdd}
+          renewId={renewId}
         />
       </div>
     </div>

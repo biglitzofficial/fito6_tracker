@@ -5,8 +5,10 @@ export const queryKeys = {
   categories: (type: string) => ['categories', type] as const,
   accounts: (type?: string) => ['accounts', type ?? 'all'] as const,
   parties: (type?: string) => ['parties', type ?? 'all'] as const,
+  party: (id: string) => ['parties', id] as const,
   membershipPlans: (kind?: string) => ['membership-plans', kind ?? 'all'] as const,
-  subscriptions: (kind?: string) => ['subscriptions', kind ?? 'all'] as const,
+  subscriptions: (kind?: string, partyId?: string) =>
+    ['subscriptions', kind ?? 'all', partyId ?? 'all'] as const,
   staff: ['staff'] as const,
   staffList: ['staff', 'all'] as const,
   staffTargets: (periodMonth: string) => ['staff-targets', periodMonth] as const,

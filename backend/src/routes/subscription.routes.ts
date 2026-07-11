@@ -29,7 +29,8 @@ router.get(
   '/',
   asyncHandler(async (req: BusinessRequest, res) => {
     const kind = req.query.kind as PlanKind | undefined;
-    const items = await subscriptionService.list(req.businessId!, kind);
+    const partyId = req.query.partyId as string | undefined;
+    const items = await subscriptionService.list(req.businessId!, kind, partyId);
     sendSuccess(res, items);
   })
 );

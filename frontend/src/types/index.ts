@@ -59,6 +59,8 @@ export interface Party {
   type: PartyType;
   email?: string | null;
   phone?: string | null;
+  dateOfBirth?: string | null;
+  gender?: string | null;
   promotionSource?: string | null;
   address?: string | null;
   emergencyContactName?: string | null;

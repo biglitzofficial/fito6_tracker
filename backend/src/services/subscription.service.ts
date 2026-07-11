@@ -70,11 +70,11 @@ function computeStatus(endDate: Date): SubscriptionStatus {
 }
 
 export const subscriptionService = {
-  async list(businessId: string, kind?: PlanKind) {
+  async list(businessId: string, kind?: PlanKind, partyId?: string) {
     const items = await findManyForBusiness<Subscription>(
       COL.subscriptions,
       businessId,
-      (s) => !kind || s.kind === kind
+      (s) => (!kind || s.kind === kind) && (!partyId || s.partyId === partyId)
     );
     const sorted = sortBy(items, 'startDate', 'desc');
     return withRelations(businessId, sorted);

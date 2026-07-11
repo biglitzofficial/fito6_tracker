@@ -22,6 +22,7 @@ import { AppError } from '../utils/response';
 interface IncomeFilters {
   search?: string;
   categoryId?: string;
+  partyId?: string;
   dateFrom?: string;
   dateTo?: string;
   createdById?: string;
@@ -95,13 +96,14 @@ async function resolvePartyFields(
 
 export const incomeService = {
   async list(businessId: string, filters: IncomeFilters) {
-    const { search, categoryId, dateFrom, dateTo, page = 1, limit = 20 } = filters;
+    const { search, categoryId, partyId, dateFrom, dateTo, page = 1, limit = 20 } = filters;
     const from = dateFrom ? new Date(dateFrom) : undefined;
     const to = dateTo ? new Date(dateTo) : undefined;
 
     let items = await findManyForBusiness<Income>(COL.income, businessId, (item) => {
       if (filters.createdById && item.createdById !== filters.createdById) return false;
       if (categoryId && item.categoryId !== categoryId) return false;
+      if (partyId && item.partyId !== partyId) return false;
       if (!inDateRange(item.date, from, to)) return false;
       if (!matchesSearch(search, item.receiptNumber, item.source, item.notes)) return false;
       return true;

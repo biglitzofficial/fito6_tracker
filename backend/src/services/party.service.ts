@@ -21,12 +21,18 @@ export const partyService = {
     return sortBy(parties, 'name', 'asc');
   },
 
+  async getById(businessId: string, id: string) {
+    return assertBusinessAccess(await getById<Party>(COL.parties, id), businessId, 'Party');
+  },
+
   async create(data: {
     businessId: string;
     name: string;
     type: PartyType;
     email?: string | null;
     phone?: string | null;
+    dateOfBirth?: string | null;
+    gender?: string | null;
     promotionSource?: string | null;
     address?: string | null;
     emergencyContactName?: string | null;
@@ -46,6 +52,8 @@ export const partyService = {
       type: data.type,
       email: data.email?.trim() || null,
       phone: data.phone?.trim() || null,
+      dateOfBirth: data.dateOfBirth?.trim() || null,
+      gender: data.gender?.trim() || null,
       promotionSource: data.promotionSource?.trim() || null,
       address: data.address?.trim() || null,
       emergencyContactName: data.emergencyContactName?.trim() || null,
@@ -64,6 +72,8 @@ export const partyService = {
       type?: PartyType;
       email?: string | null;
       phone?: string | null;
+      dateOfBirth?: string | null;
+      gender?: string | null;
       promotionSource?: string | null;
       address?: string | null;
       emergencyContactName?: string | null;
@@ -92,6 +102,8 @@ export const partyService = {
       ...data,
       email: nullable(data.email),
       phone: nullable(data.phone),
+      dateOfBirth: nullable(data.dateOfBirth),
+      gender: nullable(data.gender),
       promotionSource: nullable(data.promotionSource),
       address: nullable(data.address),
       emergencyContactName: nullable(data.emergencyContactName),

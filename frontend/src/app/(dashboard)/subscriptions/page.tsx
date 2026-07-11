@@ -8,6 +8,7 @@ import { SubscriptionManager } from '@/components/subscriptions/subscription-man
 function SubscriptionsContent() {
   const searchParams = useSearchParams();
   const autoOpenAdd = searchParams.get('action') === 'add';
+  const renewId = searchParams.get('renew');
 
   return (
     <div>
@@ -18,6 +19,7 @@ function SubscriptionsContent() {
           title="Membership Subscriptions"
           subtitle="Assign membership plans to clients with GST pricing and bill rep."
           autoOpenAdd={autoOpenAdd}
+          renewId={renewId}
         />
       </div>
     </div>

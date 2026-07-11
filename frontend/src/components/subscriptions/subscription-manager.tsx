@@ -286,9 +286,10 @@ interface SubscriptionManagerProps {
   title: string;
   subtitle: string;
   autoOpenAdd?: boolean;
+  renewId?: string | null;
 }
 
-export function SubscriptionManager({ kind, title, subtitle, autoOpenAdd }: SubscriptionManagerProps) {
+export function SubscriptionManager({ kind, title, subtitle, autoOpenAdd, renewId }: SubscriptionManagerProps) {
   const [showForm, setShowForm] = useState(autoOpenAdd ?? false);
   const [renewing, setRenewing] = useState<Subscription | null>(null);
   const invalidate = useInvalidate();
@@ -300,6 +301,16 @@ export function SubscriptionManager({ kind, title, subtitle, autoOpenAdd }: Subs
   const { data: subscriptions = [], isLoading, isError, error, refetch } = useSubscriptions(kind);
 
   const activePlans = plans.filter((p) => p.isActive);
+
+  useEffect(() => {
+    if (!renewId || !subscriptions.length) return;
+    const target = subscriptions.find((s) => s.id === renewId);
+    if (target) {
+      setRenewing(target);
+      setShowForm(true);
+    }
+  }, [renewId, subscriptions]);
+
   const invalidateAll = () => {
     invalidate(queryKeys.subscriptions(kind));
     invalidate(queryKeys.income(''));

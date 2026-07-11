@@ -54,12 +54,24 @@ export function useMembershipPlans(kind?: import('@/types').PlanKind) {
   );
 }
 
-export function useSubscriptions(kind?: import('@/types').PlanKind) {
-  const endpoint = kind ? `/subscriptions?kind=${kind}` : '/subscriptions';
+export function useSubscriptions(kind?: import('@/types').PlanKind, partyId?: string) {
+  const params = new URLSearchParams();
+  if (kind) params.set('kind', kind);
+  if (partyId) params.set('partyId', partyId);
+  const qs = params.toString();
+  const endpoint = qs ? `/subscriptions?${qs}` : '/subscriptions';
   return useApiQuery<import('@/types').Subscription[]>(
-    queryKeys.subscriptions(kind),
+    queryKeys.subscriptions(kind, partyId),
     endpoint,
-    { staleTime: 30_000 }
+    { staleTime: 30_000, enabled: partyId !== '' }
+  );
+}
+
+export function useParty(id?: string) {
+  return useApiQuery<import('@/types').Party>(
+    queryKeys.party(id || ''),
+    `/parties/${id}`,
+    { enabled: !!id, staleTime: 30_000 }
   );
 }
 
