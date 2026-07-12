@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { PlanKind } from '../types/enums';
-import { authenticate } from '../middleware/auth';
+import { authenticate, adminOnly } from '../middleware/auth';
 import { requireBusiness, BusinessRequest } from '../middleware/business';
 import { auditLog } from '../middleware/auditLog';
 import { subscriptionService } from '../services/subscription.service';
@@ -23,6 +23,17 @@ const createSchema = z.object({
   accountId: z.string().optional(),
   notes: z.string().trim().optional(),
   createIncome: z.boolean().optional(),
+});
+
+const updateSchema = z.object({
+  partyId: z.string().optional(),
+  planId: z.string().optional(),
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
+  amountPaid: z.coerce.number().positive().optional(),
+  billRepId: z.string().nullable().optional(),
+  trainerStaffId: z.string().nullable().optional(),
+  notes: z.string().trim().nullable().optional(),
 });
 
 router.get(
@@ -57,6 +68,16 @@ router.post(
   })
 );
 
+router.put(
+  '/:id',
+  auditLog('UPDATE_SUBSCRIPTION', 'Subscription'),
+  asyncHandler(async (req: BusinessRequest, res) => {
+    const data = updateSchema.parse(req.body);
+    const item = await subscriptionService.update(req.businessId!, String(req.params.id), data);
+    sendSuccess(res, item);
+  })
+);
+
 router.post(
   '/:id/renew',
   auditLog('RENEW_SUBSCRIPTION', 'Subscription'),
@@ -87,6 +108,16 @@ router.patch(
   asyncHandler(async (req: BusinessRequest, res) => {
     const item = await subscriptionService.cancel(req.businessId!, String(req.params.id));
     sendSuccess(res, item);
+  })
+);
+
+router.delete(
+  '/:id',
+  adminOnly,
+  auditLog('DELETE_SUBSCRIPTION', 'Subscription'),
+  asyncHandler(async (req: BusinessRequest, res) => {
+    const result = await subscriptionService.delete(req.businessId!, String(req.params.id));
+    sendSuccess(res, result);
   })
 );
 

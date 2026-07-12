@@ -12,7 +12,7 @@ import { QueryState } from '@/components/ui/query-state';
 import { PARTY_TYPE_LABELS } from '@/components/forms/party-select-field';
 import { PartyForm } from '@/components/parties/party-form';
 import { api } from '@/lib/api';
-import { useApiQuery, useInvalidate } from '@/hooks/use-api-query';
+import { useApiQuery, useInvalidateParties, useUpsertPartyCache } from '@/hooks/use-api-query';
 import { useDebounce } from '@/hooks/use-debounce';
 import { queryKeys } from '@/lib/query-keys';
 import { useAuthStore, isAdmin } from '@/stores/auth.store';
@@ -29,7 +29,8 @@ export function PartiesPanel({ autoOpenAdd }: PartiesPanelProps) {
   const debouncedSearch = useDebounce(search);
   const [typeFilter, setTypeFilter] = useState<PartyType | 'ALL'>('ALL');
   const [showForm, setShowForm] = useState(autoOpenAdd ?? false);
-  const invalidate = useInvalidate();
+  const invalidateParties = useInvalidateParties();
+  const upsertPartyCache = useUpsertPartyCache();
 
   const endpoint = typeFilter === 'ALL' ? '/parties' : `/parties?type=${typeFilter}`;
   const { data: parties = [], isLoading, isError, error, refetch } = useApiQuery<Party[]>(
@@ -51,16 +52,17 @@ export function PartiesPanel({ autoOpenAdd }: PartiesPanelProps) {
     );
   });
 
-  const handleSaved = () => {
+  const handleSaved = (party?: Party) => {
     setShowForm(false);
-    invalidate(queryKeys.parties());
+    if (party) upsertPartyCache(party);
+    invalidateParties();
   };
 
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!confirm('Disable this party?')) return;
     await api.delete(`/parties/${id}`);
-    invalidate(queryKeys.parties());
+    invalidateParties();
   };
 
   const openProfile = (id: string) => router.push(`/parties/${id}`);

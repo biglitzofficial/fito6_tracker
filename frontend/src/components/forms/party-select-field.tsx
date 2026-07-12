@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Plus, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,7 +20,7 @@ interface PartySelectFieldProps {
   value?: string;
   onChange: (partyId: string) => void;
   parties: Party[];
-  onPartyAdded: () => void;
+  onPartyAdded: (party?: Party) => void;
   defaultType?: PartyType;
   error?: string;
   variant?: 'party' | 'client';
@@ -50,6 +50,27 @@ export function PartySelectField({
   const [phone, setPhone] = useState('');
   const [saving, setSaving] = useState(false);
   const [addError, setAddError] = useState('');
+  const [filter, setFilter] = useState('');
+  const [localParties, setLocalParties] = useState<Party[]>([]);
+
+  const options = useMemo(() => {
+    const byId = new Map<string, Party>();
+    for (const party of [...parties, ...localParties]) {
+      byId.set(party.id, party);
+    }
+    return Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [parties, localParties]);
+
+  const filtered = useMemo(() => {
+    const q = filter.trim().toLowerCase();
+    if (!q) return options;
+    return options.filter(
+      (party) =>
+        party.name.toLowerCase().includes(q) ||
+        party.phone?.toLowerCase().includes(q) ||
+        PARTY_TYPE_LABELS[party.type].toLowerCase().includes(q)
+    );
+  }, [options, filter]);
 
   const handleAddParty = async () => {
     const name = newName.trim();
@@ -66,10 +87,17 @@ export function PartySelectField({
         type: newType,
         ...(phone.trim() ? { phone: phone.trim() } : {}),
       });
-      onPartyAdded();
+      setLocalParties((prev) => {
+        if (prev.some((p) => p.id === created.id)) {
+          return prev.map((p) => (p.id === created.id ? created : p));
+        }
+        return [...prev, created];
+      });
+      onPartyAdded(created);
       onChange(created.id);
       setNewName('');
       setPhone('');
+      setFilter('');
       setShowAdd(false);
     } catch (e) {
       setAddError(e instanceof Error ? e.message : 'Failed to add party');
@@ -119,16 +147,27 @@ export function PartySelectField({
 
   return (
     <div className="space-y-2">
-      <Select value={value} onValueChange={onChange}>
+      <Input
+        value={filter}
+        onChange={(e) => setFilter(e.target.value)}
+        placeholder={selectPlaceholder}
+      />
+      <Select value={value || undefined} onValueChange={onChange}>
         <SelectTrigger>
-          <SelectValue placeholder={selectPlaceholder} />
+          <SelectValue placeholder={isClient ? 'Select client' : 'Select party'} />
         </SelectTrigger>
         <SelectContent>
-          {parties.map((party) => (
-            <SelectItem key={party.id} value={party.id}>
-              {party.name} · {PARTY_TYPE_LABELS[party.type]}
+          {filtered.length ? (
+            filtered.map((party) => (
+              <SelectItem key={party.id} value={party.id}>
+                {party.name} · {PARTY_TYPE_LABELS[party.type]}
+              </SelectItem>
+            ))
+          ) : (
+            <SelectItem value="__none__" disabled>
+              No matching clients
             </SelectItem>
-          ))}
+          )}
         </SelectContent>
       </Select>
       {error && <p className="text-xs text-destructive">{error}</p>}

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Plus, Loader2, RefreshCw } from 'lucide-react';
+import { Plus, Loader2, RefreshCw, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -25,8 +25,11 @@ import {
   useParties,
   useAccounts,
   useInvalidate,
+  useInvalidateParties,
+  useUpsertPartyCache,
 } from '@/hooks/use-api-query';
 import { queryKeys } from '@/lib/query-keys';
+import { useAuthStore, isAdmin } from '@/stores/auth.store';
 import type { MembershipPlan, PlanKind, Subscription, SubscriptionStatus, User } from '@/types';
 import { formatCurrency, formatDate } from '@/lib/utils';
 
@@ -59,6 +62,7 @@ function SubscriptionForm({
   accounts,
   staff,
   renewing,
+  editing,
   onCancel,
   onSaved,
   onPartyAdded,
@@ -70,12 +74,14 @@ function SubscriptionForm({
   accounts: import('@/types').Account[];
   staff: User[];
   renewing?: Subscription | null;
+  editing?: Subscription | null;
   onCancel: () => void;
   onSaved: () => void;
-  onPartyAdded: () => void;
+  onPartyAdded: (party?: import('@/types').Party) => void;
   onAccountAdded: () => void;
 }) {
   const isRenew = !!renewing;
+  const isEdit = !!editing && !isRenew;
   const schema = useMemo(() => buildSchema(kind), [kind]);
   const today = toDateInput(new Date());
   const defaultStart = renewing
@@ -84,19 +90,31 @@ function SubscriptionForm({
 
   const { register, handleSubmit, control, watch, setValue, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: renewing
+    defaultValues: editing
       ? {
-          partyId: renewing.partyId,
-          planId: renewing.planId,
-          startDate: defaultStart,
-          endDate: '',
-          amountPaid: renewing.amountPaid,
-          billRepId: renewing.billRepId || undefined,
-          trainerStaffId: renewing.trainerStaffId || undefined,
-          accountId: renewing.accountId || undefined,
-          notes: '',
+          partyId: editing.partyId,
+          planId: editing.planId,
+          startDate: toDateInput(new Date(editing.startDate)),
+          endDate: toDateInput(new Date(editing.endDate)),
+          amountPaid: editing.amountPaid,
+          billRepId: editing.billRepId || undefined,
+          trainerStaffId: editing.trainerStaffId || undefined,
+          accountId: editing.accountId || undefined,
+          notes: editing.notes || '',
         }
-      : { startDate: today, endDate: '', amountPaid: 0 },
+      : renewing
+        ? {
+            partyId: renewing.partyId,
+            planId: renewing.planId,
+            startDate: defaultStart,
+            endDate: '',
+            amountPaid: renewing.amountPaid,
+            billRepId: renewing.billRepId || undefined,
+            trainerStaffId: renewing.trainerStaffId || undefined,
+            accountId: renewing.accountId || undefined,
+            notes: '',
+          }
+        : { startDate: today, endDate: '', amountPaid: 0 },
   });
 
   const planId = watch('planId');
@@ -105,33 +123,47 @@ function SubscriptionForm({
 
   useEffect(() => {
     if (!selectedPlan || !startDate) return;
+    if (isEdit) return;
     const end = toDateInput(addDays(new Date(startDate), selectedPlan.durationDays - 1));
     setValue('endDate', end);
     if (!isRenew) setValue('amountPaid', selectedPlan.priceInclGst);
-  }, [selectedPlan, startDate, setValue, isRenew]);
+  }, [selectedPlan, startDate, setValue, isRenew, isEdit]);
 
   const [submitting, setSubmitting] = useState(false);
 
   const onSubmit = async (data: FormData) => {
     setSubmitting(true);
     try {
-      const payload = {
-        kind,
-        partyId: data.partyId,
-        planId: data.planId,
-        startDate: data.startDate,
-        endDate: data.endDate,
-        amountPaid: data.amountPaid,
-        billRepId: data.billRepId || undefined,
-        trainerStaffId: data.trainerStaffId || undefined,
-        accountId: data.accountId || undefined,
-        notes: data.notes?.trim() || undefined,
-        createIncome: !!data.accountId,
-      };
-      if (isRenew && renewing) {
-        await api.post(`/subscriptions/${renewing.id}/renew`, payload);
+      if (isEdit && editing) {
+        await api.put(`/subscriptions/${editing.id}`, {
+          partyId: data.partyId,
+          planId: data.planId,
+          startDate: data.startDate,
+          endDate: data.endDate,
+          amountPaid: data.amountPaid,
+          billRepId: data.billRepId || null,
+          trainerStaffId: data.trainerStaffId || null,
+          notes: data.notes?.trim() || null,
+        });
       } else {
-        await api.post('/subscriptions', payload);
+        const payload = {
+          kind,
+          partyId: data.partyId,
+          planId: data.planId,
+          startDate: data.startDate,
+          endDate: data.endDate,
+          amountPaid: data.amountPaid,
+          billRepId: data.billRepId || undefined,
+          trainerStaffId: data.trainerStaffId || undefined,
+          accountId: data.accountId || undefined,
+          notes: data.notes?.trim() || undefined,
+          createIncome: !!data.accountId,
+        };
+        if (isRenew && renewing) {
+          await api.post(`/subscriptions/${renewing.id}/renew`, payload);
+        } else {
+          await api.post('/subscriptions', payload);
+        }
       }
       onSaved();
     } finally {
@@ -140,13 +172,18 @@ function SubscriptionForm({
   };
 
   const activeStaff = staff.filter((s) => s.isActive);
+  const formTitle = isEdit
+    ? 'Edit Subscription'
+    : isRenew
+      ? 'Renew Subscription'
+      : kind === 'MEMBERSHIP'
+        ? 'Add Subscription'
+        : 'Assign Personal Training';
 
   return (
     <Card className="animate-fade-in">
       <CardContent className="p-6">
-        <h3 className="font-semibold mb-4">
-          {isRenew ? 'Renew Subscription' : kind === 'MEMBERSHIP' ? 'Add Subscription' : 'Assign Personal Training'}
-        </h3>
+        <h3 className="font-semibold mb-4">{formTitle}</h3>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
@@ -248,22 +285,24 @@ function SubscriptionForm({
                 {errors.trainerStaffId && <p className="text-xs text-destructive">{errors.trainerStaffId.message}</p>}
               </div>
             )}
-            <div className="space-y-2">
-              <Label>Payment Account (optional)</Label>
-              <Controller
-                name="accountId"
-                control={control}
-                render={({ field }) => (
-                  <AccountSelectField
-                    value={field.value}
-                    onChange={field.onChange}
-                    accounts={accounts}
-                    onAccountAdded={onAccountAdded}
-                  />
-                )}
-              />
-              <p className="text-xs text-muted-foreground">Records income when an account is selected</p>
-            </div>
+            {!isEdit && (
+              <div className="space-y-2">
+                <Label>Payment Account (optional)</Label>
+                <Controller
+                  name="accountId"
+                  control={control}
+                  render={({ field }) => (
+                    <AccountSelectField
+                      value={field.value}
+                      onChange={field.onChange}
+                      accounts={accounts}
+                      onAccountAdded={onAccountAdded}
+                    />
+                  )}
+                />
+                <p className="text-xs text-muted-foreground">Records income when an account is selected</p>
+              </div>
+            )}
             <div className="space-y-2 md:col-span-2">
               <Label>Notes</Label>
               <Textarea {...register('notes')} rows={2} placeholder="Optional notes" />
@@ -271,7 +310,15 @@ function SubscriptionForm({
           </div>
           <div className="flex gap-3">
             <Button type="submit" disabled={submitting}>
-              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : isRenew ? 'Renew' : 'Save'}
+              {submitting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : isEdit ? (
+                'Save Changes'
+              ) : isRenew ? (
+                'Renew'
+              ) : (
+                'Save'
+              )}
             </Button>
             <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>
           </div>
@@ -290,9 +337,13 @@ interface SubscriptionManagerProps {
 }
 
 export function SubscriptionManager({ kind, title, subtitle, autoOpenAdd, renewId }: SubscriptionManagerProps) {
+  const { user } = useAuthStore();
   const [showForm, setShowForm] = useState(autoOpenAdd ?? false);
   const [renewing, setRenewing] = useState<Subscription | null>(null);
+  const [editing, setEditing] = useState<Subscription | null>(null);
   const invalidate = useInvalidate();
+  const invalidateParties = useInvalidateParties();
+  const upsertPartyCache = useUpsertPartyCache();
 
   const { data: plans = [] } = useMembershipPlans(kind);
   const { data: parties = [] } = useParties('CUSTOMER');
@@ -301,11 +352,20 @@ export function SubscriptionManager({ kind, title, subtitle, autoOpenAdd, renewI
   const { data: subscriptions = [], isLoading, isError, error, refetch } = useSubscriptions(kind);
 
   const activePlans = plans.filter((p) => p.isActive);
+  const formPlans = useMemo(() => {
+    if (!editing) return activePlans;
+    const current = plans.find((p) => p.id === editing.planId);
+    if (current && !activePlans.some((p) => p.id === current.id)) {
+      return [current, ...activePlans];
+    }
+    return activePlans;
+  }, [activePlans, editing, plans]);
 
   useEffect(() => {
     if (!renewId || !subscriptions.length) return;
     const target = subscriptions.find((s) => s.id === renewId);
     if (target) {
+      setEditing(null);
       setRenewing(target);
       setShowForm(true);
     }
@@ -316,9 +376,14 @@ export function SubscriptionManager({ kind, title, subtitle, autoOpenAdd, renewI
     invalidate(queryKeys.income(''));
   };
 
-  const handleSaved = () => {
+  const closeForm = () => {
     setShowForm(false);
     setRenewing(null);
+    setEditing(null);
+  };
+
+  const handleSaved = () => {
+    closeForm();
     invalidateAll();
   };
 
@@ -326,6 +391,27 @@ export function SubscriptionManager({ kind, title, subtitle, autoOpenAdd, renewI
     if (!confirm('Cancel this subscription?')) return;
     await api.patch(`/subscriptions/${id}/cancel`, {});
     invalidateAll();
+  };
+
+  const handleDelete = async (sub: Subscription) => {
+    if (!confirm(`Delete subscription for "${sub.party?.name || 'client'}" (${sub.planName})? This cannot be undone.`)) {
+      return;
+    }
+    await api.delete(`/subscriptions/${sub.id}`);
+    if (editing?.id === sub.id || renewing?.id === sub.id) closeForm();
+    invalidateAll();
+  };
+
+  const openEdit = (sub: Subscription) => {
+    setRenewing(null);
+    setEditing(sub);
+    setShowForm(true);
+  };
+
+  const openRenew = (sub: Subscription) => {
+    setEditing(null);
+    setRenewing(sub);
+    setShowForm(true);
   };
 
   return (
@@ -337,8 +423,13 @@ export function SubscriptionManager({ kind, title, subtitle, autoOpenAdd, renewI
         </div>
         <Button
           onClick={() => {
+            if (showForm && !renewing && !editing) {
+              setShowForm(false);
+              return;
+            }
             setRenewing(null);
-            setShowForm(!showForm);
+            setEditing(null);
+            setShowForm(true);
           }}
           disabled={!activePlans.length}
         >
@@ -353,19 +444,23 @@ export function SubscriptionManager({ kind, title, subtitle, autoOpenAdd, renewI
         </p>
       )}
 
-      {(showForm || renewing) && (
+      {(showForm || renewing || editing) && (
         <div className="mb-6">
           <SubscriptionForm
-            key={renewing?.id ?? 'new'}
+            key={editing?.id ?? renewing?.id ?? 'new'}
             kind={kind}
-            plans={activePlans}
+            plans={formPlans}
             parties={parties}
             accounts={accounts}
             staff={staff}
             renewing={renewing}
-            onCancel={() => { setShowForm(false); setRenewing(null); }}
+            editing={editing}
+            onCancel={closeForm}
             onSaved={handleSaved}
-            onPartyAdded={() => invalidate(queryKeys.parties('CUSTOMER'))}
+            onPartyAdded={(party) => {
+              if (party) upsertPartyCache(party);
+              invalidateParties();
+            }}
             onAccountAdded={() => invalidate(queryKeys.accounts())}
           />
         </div>
@@ -394,13 +489,12 @@ export function SubscriptionManager({ kind, title, subtitle, autoOpenAdd, renewI
                     <p className="text-xs text-muted-foreground">Receipt: {sub.receiptNumber}</p>
                   )}
                 </div>
-                <div className="flex gap-2 shrink-0">
+                <div className="flex flex-wrap gap-2 shrink-0">
+                  <Button variant="outline" size="sm" onClick={() => openEdit(sub)}>
+                    <Pencil className="h-3 w-3" /> Edit
+                  </Button>
                   {sub.status !== 'CANCELLED' && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => { setShowForm(false); setRenewing(sub); }}
-                    >
+                    <Button variant="outline" size="sm" onClick={() => openRenew(sub)}>
                       <RefreshCw className="h-3 w-3" />
                       {kind === 'MEMBERSHIP' ? 'Renew' : 'Renew PT'}
                     </Button>
@@ -408,6 +502,16 @@ export function SubscriptionManager({ kind, title, subtitle, autoOpenAdd, renewI
                   {sub.status === 'ACTIVE' && (
                     <Button variant="ghost" size="sm" className="text-destructive" onClick={() => handleCancel(sub.id)}>
                       Cancel
+                    </Button>
+                  )}
+                  {isAdmin(user) && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive"
+                      onClick={() => handleDelete(sub)}
+                    >
+                      <Trash2 className="h-3 w-3" /> Delete
                     </Button>
                   )}
                 </div>

@@ -8,6 +8,7 @@ import {
   getById,
   getPartyMap,
   getUserMap,
+  remove,
   sortBy,
   update,
 } from '../lib/firestore';
@@ -237,5 +238,105 @@ export const subscriptionService = {
     assertBusinessAccess(await getById<Subscription>(COL.subscriptions, id), businessId, 'Subscription');
     const updated = await update<Subscription>(COL.subscriptions, id, { status: SubscriptionStatus.CANCELLED });
     return (await withRelations(businessId, [updated]))[0];
+  },
+
+  async update(
+    businessId: string,
+    id: string,
+    data: {
+      partyId?: string;
+      planId?: string;
+      startDate?: string;
+      endDate?: string;
+      amountPaid?: number;
+      billRepId?: string | null;
+      trainerStaffId?: string | null;
+      notes?: string | null;
+    }
+  ) {
+    const existing = assertBusinessAccess(
+      await getById<Subscription>(COL.subscriptions, id),
+      businessId,
+      'Subscription'
+    );
+
+    let partyId = existing.partyId;
+    if (data.partyId !== undefined) {
+      const party = assertBusinessAccess(
+        await getById<Party>(COL.parties, data.partyId),
+        businessId,
+        'Party'
+      );
+      if (!party.isActive) throw new AppError(400, 'Invalid client selected');
+      partyId = party.id;
+    }
+
+    let plan = assertBusinessAccess(
+      await getById<MembershipPlan>(COL.membershipPlans, data.planId || existing.planId),
+      businessId,
+      'Membership plan'
+    );
+    if (plan.kind !== existing.kind) throw new AppError(400, 'Plan type does not match subscription type');
+
+    if (existing.kind === PlanKind.PERSONAL_TRAINING) {
+      const trainerId = data.trainerStaffId !== undefined ? data.trainerStaffId : existing.trainerStaffId;
+      if (!trainerId) throw new AppError(400, 'Trainer is required for personal training');
+    }
+
+    const startDate = data.startDate ? new Date(data.startDate) : new Date(existing.startDate);
+    const endDate = data.endDate
+      ? new Date(data.endDate)
+      : data.startDate
+        ? addDays(startDate, Number(plan.durationDays) - 1)
+        : new Date(existing.endDate);
+
+    const billRep =
+      data.billRepId !== undefined
+        ? await resolveBillRep(businessId, data.billRepId || undefined)
+        : { billRepId: existing.billRepId ?? null, billRepName: existing.billRepName ?? null };
+
+    const trainer =
+      data.trainerStaffId !== undefined
+        ? await resolveTrainer(businessId, data.trainerStaffId || undefined)
+        : {
+            trainerStaffId: existing.trainerStaffId ?? null,
+            trainerName: existing.trainerName ?? null,
+          };
+
+    const planChanged = data.planId !== undefined && data.planId !== existing.planId;
+    const updated = await update<Subscription>(COL.subscriptions, id, {
+      partyId,
+      planId: plan.id,
+      planName: plan.name,
+      startDate,
+      endDate,
+      status:
+        existing.status === SubscriptionStatus.CANCELLED
+          ? SubscriptionStatus.CANCELLED
+          : computeStatus(endDate),
+      ...(planChanged
+        ? {
+            priceExGst: Number(plan.priceExGst),
+            priceInclGst: Number(plan.priceInclGst),
+            gstRate: Number(plan.gstRate),
+            gstAmount: Number(plan.gstAmount),
+            sessionsTotal: plan.sessionsTotal ?? null,
+          }
+        : {}),
+      amountPaid: data.amountPaid !== undefined ? data.amountPaid : Number(existing.amountPaid),
+      billRepId: billRep.billRepId,
+      billRepName: billRep.billRepName,
+      trainerStaffId: trainer.trainerStaffId,
+      trainerName: trainer.trainerName,
+      notes: data.notes !== undefined ? data.notes?.trim() || null : existing.notes,
+    });
+
+    return (await withRelations(businessId, [updated]))[0];
+  },
+
+  async delete(businessId: string, id: string) {
+    assertBusinessAccess(await getById<Subscription>(COL.subscriptions, id), businessId, 'Subscription');
+    await remove(COL.subscriptions, id);
+    return { id };
   },
 };

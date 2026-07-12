@@ -21,7 +21,7 @@ import { PartySelectField } from '@/components/forms/party-select-field';
 import { StaffSelectField } from '@/components/forms/staff-select-field';
 import Link from 'next/link';
 import { api } from '@/lib/api';
-import { useApiQuery, useCategories, useAccounts, useParties, useInvalidate, useEntryFields, useStaffAccess } from '@/hooks/use-api-query';
+import { useApiQuery, useCategories, useAccounts, useParties, useInvalidate, useInvalidateParties, useUpsertPartyCache, useEntryFields, useStaffAccess } from '@/hooks/use-api-query';
 import { useDebounce } from '@/hooks/use-debounce';
 import { queryKeys } from '@/lib/query-keys';
 import { useAuthStore, isAdmin } from '@/stores/auth.store';
@@ -50,6 +50,8 @@ function IncomeContent() {
   const [submitting, setSubmitting] = useState(false);
   const [partyError, setPartyError] = useState('');
   const invalidate = useInvalidate();
+  const invalidateParties = useInvalidateParties();
+  const upsertPartyCache = useUpsertPartyCache();
   const { data: entryFieldsData } = useEntryFields();
   const fieldConfig = mergeEntryFields(entryFieldsData);
   const { data: staffAccessData } = useStaffAccess();
@@ -237,7 +239,10 @@ function IncomeContent() {
                           parties={parties}
                           defaultType="CUSTOMER"
                           variant="client"
-                          onPartyAdded={() => invalidate(queryKeys.parties())}
+                          onPartyAdded={(party) => {
+                            if (party) upsertPartyCache(party);
+                            invalidateParties();
+                          }}
                           error={partyError}
                         />
                       )}

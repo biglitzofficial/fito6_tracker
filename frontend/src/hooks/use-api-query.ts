@@ -81,6 +81,29 @@ export function useInvalidate() {
     queryClient.invalidateQueries({ queryKey });
 }
 
+/** Invalidate every parties list cache (all types + single party). */
+export function useInvalidateParties() {
+  const queryClient = useQueryClient();
+  return () => queryClient.invalidateQueries({ queryKey: ['parties'] });
+}
+
+export function useUpsertPartyCache() {
+  const queryClient = useQueryClient();
+  return (party: import('@/types').Party) => {
+    queryClient.setQueriesData<import('@/types').Party[]>(
+      { queryKey: ['parties'] },
+      (old) => {
+        if (!old) return [party];
+        if (old.some((p) => p.id === party.id)) {
+          return old.map((p) => (p.id === party.id ? { ...p, ...party } : p));
+        }
+        return [...old, party].sort((a, b) => a.name.localeCompare(b.name));
+      }
+    );
+    queryClient.setQueryData(queryKeys.party(party.id), party);
+  };
+}
+
 export function useEntryFields() {
   return useApiQuery<import('@/lib/entry-fields').EntryFieldsConfig>(
     queryKeys.entryFields,

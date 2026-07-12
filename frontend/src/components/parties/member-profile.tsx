@@ -1,7 +1,6 @@
 'use client';
 
 import { useMemo, useState, type ComponentType, type ReactNode } from 'react';
-import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft,
@@ -20,14 +19,16 @@ import {
   Calendar,
   Users,
   Megaphone,
+  Plus,
 } from 'lucide-react';
 import { Header } from '@/components/layout/header';
 import { PartyForm } from '@/components/parties/party-form';
+import { AssignPlanForm } from '@/components/subscriptions/assign-plan-form';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { QueryState } from '@/components/ui/query-state';
-import { useApiQuery, useInvalidate, useParty, useSubscriptions } from '@/hooks/use-api-query';
+import { useApiQuery, useInvalidate, useInvalidateParties, useParty, useSubscriptions } from '@/hooks/use-api-query';
 import { queryKeys } from '@/lib/query-keys';
 import {
   getMembershipBadgeStatus,
@@ -39,7 +40,7 @@ import {
 } from '@/lib/member-status';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { PARTY_TYPE_LABELS } from '@/components/forms/party-select-field';
-import type { Income } from '@/types';
+import type { Income, PlanKind } from '@/types';
 
 function InfoRow({
   label,
@@ -114,9 +115,14 @@ export function MemberProfile({ partyId }: MemberProfileProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const invalidate = useInvalidate();
+  const invalidateParties = useInvalidateParties();
   const [editing, setEditing] = useState(searchParams.get('edit') === '1');
   const [showInvoice, setShowInvoice] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [planAction, setPlanAction] = useState<{
+    kind: PlanKind;
+    mode: 'assign' | 'renew';
+  } | null>(null);
 
   const { data: party, isLoading, isError, error, refetch } = useParty(partyId);
   const { data: memberships = [] } = useSubscriptions('MEMBERSHIP', partyId);
@@ -152,7 +158,7 @@ export function MemberProfile({ partyId }: MemberProfileProps) {
 
   const refresh = () => {
     invalidate(queryKeys.party(partyId));
-    invalidate(queryKeys.parties());
+    invalidateParties();
     invalidate(queryKeys.subscriptions('MEMBERSHIP', partyId));
     invalidate(queryKeys.subscriptions('PERSONAL_TRAINING', partyId));
     invalidate(['income', 'party', partyId]);
@@ -259,38 +265,73 @@ export function MemberProfile({ partyId }: MemberProfileProps) {
                 </div>
 
                 <div className="mt-5 flex flex-wrap gap-3">
-                  <Button
-                    disabled={!membership}
-                    onClick={() =>
-                      membership && router.push(`/subscriptions?renew=${membership.id}`)
-                    }
-                  >
-                    <RefreshCw className="h-4 w-4" /> Renew Membership
-                  </Button>
-                  <Button
-                    variant="outline"
-                    disabled={!training}
-                    onClick={() =>
-                      training && router.push(`/personal-training?renew=${training.id}`)
-                    }
-                  >
-                    <Dumbbell className="h-4 w-4" /> Renew Personal Training
-                  </Button>
-                  {!membership && (
-                    <Button variant="ghost" asChild>
-                      <Link href="/subscriptions?action=add">Assign Membership</Link>
+                  {membership ? (
+                    <Button
+                      onClick={() => setPlanAction({ kind: 'MEMBERSHIP', mode: 'renew' })}
+                    >
+                      <RefreshCw className="h-4 w-4" /> Renew Membership
+                    </Button>
+                  ) : (
+                    <Button onClick={() => setPlanAction({ kind: 'MEMBERSHIP', mode: 'assign' })}>
+                      <Plus className="h-4 w-4" /> Assign Membership
                     </Button>
                   )}
-                  {!training && (
-                    <Button variant="ghost" asChild>
-                      <Link href="/personal-training?action=add">Assign PT</Link>
+                  {training ? (
+                    <Button
+                      variant="outline"
+                      onClick={() => setPlanAction({ kind: 'PERSONAL_TRAINING', mode: 'renew' })}
+                    >
+                      <Dumbbell className="h-4 w-4" /> Renew Personal Training
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      onClick={() => setPlanAction({ kind: 'PERSONAL_TRAINING', mode: 'assign' })}
+                    >
+                      <Plus className="h-4 w-4" /> Assign Personal Training
                     </Button>
                   )}
                 </div>
+
+                {planAction && (
+                  <div className="mt-5">
+                    <AssignPlanForm
+                      key={`${planAction.kind}-${planAction.mode}-${membership?.id || ''}-${training?.id || ''}`}
+                      kind={planAction.kind}
+                      party={party}
+                      renewing={
+                        planAction.mode === 'renew'
+                          ? planAction.kind === 'MEMBERSHIP'
+                            ? membership
+                            : training
+                          : null
+                      }
+                      onCancel={() => setPlanAction(null)}
+                      onSaved={() => {
+                        setPlanAction(null);
+                        refresh();
+                      }}
+                    />
+                  </div>
+                )}
               </Panel>
 
               {/* Section 3 */}
-              <Panel title="Membership Plan" icon={BadgeCheck}>
+              <Panel
+                title="Membership Plan"
+                icon={BadgeCheck}
+                action={
+                  !membership && !planAction ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPlanAction({ kind: 'MEMBERSHIP', mode: 'assign' })}
+                    >
+                      <Plus className="h-3.5 w-3.5" /> Assign Plan
+                    </Button>
+                  ) : null
+                }
+              >
                 {membership ? (
                   <div className="space-y-4">
                     <div className="flex flex-wrap items-center gap-2">
@@ -311,10 +352,8 @@ export function MemberProfile({ partyId }: MemberProfileProps) {
                   </div>
                 ) : (
                   <p className="text-sm text-muted-foreground">
-                    No membership assigned yet.{' '}
-                    <Link href="/subscriptions?action=add" className="text-primary hover:underline">
-                      Add a subscription
-                    </Link>
+                    No membership assigned yet. Use <span className="text-foreground">Assign Membership</span> above
+                    to link a plan to this client on this page.
                   </p>
                 )}
               </Panel>
