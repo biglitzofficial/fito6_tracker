@@ -324,7 +324,6 @@ function pgMemberships(){
  ensurePkgSettings();
  const kind=PKG_TAB;
  const list=pkgStore(kind);
- const gst=db.settings.gstPct||0;
  $('content').innerHTML=`
  <div class="row" style="justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px">
   <div><h2>Membership / Subscriptions</h2>
@@ -339,26 +338,22 @@ function pgMemberships(){
  <div class="grid g3" style="margin-bottom:12px">
   ${stat('Active packages',list.filter(p=>p.active!==false).length,'ok')}
   ${stat('Total packages',list.length)}
-  ${stat('Sample (ex-GST)',list[0]?inr(list[0].price):'—','br')}
+  ${stat('Sample amount',list[0]?inr(list[0].price):'—','br')}
  </div>
  <div class="tbl"><table>
-  <tr><th>Package Name</th><th>Duration</th><th class="r">Amount (ex-GST)</th><th class="r">With ${gst}% GST</th><th>Status</th><th></th></tr>
-  ${list.map((p,i)=>{
-   const withGst=+(p.price*(1+gst/100)).toFixed(2);
-   return `<tr>
+  <tr><th>Package Name</th><th>Duration</th><th class="r">Amount</th><th>Status</th><th></th></tr>
+  ${list.map((p,i)=>`<tr>
     <td class="bold">${esc(p.name)}</td>
     <td>${p.months} month${p.months===1?'':'s'}</td>
     <td class="r">${inr(p.price)}</td>
-    <td class="r">${inr(withGst)}</td>
     <td>${p.active!==false?'<span class="badge b-ok">Active</span>':'<span class="badge b-mut">Hidden</span>'}</td>
     <td class="r">
      <button class="btn sm sec" onclick="openPkgForm('${kind}',${i})">Edit</button>
      <button class="btn sm sec" onclick="togglePkg('${kind}',${i})">${p.active!==false?'Hide':'Show'}</button>
      <button class="btn sm dgr" onclick="deletePkg('${kind}',${i})">Delete</button>
-    </td></tr>`;
-  }).join('')||'<tr><td colspan="6" class="mut" style="padding:20px">No packages yet. Click <b>+ Add Package</b> to create one.</td></tr>'}
+    </td></tr>`).join('')||'<tr><td colspan="5" class="mut" style="padding:20px">No packages yet. Click <b>+ Add Package</b> to create one.</td></tr>'}
  </table></div>
- <p class="sub" style="margin-top:12px">Active packages show in <b>New Client → Subscription</b> and Renew/Upgrade forms. GST is added on top of Amount.</p>`;
+ <p class="sub" style="margin-top:12px">Active packages show in <b>New Client → Subscription</b> and Renew/Upgrade forms. GST is entered and calculated only during client entry.</p>`;
 }
 function openPkgForm(kind,idx){
  const edit=idx!==undefined&&idx!==null;
@@ -368,12 +363,12 @@ function openPkgForm(kind,idx){
   <div class="grid g2" style="margin-top:12px">
    ${fld('pkg_name','Package Name',p.name)}
    ${fld('pkg_months','Duration (months)',p.months,'number')}
-   ${fld('pkg_price','Amount ₹ (before GST)',p.price,'number')}
+   ${fld('pkg_price','Amount ₹',p.price,'number')}
    <div class="field"><label>Status</label>
     <select id="pkg_active"><option value="1" ${p.active!==false?'selected':''}>Active (show when adding client)</option>
     <option value="0" ${p.active===false?'selected':''}>Hidden</option></select></div>
   </div>
-  <p class="sub" style="margin:8px 0 14px">This amount is exclusive of GST. Client wizard will add GST % on top.</p>
+  <p class="sub" style="margin:8px 0 14px">GST is not set here — it is entered and calculated in the client subscription step.</p>
   <div class="row" style="justify-content:flex-end;gap:8px">
    <button class="btn sec" onclick="closeModal()">Cancel</button>
    <button class="btn" onclick="savePkg('${kind}',${edit?idx:'null'})">Save Package</button>
