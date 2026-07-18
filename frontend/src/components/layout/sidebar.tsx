@@ -18,12 +18,14 @@ import {
   FolderOpen,
   LogOut,
   ChevronLeft,
-  Dumbbell,
   BookOpen,
   Scale,
   ListChecks,
   CreditCard,
   UserCheck,
+  UserRound,
+  Receipt,
+  Banknote,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { prefetchRoute, useStaffAccess } from '@/hooks/use-api-query';
@@ -34,35 +36,40 @@ import { Button } from '@/components/ui/button';
 
 const adminNav = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/income', label: 'Income', icon: TrendingUp },
+  { href: '/clients', label: 'Clients', icon: UserRound },
+  { href: '/billing', label: 'Billing', icon: Receipt },
+  { href: '/ledger', label: 'Cashbook', icon: BookOpen },
   { href: '/expenses', label: 'Expenses', icon: TrendingDown },
-  { href: '/entry-fields', label: 'Entry Fields', icon: ListChecks },
-  { href: '/subscriptions', label: 'Subscriptions', icon: CreditCard },
-  { href: '/personal-training', label: 'Personal Training', icon: UserCheck },
-  { href: '/ledger', label: 'Ledger', icon: BookOpen },
-  { href: '/profit-loss', label: 'P&L', icon: Scale },
   { href: '/staff', label: 'Staff', icon: Users },
   { href: '/attendance', label: 'Attendance', icon: Calendar },
+  { href: '/payroll', label: 'Payroll', icon: Banknote },
+  { href: '/reports', label: 'Reports', icon: FileText },
+  { href: '/profit-loss', label: 'Accounts', icon: Scale },
+  { href: '/audit-logs', label: 'Audit Log', icon: ScrollText },
+  { href: '/settings', label: 'Settings', icon: Settings },
+  { href: '/income', label: 'Income', icon: TrendingUp },
+  { href: '/subscriptions', label: 'Subscriptions', icon: CreditCard },
+  { href: '/personal-training', label: 'Personal Training', icon: UserCheck },
+  { href: '/entry-fields', label: 'Entry Fields', icon: ListChecks },
   { href: '/tasks', label: 'Tasks', icon: CheckSquare },
   { href: '/documents', label: 'Documents', icon: FolderOpen },
   { href: '/analytics', label: 'Analytics', icon: BarChart3 },
-  { href: '/reports', label: 'Reports', icon: FileText },
   { href: '/notifications', label: 'Notifications', icon: Bell },
-  { href: '/audit-logs', label: 'Audit Logs', icon: ScrollText },
-  { href: '/settings', label: 'Settings', icon: Settings },
 ];
 
 const staffNav = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/income', label: 'Income', icon: TrendingUp },
+  { href: '/clients', label: 'Clients', icon: UserRound },
+  { href: '/billing', label: 'Billing', icon: Receipt },
   { href: '/expenses', label: 'Expenses', icon: TrendingDown },
-  { href: '/entry-fields', label: 'Entry Fields', icon: ListChecks },
+  { href: '/attendance', label: 'Attendance', icon: Calendar },
+  { href: '/reports', label: 'Reports', icon: FileText },
+  { href: '/income', label: 'Income', icon: TrendingUp },
   { href: '/subscriptions', label: 'Subscriptions', icon: CreditCard },
   { href: '/personal-training', label: 'Personal Training', icon: UserCheck },
-  { href: '/attendance', label: 'Attendance', icon: Calendar },
+  { href: '/entry-fields', label: 'Entry Fields', icon: ListChecks },
   { href: '/tasks', label: 'My Tasks', icon: CheckSquare },
   { href: '/documents', label: 'Documents', icon: FolderOpen },
-  { href: '/reports', label: 'Reports', icon: FileText },
 ];
 
 interface SidebarProps {
@@ -88,30 +95,38 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   return (
     <aside
       className={cn(
-        'fixed left-0 top-0 z-40 flex h-screen flex-col border-r border-border glass-strong transition-all duration-300',
-        collapsed ? 'w-[72px]' : 'w-64'
+        'fixed left-0 top-0 z-40 flex h-screen flex-col bg-[#141b2d] text-[#cfd6e4] transition-all duration-300',
+        collapsed ? 'w-[72px]' : 'w-[212px]'
       )}
     >
-      <div className="flex h-16 items-center gap-3 border-b border-border px-4">
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/20">
-          <Dumbbell className="h-5 w-5 text-primary" />
-        </div>
-        {!collapsed && (
-          <div>
-            <h1 className="font-bold text-sm truncate max-w-[140px]">
-              {activeBusiness?.name || 'Fito6'}
+      <div className="flex h-[70px] items-center gap-2 border-b border-white/10 px-4">
+        {!collapsed ? (
+          <div className="min-w-0 flex-1">
+            <h1 className="text-[20px] font-extrabold tracking-wide text-white">
+              FITO<span className="text-primary">6</span>
             </h1>
-            <p className="text-xs text-muted-foreground">Finance Tracker</p>
+            <p className="truncate text-[11px] text-[#7f8aa3]">
+              {activeBusiness?.name || 'Gym Management'}
+            </p>
+          </div>
+        ) : (
+          <div className="mx-auto text-sm font-extrabold text-white">
+            F<span className="text-primary">6</span>
           </div>
         )}
         {onToggle && (
-          <Button variant="ghost" size="icon" className="ml-auto" onClick={onToggle}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="ml-auto text-[#cfd6e4] hover:bg-[#1d2740] hover:text-white"
+            onClick={onToggle}
+          >
             <ChevronLeft className={cn('h-4 w-4 transition-transform', collapsed && 'rotate-180')} />
           </Button>
         )}
       </div>
 
-      <nav className="flex-1 space-y-1 p-3 overflow-y-auto scrollbar-thin">
+      <nav className="flex-1 space-y-0.5 overflow-y-auto p-2 scrollbar-thin">
         {nav.map((item) => {
           const active = pathname === item.href || pathname.startsWith(item.href + '/');
           return (
@@ -121,10 +136,10 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
               prefetch={true}
               onMouseEnter={() => prefetchRoute(queryClient, item.href)}
               className={cn(
-                'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200',
+                'flex items-center gap-2.5 border-l-[3px] px-3 py-2.5 text-[13px] transition-colors',
                 active
-                  ? 'bg-primary/15 text-primary-foreground border border-primary/20'
-                  : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                  ? 'border-primary bg-[#1d2740] font-semibold text-white'
+                  : 'border-transparent text-[#cfd6e4] hover:bg-[#1d2740]'
               )}
               title={collapsed ? item.label : undefined}
             >
@@ -135,14 +150,18 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         })}
       </nav>
 
-      <div className="border-t border-border p-3">
+      <div className="border-t border-white/10 p-3">
         {!collapsed && user && (
-          <div className="mb-3 px-3">
-            <p className="text-sm font-medium truncate">{user.name}</p>
-            <p className="text-xs text-muted-foreground capitalize">{user.role.toLowerCase()}</p>
+          <div className="mb-2 px-2">
+            <p className="truncate text-sm font-semibold text-white">{user.name}</p>
+            <p className="text-[11px] capitalize text-[#7f8aa3]">{user.role.toLowerCase()}</p>
           </div>
         )}
-        <Button variant="ghost" className="w-full justify-start gap-3" onClick={logout}>
+        <Button
+          variant="ghost"
+          className="w-full justify-start gap-3 text-[#cfd6e4] hover:bg-[#1d2740] hover:text-white"
+          onClick={logout}
+        >
           <LogOut className="h-4 w-4" />
           {!collapsed && 'Logout'}
         </Button>

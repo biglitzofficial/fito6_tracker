@@ -64,15 +64,15 @@ export function AccountsWalletMenu() {
       <>
         <div className="fixed inset-0 z-[200] bg-black/40" onClick={() => setOpen(false)} aria-hidden />
         <div
-          className="fixed z-[201] rounded-xl border border-border bg-[#12121c] shadow-2xl overflow-hidden"
+          className="fixed z-[201] rounded-xl border border-border bg-white shadow-xl overflow-hidden"
           style={{ top: menuStyle.top, right: menuStyle.right, width: menuStyle.width }}
         >
-          <div className="px-4 py-3 border-b border-border bg-[#12121c]">
+          <div className="px-4 py-3 border-b border-border bg-white">
             <p className="text-sm font-semibold">Payment Accounts</p>
             <p className="text-xs text-muted-foreground">Cash, bank, UPI & more</p>
           </div>
 
-          <div className="max-h-64 overflow-y-auto p-2 space-y-1 bg-[#12121c] scrollbar-thin">
+          <div className="max-h-64 overflow-y-auto p-2 space-y-1 bg-white scrollbar-thin">
             {isLoading && (
               <p className="px-3 py-4 text-sm text-muted-foreground text-center">Loading accounts...</p>
             )}
@@ -106,7 +106,7 @@ export function AccountsWalletMenu() {
             )}
           </div>
 
-          <div className="border-t border-border p-2 bg-[#12121c]">
+          <div className="border-t border-border p-2 bg-white">
             <Button asChild variant="ghost" size="sm" className="w-full justify-start">
               <Link href="/entry-fields?tab=payment-modes" onClick={() => setOpen(false)}>
                 Manage payment modes

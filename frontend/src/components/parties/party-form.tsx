@@ -89,9 +89,21 @@ interface PartyFormProps {
   onCancel: () => void;
   onSaved: (party?: Party) => void;
   compact?: boolean;
+  /** Force CUSTOMER and hide party type field (wizard) */
+  forceCustomer?: boolean;
+  hideCancel?: boolean;
+  submitLabel?: string;
 }
 
-export function PartyForm({ editingParty, onCancel, onSaved, compact }: PartyFormProps) {
+export function PartyForm({
+  editingParty,
+  onCancel,
+  onSaved,
+  compact,
+  forceCustomer,
+  hideCancel,
+  submitLabel,
+}: PartyFormProps) {
   const [submitting, setSubmitting] = useState(false);
   const isEditing = !!editingParty;
 
@@ -113,7 +125,10 @@ export function PartyForm({ editingParty, onCancel, onSaved, compact }: PartyFor
   const onSubmit = async (data: PartyFormData) => {
     setSubmitting(true);
     try {
-      const payload = buildPartyPayload(data);
+      const payload = buildPartyPayload({
+        ...data,
+        type: forceCustomer ? 'CUSTOMER' : data.type,
+      });
       const party = isEditing
         ? await api.put<Party>(`/parties/${editingParty.id}`, payload)
         : await api.post<Party>('/parties', payload);
@@ -126,28 +141,30 @@ export function PartyForm({ editingParty, onCancel, onSaved, compact }: PartyFor
   const form = (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
       <div className="grid gap-4 md:grid-cols-2">
-        <div className="space-y-2">
-          <Label>Party Type</Label>
-          <Controller
-            name="type"
-            control={control}
-            render={({ field }) => (
-              <Select value={field.value} onValueChange={field.onChange}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select type" />
-                </SelectTrigger>
-                <SelectContent>
-                  {(Object.keys(PARTY_TYPE_LABELS) as PartyType[]).map((type) => (
-                    <SelectItem key={type} value={type}>
-                      {PARTY_TYPE_LABELS[type]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          />
-        </div>
-        <div className="space-y-2">
+        {!forceCustomer && (
+          <div className="space-y-2">
+            <Label>Party Type</Label>
+            <Controller
+              name="type"
+              control={control}
+              render={({ field }) => (
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(Object.keys(PARTY_TYPE_LABELS) as PartyType[]).map((type) => (
+                      <SelectItem key={type} value={type}>
+                        {PARTY_TYPE_LABELS[type]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
+          </div>
+        )}
+        <div className={forceCustomer ? 'space-y-2 md:col-span-2' : 'space-y-2'}>
           <Label>Name</Label>
           <Input {...register('name')} placeholder="e.g. John Doe, ABC Suppliers" />
           {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
@@ -246,9 +263,15 @@ export function PartyForm({ editingParty, onCancel, onSaved, compact }: PartyFor
 
       <div className="flex gap-3">
         <Button type="submit" disabled={submitting}>
-          {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : isEditing ? 'Save Changes' : 'Save Party'}
+          {submitting ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            submitLabel || (isEditing ? 'Save Changes' : 'Save Party')
+          )}
         </Button>
-        <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>
+        {!hideCancel && (
+          <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>
+        )}
       </div>
     </form>
   );

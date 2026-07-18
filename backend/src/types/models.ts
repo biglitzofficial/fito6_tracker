@@ -191,6 +191,19 @@ export interface Attendance {
   updatedAt: Date;
 }
 
+export interface MemberAttendance {
+  id: string;
+  businessId: string;
+  partyId: string;
+  date: Date;
+  checkIn: Date;
+  checkOut?: Date | null;
+  notes?: string | null;
+  checkedInById: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface Task {
   id: string;
   title: string;

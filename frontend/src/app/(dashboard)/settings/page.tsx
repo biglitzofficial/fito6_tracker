@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { Download, Loader2 } from 'lucide-react';
 import { Header } from '@/components/layout/header';
 import { AdminGuard } from '@/components/auth/admin-guard';
 import { Button } from '@/components/ui/button';
@@ -20,6 +22,7 @@ export default function SettingsPage() {
   );
   const [settings, setSettings] = useState<Record<string, { name?: string; code?: string; symbol?: string; hour?: number; minute?: number }>>({});
   const [saving, setSaving] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     if (loadedSettings) setSettings(loadedSettings);
@@ -31,8 +34,25 @@ export default function SettingsPage() {
       await api.put('/settings/business_name', { value: settings.business_name });
       await api.put('/settings/currency', { value: settings.currency });
       await api.put('/settings/late_threshold', { value: settings.late_threshold });
+      invalidate(queryKeys.settings);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const exportBackup = async () => {
+    setExporting(true);
+    try {
+      const backup = await api.get<Record<string, unknown>>('/settings/backup');
+      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `fito6-backup-${new Date().toISOString().split('T')[0]}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -90,6 +110,29 @@ export default function SettingsPage() {
                   })}
                 />
               </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader><CardTitle className="text-base">Packages & Entry Fields</CardTitle></CardHeader>
+            <CardContent className="space-y-3 text-sm text-muted-foreground">
+              <p>Membership / PT packages, payment modes, and categories are managed under Entry Fields.</p>
+              <Button asChild variant="secondary">
+                <Link href="/entry-fields">Open Entry Fields</Link>
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader><CardTitle className="text-base">Backup</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Download a JSON export of parties, subscriptions, income, expenses, plans, and settings for this business.
+              </p>
+              <Button variant="outline" onClick={exportBackup} disabled={exporting}>
+                {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                Export JSON Backup
+              </Button>
             </CardContent>
           </Card>
 

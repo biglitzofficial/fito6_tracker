@@ -1,19 +1,16 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
 import { Providers } from '@/components/providers';
 import './globals.css';
 
-const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
-
 export const metadata: Metadata = {
-  title: 'Fito6 - Business Finance & Operations Tracker',
-  description: 'Premium finance and operations tracker for gyms and small businesses',
+  title: 'FITO6 ERP — Gym Management',
+  description: 'Gym management, accounts, and cashbook for FITO6',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="dark">
-      <body className={`${inter.variable} font-sans antialiased`}>
+    <html lang="en">
+      <body className="font-sans antialiased text-[14px]">
         <Providers>{children}</Providers>
       </body>
     </html>

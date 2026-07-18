@@ -71,6 +71,10 @@ export default function ReportsPage() {
         { id: 'expense', label: 'Expense Report', desc: 'All expense entries with voucher numbers for date range' },
         { id: 'profit-loss', label: 'Profit & Loss', desc: 'P&L summary for period' },
         { id: 'attendance', label: 'Attendance Report', desc: 'Staff attendance for month' },
+        { id: 'membership', label: 'Membership Report', desc: 'Active/expired members with package and trainer' },
+        { id: 'dues', label: 'Dues Report', desc: 'Outstanding balances on memberships and PT' },
+        { id: 'gst', label: 'GST Report', desc: 'Taxable value and GST from subscriptions in range' },
+        { id: 'staff-sales', label: 'Staff Sales', desc: 'Collections credited to staff for period' },
       ]
     : [{ id: 'income', label: 'My Income Report', desc: 'Your income entries' }];
 

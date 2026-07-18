@@ -115,7 +115,7 @@ export function BusinessSwitcher() {
     <>
       <div className="fixed inset-0 z-[200] bg-black/40" onClick={closeMenu} aria-hidden />
       <div
-        className="fixed z-[201] rounded-xl border border-border bg-[#12121a] shadow-2xl overflow-hidden"
+        className="fixed z-[201] rounded-xl border border-border bg-white shadow-xl overflow-hidden"
         style={{ top: menuStyle.top, left: menuStyle.left, width: menuStyle.width }}
       >
         <div className="p-3 border-b border-border">
@@ -180,7 +180,7 @@ export function BusinessSwitcher() {
     <>
       <div className="fixed inset-0 z-[210] bg-black/50" onClick={closeAddModal} aria-hidden />
       <div className="fixed inset-0 z-[211] flex items-center justify-center p-4 pointer-events-none">
-        <div className="w-full max-w-md rounded-xl border border-border bg-[#12121a] p-6 shadow-2xl pointer-events-auto">
+        <div className="w-full max-w-md rounded-xl border border-border bg-white p-6 shadow-xl pointer-events-auto">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold">Add New Business</h3>
             <Button type="button" variant="ghost" size="icon" onClick={closeAddModal}>

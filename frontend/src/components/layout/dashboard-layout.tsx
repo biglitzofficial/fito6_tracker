@@ -57,9 +57,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
   if (!hasHydrated || !token || !user || isLoading || !activeBusinessId) {
     return (
-      <div className="min-h-screen gradient-mesh">
+      <div className="min-h-screen bg-background">
         <Sidebar />
-        <main className="pl-64 min-h-screen">
+        <main className="min-h-screen pl-[212px]">
           <AppTopBar />
           <AuthLoading />
         </main>
@@ -68,9 +68,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen gradient-mesh">
+    <div className="min-h-screen bg-background">
       <Sidebar />
-      <main className="pl-64 min-h-screen">
+      <main className="min-h-screen pl-[212px]">
         <AppTopBar />
         {children}
       </main>

@@ -44,10 +44,23 @@ interface AssignPlanFormProps {
   party: Party;
   renewing?: Subscription | null;
   onCancel: () => void;
-  onSaved: () => void;
+  onSaved: (subscription?: Subscription) => void;
+  /** When true, skip auto income so wizard can collect payment next */
+  deferIncome?: boolean;
+  hideCancel?: boolean;
+  submitLabel?: string;
 }
 
-export function AssignPlanForm({ kind, party, renewing, onCancel, onSaved }: AssignPlanFormProps) {
+export function AssignPlanForm({
+  kind,
+  party,
+  renewing,
+  onCancel,
+  onSaved,
+  deferIncome,
+  hideCancel,
+  submitLabel,
+}: AssignPlanFormProps) {
   const isRenew = !!renewing;
   const invalidate = useInvalidate();
   const { data: plans = [] } = useMembershipPlans(kind);
@@ -105,17 +118,18 @@ export function AssignPlanForm({ kind, party, renewing, onCancel, onSaved }: Ass
         trainerStaffId: data.trainerStaffId || undefined,
         accountId: data.accountId || undefined,
         notes: data.notes?.trim() || undefined,
-        createIncome: !!data.accountId,
+        createIncome: deferIncome ? false : !!data.accountId,
       };
+      let saved: Subscription;
       if (isRenew && renewing) {
-        await api.post(`/subscriptions/${renewing.id}/renew`, payload);
+        saved = await api.post<Subscription>(`/subscriptions/${renewing.id}/renew`, payload);
       } else {
-        await api.post('/subscriptions', payload);
+        saved = await api.post<Subscription>('/subscriptions', payload);
       }
       invalidate(queryKeys.subscriptions(kind));
       invalidate(queryKeys.subscriptions(kind, party.id));
       invalidate(queryKeys.income(''));
-      onSaved();
+      onSaved(saved);
     } finally {
       setSubmitting(false);
     }
@@ -255,22 +269,24 @@ export function AssignPlanForm({ kind, party, renewing, onCancel, onSaved }: Ass
           </div>
         )}
 
-        <div className="space-y-2">
-          <Label>Payment Account (optional)</Label>
-          <Controller
-            name="accountId"
-            control={control}
-            render={({ field }) => (
-              <AccountSelectField
-                value={field.value}
-                onChange={field.onChange}
-                accounts={accounts}
-                onAccountAdded={() => invalidate(queryKeys.accounts())}
-              />
-            )}
-          />
-          <p className="text-xs text-muted-foreground">Records income when an account is selected</p>
-        </div>
+        {!deferIncome && (
+          <div className="space-y-2">
+            <Label>Payment Account (optional)</Label>
+            <Controller
+              name="accountId"
+              control={control}
+              render={({ field }) => (
+                <AccountSelectField
+                  value={field.value}
+                  onChange={field.onChange}
+                  accounts={accounts}
+                  onAccountAdded={() => invalidate(queryKeys.accounts())}
+                />
+              )}
+            />
+            <p className="text-xs text-muted-foreground">Records income when an account is selected</p>
+          </div>
+        )}
 
         <div className="space-y-2 md:col-span-2">
           <Label>Notes</Label>
@@ -282,15 +298,15 @@ export function AssignPlanForm({ kind, party, renewing, onCancel, onSaved }: Ass
         <Button type="submit" disabled={submitting}>
           {submitting ? (
             <Loader2 className="h-4 w-4 animate-spin" />
-          ) : isRenew ? (
-            'Renew'
           ) : (
-            'Assign Plan'
+            submitLabel || (isRenew ? 'Renew' : 'Assign Plan')
           )}
         </Button>
-        <Button type="button" variant="ghost" onClick={onCancel}>
-          Cancel
-        </Button>
+        {!hideCancel && (
+          <Button type="button" variant="ghost" onClick={onCancel}>
+            Cancel
+          </Button>
+        )}
       </div>
     </form>
   );

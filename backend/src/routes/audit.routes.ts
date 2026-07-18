@@ -58,6 +58,14 @@ settingsRouter.get(
   })
 );
 
+settingsRouter.get(
+  '/backup',
+  asyncHandler(async (req: BusinessRequest, res) => {
+    const backup = await settingsService.exportBackup(req.businessId!);
+    sendSuccess(res, backup);
+  })
+);
+
 settingsRouter.put(
   '/:key',
   asyncHandler(async (req: BusinessRequest, res) => {

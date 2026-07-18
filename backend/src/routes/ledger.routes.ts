@@ -15,6 +15,7 @@ router.get(
     const result = await ledgerService.getLedger(req.businessId!, {
       search: req.query.search as string,
       type: (req.query.type as LedgerType) || 'ALL',
+      partyId: req.query.partyId as string | undefined,
       dateFrom: req.query.dateFrom as string,
       dateTo: req.query.dateTo as string,
       page: parseInt(req.query.page as string) || 1,
@@ -30,6 +31,7 @@ router.get(
     const csv = await ledgerService.exportCsv(req.businessId!, {
       search: req.query.search as string,
       type: (req.query.type as LedgerType) || 'ALL',
+      partyId: req.query.partyId as string | undefined,
       dateFrom: req.query.dateFrom as string,
       dateTo: req.query.dateTo as string,
     });

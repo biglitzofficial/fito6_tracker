@@ -131,4 +131,72 @@ router.post(
   })
 );
 
+router.post(
+  '/membership',
+  requireBusiness,
+  adminOnly,
+  auditLog('GENERATE_MEMBERSHIP_REPORT', 'Report'),
+  asyncHandler(async (req: AuthRequest & BusinessRequest, res) => {
+    const { format } = generateSchema.parse(req.body);
+    const result = await reportService.generateMembershipReport(
+      req.businessId!,
+      format,
+      req.user!.userId
+    );
+    sendSuccess(res, result);
+  })
+);
+
+router.post(
+  '/dues',
+  requireBusiness,
+  adminOnly,
+  auditLog('GENERATE_DUES_REPORT', 'Report'),
+  asyncHandler(async (req: AuthRequest & BusinessRequest, res) => {
+    const { format } = generateSchema.parse(req.body);
+    const result = await reportService.generateDuesReport(
+      req.businessId!,
+      format,
+      req.user!.userId
+    );
+    sendSuccess(res, result);
+  })
+);
+
+router.post(
+  '/gst',
+  requireBusiness,
+  adminOnly,
+  auditLog('GENERATE_GST_REPORT', 'Report'),
+  asyncHandler(async (req: AuthRequest & BusinessRequest, res) => {
+    const { dateFrom, dateTo, format } = generateSchema.parse(req.body);
+    const result = await reportService.generateGstReport(
+      req.businessId!,
+      dateFrom!,
+      dateTo!,
+      format,
+      req.user!.userId
+    );
+    sendSuccess(res, result);
+  })
+);
+
+router.post(
+  '/staff-sales',
+  requireBusiness,
+  adminOnly,
+  auditLog('GENERATE_STAFF_SALES_REPORT', 'Report'),
+  asyncHandler(async (req: AuthRequest & BusinessRequest, res) => {
+    const { dateFrom, dateTo, format } = generateSchema.parse(req.body);
+    const result = await reportService.generateStaffSalesReport(
+      req.businessId!,
+      dateFrom!,
+      dateTo!,
+      format,
+      req.user!.userId
+    );
+    sendSuccess(res, result);
+  })
+);
+
 export default router;

@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { StatCard } from '@/components/dashboard/stat-card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { api } from '@/lib/api';
-import { useApiQuery } from '@/hooks/use-api-query';
+import { useApiQuery, useParties } from '@/hooks/use-api-query';
 import { useDebounce } from '@/hooks/use-debounce';
 import { queryKeys } from '@/lib/query-keys';
 import { formatCurrency, formatDate } from '@/lib/utils';
@@ -54,9 +54,11 @@ export default function LedgerPage() {
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounce(search);
   const [type, setType] = useState<'ALL' | 'INCOME' | 'EXPENSE'>('ALL');
+  const [partyId, setPartyId] = useState('all');
   const [dateFrom, setDateFrom] = useState(monthStart);
   const [dateTo, setDateTo] = useState(today);
   const [page, setPage] = useState(1);
+  const { data: parties = [] } = useParties();
 
   const ledgerParams = useMemo(() => {
     const params = new URLSearchParams({
@@ -64,11 +66,12 @@ export default function LedgerPage() {
       limit: '50',
       type,
       ...(debouncedSearch ? { search: debouncedSearch } : {}),
+      ...(partyId !== 'all' ? { partyId } : {}),
       ...(dateFrom ? { dateFrom } : {}),
       ...(dateTo ? { dateTo } : {}),
     });
     return params.toString();
-  }, [page, type, debouncedSearch, dateFrom, dateTo]);
+  }, [page, type, partyId, debouncedSearch, dateFrom, dateTo]);
 
   const { data, isLoading } = useApiQuery<LedgerResponse>(
     queryKeys.ledger(ledgerParams),
@@ -79,6 +82,7 @@ export default function LedgerPage() {
     const params = new URLSearchParams({
       type,
       ...(search ? { search } : {}),
+      ...(partyId !== 'all' ? { partyId } : {}),
       ...(dateFrom ? { dateFrom } : {}),
       ...(dateTo ? { dateTo } : {}),
     });
@@ -94,7 +98,7 @@ export default function LedgerPage() {
   return (
     <AdminGuard>
       <div>
-        <Header title="General Ledger" subtitle="Complete financial transaction book with running balance" />
+        <Header title="Cashbook" subtitle="Complete financial transaction book with running balance" />
         <div className="p-6 space-y-6">
           {data && (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -107,7 +111,7 @@ export default function LedgerPage() {
 
           <Card>
             <CardContent className="p-6">
-              <div className="grid gap-4 md:grid-cols-5">
+              <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
                 <div className="space-y-2 md:col-span-2">
                   <Label>Search</Label>
                   <div className="relative">
@@ -128,6 +132,18 @@ export default function LedgerPage() {
                       <SelectItem value="ALL">All Transactions</SelectItem>
                       <SelectItem value="INCOME">Income Only</SelectItem>
                       <SelectItem value="EXPENSE">Expense Only</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Client / Party</Label>
+                  <Select value={partyId} onValueChange={(v) => { setPartyId(v); setPage(1); }}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All parties</SelectItem>
+                      {parties.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>

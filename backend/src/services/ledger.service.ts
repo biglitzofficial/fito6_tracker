@@ -16,6 +16,7 @@ export type LedgerType = 'INCOME' | 'EXPENSE' | 'ALL';
 export interface LedgerFilters {
   search?: string;
   type?: LedgerType;
+  partyId?: string;
   dateFrom?: string;
   dateTo?: string;
   page?: number;
@@ -39,28 +40,38 @@ export interface LedgerEntry {
 
 export const ledgerService = {
   async getLedger(businessId: string, filters: LedgerFilters) {
-    const { search, type = 'ALL', dateFrom, dateTo, page = 1, limit = 50 } = filters;
+    const { search, type = 'ALL', partyId, dateFrom, dateTo, page = 1, limit = 50 } = filters;
 
     const dateToEnd = dateTo ? new Date(dateTo) : undefined;
     if (dateToEnd) dateToEnd.setHours(23, 59, 59, 999);
     const dateFromStart = dateFrom ? new Date(dateFrom) : undefined;
     if (dateFromStart) dateFromStart.setHours(0, 0, 0, 0);
 
+    const matchesParty = (id?: string | null) => !partyId || id === partyId;
+
     let openingBalance = 0;
     if (dateFromStart) {
       const [incomes, expenses] = await Promise.all([
-        findManyForBusiness<Income>(COL.income, businessId, (i) => i.date < dateFromStart),
-        findManyForBusiness<Expense>(COL.expenses, businessId, (e) => e.date < dateFromStart),
+        findManyForBusiness<Income>(
+          COL.income,
+          businessId,
+          (i) => matchesParty(i.partyId) && i.date < dateFromStart
+        ),
+        findManyForBusiness<Expense>(
+          COL.expenses,
+          businessId,
+          (e) => matchesParty(e.partyId) && e.date < dateFromStart
+        ),
       ]);
       openingBalance = sumAmounts(incomes) - sumAmounts(expenses);
     }
 
     const [incomes, expenses] = await Promise.all([
       type !== 'EXPENSE'
-        ? findManyForBusiness<Income>(COL.income, businessId)
+        ? findManyForBusiness<Income>(COL.income, businessId, (i) => matchesParty(i.partyId))
         : Promise.resolve([] as Income[]),
       type !== 'INCOME'
-        ? findManyForBusiness<Expense>(COL.expenses, businessId)
+        ? findManyForBusiness<Expense>(COL.expenses, businessId, (e) => matchesParty(e.partyId))
         : Promise.resolve([] as Expense[]),
     ]);
 

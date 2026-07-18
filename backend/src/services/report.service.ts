@@ -1,6 +1,18 @@
-import { AccountType, ReportFormat, ReportType } from '../types/enums';
-import { Attendance, Expense, Income, Report } from '../types/models';
-import { COL, create, findMany, findManyForBusiness, getAccountMap, getCategoryMap, getUserMap, inDateRange, sortBy, sumAmounts } from '../lib/firestore';
+import { AccountType, PlanKind, ReportFormat, ReportType, SubscriptionStatus } from '../types/enums';
+import { Attendance, Expense, Income, Report, Subscription } from '../types/models';
+import {
+  COL,
+  create,
+  findMany,
+  findManyForBusiness,
+  getAccountMap,
+  getCategoryMap,
+  getPartyMap,
+  getUserMap,
+  inDateRange,
+  sortBy,
+  sumAmounts,
+} from '../lib/firestore';
 import PDFDocument from 'pdfkit';
 import ExcelJS from 'exceljs';
 
@@ -448,6 +460,220 @@ export const reportService = {
     });
 
     return { report, ...blob, rows, groupBy, label };
+  },
+
+  async generateMembershipReport(
+    businessId: string,
+    format: ReportFormat,
+    userId: string
+  ) {
+    const subs = await findManyForBusiness<Subscription>(
+      COL.subscriptions,
+      businessId,
+      (s) => s.kind === PlanKind.MEMBERSHIP
+    );
+    const sorted = sortBy(subs, 'endDate', 'desc');
+    const partyMap = await getPartyMap(sorted.map((s) => s.partyId));
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const rows = sorted.map((s) => {
+      const end = new Date(s.endDate);
+      let status = s.status;
+      if (s.status !== SubscriptionStatus.CANCELLED && end < today) {
+        status = SubscriptionStatus.EXPIRED;
+      }
+      return {
+        client: partyMap.get(s.partyId)?.name || 'Unknown',
+        phone: partyMap.get(s.partyId)?.phone || '',
+        package: s.planName,
+        startDate: new Date(s.startDate).toISOString().split('T')[0],
+        endDate: end.toISOString().split('T')[0],
+        status,
+        priceInclGst: Number(s.priceInclGst),
+        amountPaid: Number(s.amountPaid || 0),
+        trainer: s.trainerName || '',
+      };
+    });
+
+    const blob = await buildReportBlob({
+      title: 'Membership Report',
+      format,
+      rows,
+      filenameBase: `Membership_Report_${new Date().toISOString().split('T')[0]}`,
+    });
+
+    const report = await create<Report>(COL.reports, {
+      businessId,
+      type: ReportType.MEMBERSHIP,
+      format,
+      title: 'Membership Report',
+      dateFrom: new Date(),
+      dateTo: new Date(),
+      generatedById: userId,
+    });
+
+    return { report, ...blob, rows };
+  },
+
+  async generateDuesReport(businessId: string, format: ReportFormat, userId: string) {
+    const subs = await findManyForBusiness<Subscription>(COL.subscriptions, businessId);
+    const due = subs.filter(
+      (s) =>
+        s.status !== SubscriptionStatus.CANCELLED &&
+        Number(s.amountPaid || 0) + 0.001 < Number(s.priceInclGst)
+    );
+    const partyMap = await getPartyMap(due.map((s) => s.partyId));
+
+    const rows = due
+      .map((s) => {
+        const total = Number(s.priceInclGst);
+        const paid = Number(s.amountPaid || 0);
+        return {
+          client: partyMap.get(s.partyId)?.name || 'Unknown',
+          phone: partyMap.get(s.partyId)?.phone || '',
+          kind: s.kind,
+          package: s.planName,
+          total,
+          paid,
+          due: Math.max(0, total - paid),
+          endDate: new Date(s.endDate).toISOString().split('T')[0],
+        };
+      })
+      .sort((a, b) => b.due - a.due);
+
+    const blob = await buildReportBlob({
+      title: 'Dues Report',
+      format,
+      rows,
+      filenameBase: `Dues_Report_${new Date().toISOString().split('T')[0]}`,
+    });
+
+    const report = await create<Report>(COL.reports, {
+      businessId,
+      type: ReportType.DUES,
+      format,
+      title: 'Dues Report',
+      dateFrom: new Date(),
+      dateTo: new Date(),
+      generatedById: userId,
+    });
+
+    return { report, ...blob, rows };
+  },
+
+  async generateGstReport(
+    businessId: string,
+    dateFrom: string,
+    dateTo: string,
+    format: ReportFormat,
+    userId: string
+  ) {
+    const from = new Date(dateFrom);
+    const to = new Date(dateTo);
+    to.setHours(23, 59, 59, 999);
+
+    const subs = await findManyForBusiness<Subscription>(
+      COL.subscriptions,
+      businessId,
+      (s) => inDateRange(new Date(s.startDate), from, to)
+    );
+    const partyMap = await getPartyMap(subs.map((s) => s.partyId));
+
+    const rows = sortBy(subs, 'startDate', 'desc').map((s) => ({
+      client: partyMap.get(s.partyId)?.name || 'Unknown',
+      package: s.planName,
+      kind: s.kind,
+      startDate: new Date(s.startDate).toISOString().split('T')[0],
+      taxable: Number(s.priceExGst),
+      gstRate: Number(s.gstRate),
+      gstAmount: Number(s.gstAmount),
+      totalInclGst: Number(s.priceInclGst),
+      amountPaid: Number(s.amountPaid || 0),
+    }));
+
+    const totals = rows.reduce(
+      (acc, r) => {
+        acc.taxable += r.taxable;
+        acc.gstAmount += r.gstAmount;
+        acc.totalInclGst += r.totalInclGst;
+        return acc;
+      },
+      { taxable: 0, gstAmount: 0, totalInclGst: 0 }
+    );
+
+    const blob = await buildReportBlob({
+      title: `GST Report ${dateFrom} to ${dateTo}`,
+      format,
+      rows: rows.length
+        ? [...rows, { client: 'TOTAL', package: '', kind: '', startDate: '', ...totals, gstRate: '', amountPaid: '' }]
+        : rows,
+      filenameBase: `GST_Report_${dateFrom}_to_${dateTo}`,
+    });
+
+    const report = await create<Report>(COL.reports, {
+      businessId,
+      type: ReportType.GST,
+      format,
+      title: `GST Report ${dateFrom} to ${dateTo}`,
+      dateFrom: from,
+      dateTo: to,
+      generatedById: userId,
+    });
+
+    return { report, ...blob, rows, totals };
+  },
+
+  async generateStaffSalesReport(
+    businessId: string,
+    dateFrom: string,
+    dateTo: string,
+    format: ReportFormat,
+    userId: string
+  ) {
+    const from = new Date(dateFrom);
+    const to = new Date(dateTo);
+    to.setHours(23, 59, 59, 999);
+
+    const incomes = await findManyForBusiness<Income>(
+      COL.income,
+      businessId,
+      (i) => inDateRange(i.date, from, to)
+    );
+    const userMap = await getUserMap(
+      incomes.flatMap((i) => [i.creditedToId, i.createdById].filter(Boolean) as string[])
+    );
+
+    const map = new Map<string, { staff: string; receipts: number; amount: number }>();
+    for (const inc of incomes) {
+      const id = inc.creditedToId || inc.createdById;
+      const name = userMap.get(id)?.name || 'Unknown';
+      const row = map.get(id) || { staff: name, receipts: 0, amount: 0 };
+      row.receipts += 1;
+      row.amount += Number(inc.amount);
+      map.set(id, row);
+    }
+
+    const rows = Array.from(map.values()).sort((a, b) => b.amount - a.amount);
+
+    const blob = await buildReportBlob({
+      title: `Staff Sales ${dateFrom} to ${dateTo}`,
+      format,
+      rows,
+      filenameBase: `Staff_Sales_${dateFrom}_to_${dateTo}`,
+    });
+
+    const report = await create<Report>(COL.reports, {
+      businessId,
+      type: ReportType.STAFF_SALES,
+      format,
+      title: `Staff Sales ${dateFrom} to ${dateTo}`,
+      dateFrom: from,
+      dateTo: to,
+      generatedById: userId,
+    });
+
+    return { report, ...blob, rows };
   },
 
   async generateAttendanceReport(month: number, year: number, format: ReportFormat, userId: string) {

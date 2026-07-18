@@ -75,6 +75,10 @@ export enum ReportType {
   PROFIT_LOSS = 'PROFIT_LOSS',
   ATTENDANCE = 'ATTENDANCE',
   TRANSACTIONS = 'TRANSACTIONS',
+  MEMBERSHIP = 'MEMBERSHIP',
+  DUES = 'DUES',
+  GST = 'GST',
+  STAFF_SALES = 'STAFF_SALES',
 }
 
 export enum ReportFormat {

@@ -16,6 +16,7 @@ export const COL = {
   income: 'income',
   expenses: 'expenses',
   attendance: 'attendance',
+  memberAttendance: 'member_attendance',
   tasks: 'tasks',
   documents: 'documents',
   notifications: 'notifications',
@@ -189,6 +190,10 @@ export function attendanceDocId(userId: string, date: Date): string {
   return `${userId}_${startOfDay(date).toISOString().split('T')[0]}`;
 }
 
+export function memberAttendanceDocId(businessId: string, partyId: string, date: Date): string {
+  return `${businessId}_${partyId}_${startOfDay(date).toISOString().split('T')[0]}`;
+}
+
 export function sumAmounts(
   items: { amount: number | unknown; date: Date }[],
   since?: Date,
@@ -222,7 +227,7 @@ export async function getAccountMap(ids: string[]) {
 export async function getPartyMap(ids: string[]) {
   const unique = [...new Set(ids.filter(Boolean))];
   const parties = await Promise.all(
-    unique.map((id) => getById<{ name: string; type: string }>(COL.parties, id))
+    unique.map((id) => getById<{ name: string; type: string; phone?: string | null }>(COL.parties, id))
   );
   return new Map(unique.map((id, i) => [id, parties[i]]));
 }

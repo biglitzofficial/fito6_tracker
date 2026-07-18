@@ -72,9 +72,14 @@ function IncomeContent() {
     [fieldConfig]
   );
 
+  const prefillPartyId = searchParams.get('partyId') || undefined;
+
   const { register, handleSubmit, reset, control, formState: { errors } } = useForm<z.infer<typeof baseSchema>>({
     resolver: zodResolver(schema),
-    defaultValues: { date: new Date().toISOString().split('T')[0] },
+    defaultValues: {
+      date: new Date().toISOString().split('T')[0],
+      partyId: prefillPartyId,
+    },
   });
 
   const { data: allCategories = [] } = useCategories('INCOME');
@@ -96,7 +101,10 @@ function IncomeContent() {
   const openAddForm = () => {
     setEditingItem(null);
     setPartyError('');
-    reset({ date: new Date().toISOString().split('T')[0] });
+    reset({
+      date: new Date().toISOString().split('T')[0],
+      partyId: prefillPartyId,
+    });
     setShowForm(true);
   };
 

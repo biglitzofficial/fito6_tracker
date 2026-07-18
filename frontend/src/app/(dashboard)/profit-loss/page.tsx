@@ -102,7 +102,7 @@ export default function ProfitLossPage() {
     <AdminGuard>
       <div>
         <Header
-          title="Profit & Loss"
+          title="Accounts / P&L"
           subtitle="Performance by bill-for month (expenses) and payment date (income)"
         />
         <div className="p-6 space-y-6">

@@ -205,6 +205,25 @@ export interface AdminDashboard {
   };
   healthScore: { score: number; rating: string };
   insights: string[];
+  gymOps?: {
+    collectionByMode: { mode: string; amount: number }[];
+    membership: { active: number; expired: number; cancelled: number };
+    personalTraining: { active: number; expired: number };
+    expiringSoon: {
+      id: string;
+      partyId: string;
+      partyName: string;
+      planName: string;
+      endDate: string;
+    }[];
+    salesLeaderboard: { id: string; name: string; today: number; month: number }[];
+    cashbook: {
+      openingEstimate: number;
+      cashIn: number;
+      cashOut: number;
+      closingEstimate: number;
+    };
+  };
 }
 
 export interface StaffDashboard {

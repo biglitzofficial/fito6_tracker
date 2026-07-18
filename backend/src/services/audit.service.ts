@@ -1,5 +1,15 @@
 import { AuditLog, Setting, User } from '../types/models';
-import { COL, create, findMany, findOne, getUserMap, paginate, sortBy, update } from '../lib/firestore';
+import {
+  COL,
+  create,
+  findMany,
+  findManyForBusiness,
+  findOne,
+  getUserMap,
+  paginate,
+  sortBy,
+  update,
+} from '../lib/firestore';
 
 export const auditService = {
   async list(filters: { page?: number; limit?: number; userId?: string }) {
@@ -73,5 +83,43 @@ export const settingsService = {
       businessId: businessId || null,
       value: value as Record<string, unknown>,
     });
+  },
+
+  async exportBackup(businessId: string) {
+    const [
+      settings,
+      categories,
+      accounts,
+      parties,
+      membershipPlans,
+      subscriptions,
+      income,
+      expenses,
+      memberAttendance,
+    ] = await Promise.all([
+      this.getAll(businessId),
+      findManyForBusiness(COL.categories, businessId),
+      findManyForBusiness(COL.accounts, businessId),
+      findManyForBusiness(COL.parties, businessId),
+      findManyForBusiness(COL.membershipPlans, businessId),
+      findManyForBusiness(COL.subscriptions, businessId),
+      findManyForBusiness(COL.income, businessId),
+      findManyForBusiness(COL.expenses, businessId),
+      findManyForBusiness(COL.memberAttendance, businessId),
+    ]);
+
+    return {
+      exportedAt: new Date().toISOString(),
+      businessId,
+      settings,
+      categories,
+      accounts,
+      parties,
+      membershipPlans,
+      subscriptions,
+      income,
+      expenses,
+      memberAttendance,
+    };
   },
 };

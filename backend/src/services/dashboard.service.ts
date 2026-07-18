@@ -1,5 +1,5 @@
-import { Role } from '../types/enums';
-import { Attendance, Expense, Income, Task, User } from '../types/models';
+import { PlanKind, Role, SubscriptionStatus } from '../types/enums';
+import { Account, Attendance, Expense, Income, Subscription, Task, User } from '../types/models';
 import {
   COL,
   findMany,
@@ -7,6 +7,7 @@ import {
   getById,
   getCategoryMap,
   getAccountMap,
+  getPartyMap,
   getUserMap,
   inDateRange,
   sortBy,
@@ -21,12 +22,16 @@ export const dashboardService = {
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const startOfYear = new Date(now.getFullYear(), 0, 1);
     const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+    const in7Days = new Date(startOfDay);
+    in7Days.setDate(in7Days.getDate() + 7);
 
-    const [incomes, expenses, staff, attendance] = await Promise.all([
+    const [incomes, expenses, staff, attendance, subscriptions, accounts] = await Promise.all([
       findManyForBusiness<Income>(COL.income, businessId),
       findManyForBusiness<Expense>(COL.expenses, businessId),
       findMany<User>(COL.users, (u) => u.role === Role.STAFF && u.isActive),
       findMany<Attendance>(COL.attendance),
+      findManyForBusiness<Subscription>(COL.subscriptions, businessId),
+      findManyForBusiness<Account>(COL.accounts, businessId),
     ]);
 
     const todayRev = sumAmounts(incomes, startOfDay);
@@ -49,6 +54,74 @@ export const dashboardService = {
     );
     const healthMetrics = getHealthMetrics(incomes, expenses, attendance, staff.length, now);
 
+    const accountMap = new Map(accounts.map((a) => [a.id, a]));
+    const todayIncomes = incomes.filter((i) => i.date >= startOfDay);
+    const collectionByModeMap = new Map<string, number>();
+    for (const inc of todayIncomes) {
+      const mode = inc.accountId
+        ? accountMap.get(inc.accountId)?.type || accountMap.get(inc.accountId)?.name || 'Other'
+        : 'Unassigned';
+      collectionByModeMap.set(mode, (collectionByModeMap.get(mode) || 0) + Number(inc.amount));
+    }
+    const collectionByMode = Array.from(collectionByModeMap.entries())
+      .map(([mode, amount]) => ({ mode, amount }))
+      .sort((a, b) => b.amount - a.amount);
+
+    const isActiveSub = (s: Subscription) => {
+      if (s.status === SubscriptionStatus.CANCELLED) return false;
+      return new Date(s.endDate) >= startOfDay && s.status !== SubscriptionStatus.EXPIRED;
+    };
+    const isExpiredSub = (s: Subscription) =>
+      s.status === SubscriptionStatus.EXPIRED || new Date(s.endDate) < startOfDay;
+
+    const memberships = subscriptions.filter((s) => s.kind === PlanKind.MEMBERSHIP);
+    const pts = subscriptions.filter((s) => s.kind === PlanKind.PERSONAL_TRAINING);
+
+    const expiring = memberships
+      .filter(
+        (s) =>
+          s.status !== SubscriptionStatus.CANCELLED &&
+          new Date(s.endDate) >= startOfDay &&
+          new Date(s.endDate) <= in7Days
+      )
+      .sort((a, b) => new Date(a.endDate).getTime() - new Date(b.endDate).getTime())
+      .slice(0, 10);
+
+    const partyMap = await getPartyMap(expiring.map((s) => s.partyId));
+
+    const leaderboardMap = new Map<string, { id: string; name: string; today: number; month: number }>();
+    const userMap = await getUserMap(
+      incomes.flatMap((i) => [i.creditedToId, i.createdById].filter(Boolean) as string[])
+    );
+    for (const inc of incomes) {
+      if (inc.date < startOfMonth) continue;
+      const id = inc.creditedToId || inc.createdById;
+      const name = userMap.get(id)?.name || 'Unknown';
+      const row = leaderboardMap.get(id) || { id, name, today: 0, month: 0 };
+      row.month += Number(inc.amount);
+      if (inc.date >= startOfDay) row.today += Number(inc.amount);
+      leaderboardMap.set(id, row);
+    }
+    const salesLeaderboard = Array.from(leaderboardMap.values())
+      .sort((a, b) => b.month - a.month)
+      .slice(0, 8);
+
+    const cashAccounts = accounts.filter((a) => a.type === 'CASH' && a.isActive !== false);
+    const cashBalance = cashAccounts.reduce((s, a) => s + Number(a.openingBalance || 0), 0);
+    // Approximate cashbook cash: opening + income to cash - expense from cash (simplified)
+    let cashIn = 0;
+    let cashOut = 0;
+    for (const inc of incomes) {
+      if (!inc.accountId) continue;
+      const acc = accountMap.get(inc.accountId);
+      if (acc?.type === 'CASH') cashIn += Number(inc.amount);
+    }
+    for (const exp of expenses) {
+      if (!exp.accountId) continue;
+      const acc = accountMap.get(exp.accountId);
+      if (acc?.type === 'CASH') cashOut += Number(exp.amount);
+    }
+
     return {
       cards: {
         todayRevenue: todayRev,
@@ -66,6 +139,32 @@ export const dashboardService = {
       charts: monthlyTrends,
       healthScore: calculateHealthScore(healthMetrics),
       insights: generateInsights(healthMetrics),
+      gymOps: {
+        collectionByMode,
+        membership: {
+          active: memberships.filter(isActiveSub).length,
+          expired: memberships.filter(isExpiredSub).length,
+          cancelled: memberships.filter((s) => s.status === SubscriptionStatus.CANCELLED).length,
+        },
+        personalTraining: {
+          active: pts.filter(isActiveSub).length,
+          expired: pts.filter(isExpiredSub).length,
+        },
+        expiringSoon: expiring.map((s) => ({
+          id: s.id,
+          partyId: s.partyId,
+          partyName: partyMap.get(s.partyId)?.name || 'Client',
+          planName: s.planName,
+          endDate: s.endDate,
+        })),
+        salesLeaderboard,
+        cashbook: {
+          openingEstimate: cashBalance,
+          cashIn,
+          cashOut,
+          closingEstimate: cashBalance + cashIn - cashOut,
+        },
+      },
     };
   },
 
