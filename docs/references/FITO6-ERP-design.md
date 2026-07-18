@@ -1,23 +1,33 @@
-﻿# FITO6 ERP (Claude) — Design reference
+﻿# FITO6 ERP (Claude) — Active product mode
 
-Standalone HTML/JS prototype the user likes. Full source was provided in chat as FITO6-ERP-source-code.
+On the `develop` branch, the **primary app** is the Claude single-file ERP SPA:
+
+- Served at [`/fito6-erp.html`](../../frontend/public/fito6-erp.html)
+- Root `/` and `/login` redirect to that page
+- **Frontend + backend** run in the browser (`localStorage` via `load()` / `save()`)
+- Express / Firestore SaaS routes remain in the repo for rollback but are **not** used by this UI
+
+## Demo logins
+
+| Username | Password | Role |
+|----------|----------|------|
+| `admin` | `admin` | Super Admin |
+| `office` | `office` | Front Office |
+| `accounts` | `accounts` | Accountant |
+| `trainer` | `trainer` | Trainer |
+
+Data is **per browser** (localStorage). Clearing site data resets the demo DB unless you export a backup from Settings.
 
 ## Visual tokens
-- bg: #f4f6fa
-- card: #ffffff
-- ink: #1a2233
-- muted: #6b7688
-- brand: #ff6a00 / #ff8c33
-- sidebar dark: #141b2d / #1d2740
-- ok: #18a558 · bad: #e0393e · warn: #e8a10c · line: #e6eaf2
 
-## UX patterns to port (keep Next.js + existing APIs)
-1. Dark navy sidebar + light content area
-2. Orange primary CTAs
-3. Stat cards + clean tables
-4. Client registration wizard (personal → plan → payment)
-5. Client profile with subscriptions + invoices on one view
-6. Billing / cashbook style lists
+- bg: `#f4f6fa`
+- card: `#ffffff`
+- ink: `#1a2233`
+- muted: `#6b7688`
+- brand: `#ff6a00` / `#ff8c33`
+- sidebar dark: `#141b2d` / `#1d2740`
+- ok: `#18a558` · bad: `#e0393e` · warn: `#e8a10c` · line: `#e6eaf2`
 
-## Note
-Do not replace the Firestore backend with localStorage from the prototype.
+## Rollback to Firestore SaaS
+
+Checkout an earlier commit / `master` that still used Next.js dashboard + Express APIs, and redeploy. Firebase data is unchanged by the Claude SPA.

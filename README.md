@@ -1,29 +1,49 @@
-# Fito6 — Business Finance & Operations Tracker
+# Fito6 — Gym ERP
 
-A full-stack SaaS application for gyms and small businesses to track income, expenses, staff, attendance, tasks, documents, analytics, ledger, and reports.
+## Active product (Claude ERP replica)
 
-## Tech Stack
+On **`develop`**, the primary app is the **Claude FITO6 single-file ERP** (HTML/JS + `localStorage`):
+
+- Open `/` or `/login` → redirects to **`/fito6-erp.html`**
+- Frontend and “backend” both run in the browser (no Firestore calls for gym ops)
+- Express/Firestore SaaS code remains in the repo for rollback; it is unused by this UI
+
+### Demo logins
+
+| Username | Password | Role |
+|----------|----------|------|
+| `admin` | `admin` | Super Admin |
+| `office` | `office` | Front Office |
+| `accounts` | `accounts` | Accountant |
+| `trainer` | `trainer` | Trainer |
+
+Data is stored **per browser**. Use Settings → backup/export in the Claude UI if you need a copy. See [docs/references/FITO6-ERP-design.md](./docs/references/FITO6-ERP-design.md).
+
+### Run Claude ERP locally
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Then open `http://localhost:3000/` (redirects to `/fito6-erp.html`).
+
+---
+
+## Legacy stack (Firestore SaaS — rollback)
+
+The Next.js dashboard + Express + Firebase stack is still in this repository (git history / unused routes). Use it only if you redeploy a pre–Claude-ERP commit / `master`.
 
 | Layer | Technology |
 |-------|------------|
-| Frontend | Next.js 15 (App Router), Tailwind CSS v4, shadcn/ui, Recharts, Zustand, React Hook Form + Zod |
+| Frontend | Next.js 15 (App Router), Tailwind CSS v4, shadcn/ui |
 | Backend | Node.js, Express.js 5, JWT Authentication |
 | Database | Firebase Firestore |
 | File Storage | Firebase Storage |
 | DevOps | Docker, Docker Compose |
 
-## Features
-
-- **Role-Based Access** — Admin and Staff roles with granular permissions
-- **Admin Dashboard** — Revenue, expenses, profit, cash flow, health score
-- **General Ledger** — Running balance, filters, CSV export
-- **Income & Expense Management** — Categories, filters, recurring expenses
-- **Staff Management** — CRUD, disable/enable, salary tracking
-- **Attendance** — Check in/out, late tracking, monthly reports
-- **Task Management** — Assign, prioritize, status updates
-- **Document Management** — Secure upload and authenticated download
-- **Analytics & Reports** — Charts, CSV/Excel/PDF exports
-- **Audit Logs** — Full action tracking
+Legacy features included role-based admin/staff access, ledger, income/expense, staff, attendance, tasks, documents, analytics, and audit logs.
 
 ## Production Deployment
 
