@@ -137,8 +137,18 @@ function defaults(){return{
  users:[{u:'admin',p:'admin',role:'superadmin',name:'Super Admin'},{u:'office',p:'office',role:'frontoffice',name:'Front Office'},{u:'accounts',p:'accounts',role:'accountant',name:'Accountant'},{u:'trainer',p:'trainer',role:'trainer',name:'Trainer'}],
  seq:{client:1000,invoice:1,receipt:1,voucher:1,staff:100},
  clients:[],subs:[],invoices:[],cashbook:[],staff:[],staffAtt:[],memberAtt:[],payroll:[],audit:[],leads:[]};}
-function load(){try{db=JSON.parse(localStorage.getItem(DBKEY))}catch(e){} if(!db)db=defaults(); }
+function load(){try{db=JSON.parse(localStorage.getItem(DBKEY))}catch(e){} if(!db)db=defaults(); ensurePkgSettings(); }
 function save(){localStorage.setItem(DBKEY,JSON.stringify(db))}
+function ensurePkgSettings(){
+ if(!db.settings)db.settings=defaults().settings;
+ const d=defaults().settings;
+ if(!Array.isArray(db.settings.packages))db.settings.packages=d.packages;
+ if(!Array.isArray(db.settings.ptPackages))db.settings.ptPackages=d.ptPackages;
+ if(!Array.isArray(db.settings.dancePackages))db.settings.dancePackages=d.dancePackages;
+ ['packages','ptPackages','dancePackages'].forEach(k=>{
+  db.settings[k]=db.settings[k].map(p=>({name:p.name,months:Number(p.months)||1,price:Number(p.price)||0,active:p.active!==false}));
+ });
+}
 
 /* ================= HELPERS ================= */
 const $=id=>document.getElementById(id);
@@ -164,11 +174,11 @@ function nextNo(key,prefix){const n=++db.seq[key];save();return prefix+String(n)
 /* ================= AUTH & NAV ================= */
 let USER=null,PAGE='dashboard';
 const MENUS={
- superadmin:['dashboard','clients','billing','cashbook','expenses','staff','attendance','payroll','reports','accounts','audit','settings'],
- frontoffice:['dashboard','clients','billing','cashbook','attendance'],
+ superadmin:['dashboard','clients','memberships','billing','cashbook','expenses','staff','attendance','payroll','reports','accounts','audit','settings'],
+ frontoffice:['dashboard','clients','memberships','billing','cashbook','attendance'],
  accountant:['dashboard','cashbook','expenses','payroll','reports','accounts'],
  trainer:['dashboard','clients','attendance']};
-const PAGES={dashboard:['📊','Dashboard'],clients:['🧍','Clients'],billing:['🧾','Billing / Invoices'],cashbook:['💰','Cashbook'],expenses:['📤','Expenses'],staff:['👥','Staff'],attendance:['🕒','Attendance'],payroll:['💵','Payroll'],reports:['📑','Reports'],accounts:['📚','Accounts / P&L'],audit:['🛡️','Audit Log'],settings:['⚙️','Settings']};
+const PAGES={dashboard:['📊','Dashboard'],clients:['🧍','Clients'],memberships:['🎫','Memberships'],billing:['🧾','Billing / Invoices'],cashbook:['💰','Cashbook'],expenses:['📤','Expenses'],staff:['👥','Staff'],attendance:['🕒','Attendance'],payroll:['💵','Payroll'],reports:['📑','Reports'],accounts:['📚','Accounts / P&L'],audit:['🛡️','Audit Log'],settings:['⚙️','Settings']};
 function doLogin(){const u=val('lg_u'),p=val('lg_p');const f=db.users.find(x=>x.u===u&&x.p===p);if(!f){toast('Invalid username or password');return}
  USER=f;$('login').style.display='none';$('app').style.display='block';$('tb_user').textContent=f.name+' · '+f.role;$('sb_role').textContent=db.settings.gymName;
  audit('Login','User logged in');buildNav();go('dashboard')}
@@ -176,7 +186,7 @@ function logout(){audit('Logout','User logged out');USER=null;$('app').style.dis
 function buildNav(){$('nav').innerHTML=MENUS[USER.role].map(p=>`<a href="#" id="nav_${p}" onclick="go('${p}');return false"><i>${PAGES[p][0]}</i><span>${PAGES[p][1]}</span></a>`).join('')}
 function go(p,arg){if(!MENUS[USER.role].includes(p)){toast('No permission');return} PAGE=p;
  document.querySelectorAll('#sidebar a').forEach(a=>a.classList.remove('on'));const n=$('nav_'+p);if(n)n.classList.add('on');
- ({dashboard:pgDashboard,clients:pgClients,billing:pgBilling,cashbook:pgCashbook,expenses:pgExpenses,staff:pgStaff,attendance:pgAttendance,payroll:pgPayroll,reports:pgReports,accounts:pgAccounts,audit:pgAudit,settings:pgSettings})[p](arg)}
+ ({dashboard:pgDashboard,clients:pgClients,memberships:pgMemberships,billing:pgBilling,cashbook:pgCashbook,expenses:pgExpenses,staff:pgStaff,attendance:pgAttendance,payroll:pgPayroll,reports:pgReports,accounts:pgAccounts,audit:pgAudit,settings:pgSettings})[p](arg)}
 
 /* ================= COMPUTED HELPERS ================= */
 function payListFor(dateFrom,dateTo){const out=[];db.invoices.forEach(iv=>iv.payments.forEach(p=>{if(p.date>=dateFrom&&p.date<=dateTo)out.push({...p,inv:iv})}));return out}
@@ -300,8 +310,98 @@ function wizSave1(){
  db.clients.push(c);save();audit('Member Added',c.id+' '+c.name);
  WIZ.clientId=id;WIZ.step=2;renderWizard();toast('Client '+id+' saved')}
 
+/* ---- Membership packages (customizable) ---- */
+const PKG_KEYS={membership:'packages',pt:'ptPackages',dance:'dancePackages'};
+const PKG_LABELS={membership:'Membership',pt:'Personal Training',dance:'Dance'};
+let PKG_TAB='membership';
+function pkgStore(kind){ensurePkgSettings();return db.settings[PKG_KEYS[kind]||'packages']}
+function pkgListFor(t){
+ ensurePkgSettings();
+ const list=t.includes('PT')?db.settings.ptPackages:t.includes('Dance')?db.settings.dancePackages:db.settings.packages;
+ return list.filter(p=>p.active!==false);
+}
+function pgMemberships(){
+ ensurePkgSettings();
+ const kind=PKG_TAB;
+ const list=pkgStore(kind);
+ const gst=db.settings.gstPct||0;
+ $('content').innerHTML=`
+ <div class="row" style="justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px">
+  <div><h2>Membership / Subscriptions</h2>
+   <div class="sub">Create packages with name, duration &amp; amount — they appear when adding a client</div></div>
+  <button class="btn" onclick="openPkgForm('${kind}')">+ Add ${PKG_LABELS[kind]} Package</button>
+ </div>
+ <div class="tabs">
+  <button class="${kind==='membership'?'on':''}" onclick="PKG_TAB='membership';pgMemberships()">Membership</button>
+  <button class="${kind==='pt'?'on':''}" onclick="PKG_TAB='pt';pgMemberships()">Personal Training</button>
+  <button class="${kind==='dance'?'on':''}" onclick="PKG_TAB='dance';pgMemberships()">Dance</button>
+ </div>
+ <div class="grid g3" style="margin-bottom:12px">
+  ${stat('Active packages',list.filter(p=>p.active!==false).length,'ok')}
+  ${stat('Total packages',list.length)}
+  ${stat('Sample (ex-GST)',list[0]?inr(list[0].price):'—','br')}
+ </div>
+ <div class="tbl"><table>
+  <tr><th>Package Name</th><th>Duration</th><th class="r">Amount (ex-GST)</th><th class="r">With ${gst}% GST</th><th>Status</th><th></th></tr>
+  ${list.map((p,i)=>{
+   const withGst=+(p.price*(1+gst/100)).toFixed(2);
+   return `<tr>
+    <td class="bold">${esc(p.name)}</td>
+    <td>${p.months} month${p.months===1?'':'s'}</td>
+    <td class="r">${inr(p.price)}</td>
+    <td class="r">${inr(withGst)}</td>
+    <td>${p.active!==false?'<span class="badge b-ok">Active</span>':'<span class="badge b-mut">Hidden</span>'}</td>
+    <td class="r">
+     <button class="btn sm sec" onclick="openPkgForm('${kind}',${i})">Edit</button>
+     <button class="btn sm sec" onclick="togglePkg('${kind}',${i})">${p.active!==false?'Hide':'Show'}</button>
+     <button class="btn sm dgr" onclick="deletePkg('${kind}',${i})">Delete</button>
+    </td></tr>`;
+  }).join('')||'<tr><td colspan="6" class="mut" style="padding:20px">No packages yet. Click <b>+ Add Package</b> to create one.</td></tr>'}
+ </table></div>
+ <p class="sub" style="margin-top:12px">Active packages show in <b>New Client → Subscription</b> and Renew/Upgrade forms. GST is added on top of Amount.</p>`;
+}
+function openPkgForm(kind,idx){
+ const edit=idx!==undefined&&idx!==null;
+ const list=pkgStore(kind);
+ const p=edit?list[idx]:{name:'',months:1,price:0,active:true};
+ openModal(`<h2>${edit?'Edit':'Add'} ${PKG_LABELS[kind]} Package</h2>
+  <div class="grid g2" style="margin-top:12px">
+   ${fld('pkg_name','Package Name',p.name)}
+   ${fld('pkg_months','Duration (months)',p.months,'number')}
+   ${fld('pkg_price','Amount ₹ (before GST)',p.price,'number')}
+   <div class="field"><label>Status</label>
+    <select id="pkg_active"><option value="1" ${p.active!==false?'selected':''}>Active (show when adding client)</option>
+    <option value="0" ${p.active===false?'selected':''}>Hidden</option></select></div>
+  </div>
+  <p class="sub" style="margin:8px 0 14px">This amount is exclusive of GST. Client wizard will add GST % on top.</p>
+  <div class="row" style="justify-content:flex-end;gap:8px">
+   <button class="btn sec" onclick="closeModal()">Cancel</button>
+   <button class="btn" onclick="savePkg('${kind}',${edit?idx:'null'})">Save Package</button>
+  </div>`);
+}
+function savePkg(kind,idx){
+ const name=val('pkg_name');const months=Math.max(1,parseInt(val('pkg_months'),10)||1);const price=Math.max(0,num('pkg_price'));
+ if(!name){toast('Enter package name');return}
+ if(price<=0){toast('Enter package amount');return}
+ const row={name,months,price,active:val('pkg_active')!=='0'};
+ const list=pkgStore(kind);
+ if(idx===null||idx===undefined||idx==='null'){list.push(row);audit('Package Added',PKG_LABELS[kind]+' · '+name+' · '+inr(price))}
+ else{const old=list[idx].name;list[idx]=row;audit('Package Updated',PKG_LABELS[kind]+' · '+old+' → '+name)}
+ save();closeModal();toast('Package saved');pgMemberships();
+}
+function togglePkg(kind,idx){
+ const list=pkgStore(kind);if(!list[idx])return;
+ list[idx].active=list[idx].active===false;save();
+ audit('Package Changed',list[idx].name+' · '+(list[idx].active!==false?'shown':'hidden'));
+ pgMemberships();
+}
+function deletePkg(kind,idx){
+ const list=pkgStore(kind);const p=list[idx];if(!p)return;
+ if(!confirm('Delete package "'+p.name+'"? Existing client subscriptions keep their saved package name.'))return;
+ list.splice(idx,1);save();audit('Package Deleted',PKG_LABELS[kind]+' · '+p.name);toast('Deleted');pgMemberships();
+}
+
 /* ---- Subscription ---- */
-function pkgListFor(t){return t.includes('PT')?db.settings.ptPackages:t.includes('Dance')?db.settings.dancePackages:db.settings.packages}
 function openSubForm(clientId,type){openModal(`<h2>Subscription — ${esc(client(clientId).name)}</h2>`+subFormHTML(clientId,type||'New Membership',false))}
 function subFormHTML(clientId,type,wizard){
  const trainers=db.staff.filter(s=>s.dept==='Trainer'&&s.status==='Active').map(s=>s.name);
@@ -663,11 +763,10 @@ function pgSettings(){
  <div class="card"><h3>Business</h3>
   ${fld('se_name','Gym Name',s.gymName)}${fld('se_branch','Branch',s.branch)}${fld('se_gstno','GST Number',s.gstNo)}${fld('se_gstp','Default GST %',s.gstPct,'number')}${fld('se_open','Opening Cash Balance ₹',s.openingCash,'number')}
   <button class="btn" onclick="saveSettings()">Save Settings</button></div>
- <div class="card"><h3>Membership Packages</h3><div class="sub" style="margin-bottom:8px">One per line: Name | Months | Price</div>
-  <textarea id="se_pkgs" rows="8">${s.packages.map(p=>`${p.name} | ${p.months} | ${p.price}`).join('\n')}</textarea>
-  <h3 style="margin-top:10px">PT Packages</h3><textarea id="se_pt" rows="4">${s.ptPackages.map(p=>`${p.name} | ${p.months} | ${p.price}`).join('\n')}</textarea>
-  <h3 style="margin-top:10px">Dance Packages</h3><textarea id="se_dance" rows="3">${s.dancePackages.map(p=>`${p.name} | ${p.months} | ${p.price}`).join('\n')}</textarea>
-  <button class="btn" style="margin-top:10px" onclick="savePkgs()">Save Packages</button></div>
+ <div class="card"><h3>Membership / Subscriptions</h3>
+  <p class="sub" style="margin-bottom:10px">Manage package names, duration and amounts in the dedicated module. Active packages appear when adding a client.</p>
+  <div class="sub" style="margin-bottom:10px">Membership: <b>${(s.packages||[]).length}</b> · PT: <b>${(s.ptPackages||[]).length}</b> · Dance: <b>${(s.dancePackages||[]).length}</b></div>
+  <button class="btn" onclick="go('memberships')">Open Memberships Module →</button></div>
  <div class="card"><h3>Expense Categories</h3><textarea id="se_exp" rows="6">${s.expCats.join('\n')}</textarea>
   <button class="btn" style="margin-top:10px" onclick="db.settings.expCats=val('se_exp').split('\\n').filter(Boolean);save();audit('Settings Changed','Expense categories');toast('Saved')">Save Categories</button></div>
  <div class="card"><h3>Backup & Data</h3>
