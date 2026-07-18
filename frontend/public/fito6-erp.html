@@ -324,10 +324,11 @@ function fillPkgs(){const t=val('s_type');const list=pkgListFor(t);$('s_pkg').in
 function calcSub(){const o=$('s_pkg').selectedOptions[0];if(!o)return;
  if($('s_pkg')._last!==o.text){$('s_price').value=o.dataset.p;$('s_pkg')._last=o.text}
  const months=parseInt(o.dataset.m)||1,price=num('s_price'),disc=num('s_disc'),gstp=num('s_gst');
- const base=price-disc,gstAmt=+(base*gstp/(100+gstp)).toFixed(2),woGst=+(base-gstAmt).toFixed(2);
+ // Package price is exclusive of GST — GST is added on top
+ const woGst=+(Math.max(0,price-disc)).toFixed(2),gstAmt=+(woGst*gstp/100).toFixed(2),final=+(woGst+gstAmt).toFixed(2);
  const start=val('s_start')||today(),end=addDays(addMonths(start,months),-1);
- $('s_calc').innerHTML=`<div class="grid g6">${stat('Amount w/o GST',inr(woGst))}${stat('GST Amount',inr(gstAmt))}${stat('Discount',inr(disc))}${stat('Final Amount','<b>'+inr(base)+'</b>','br')}${stat('End Date',fmtD(end))}${stat('Validity',daysBetween(start,end)+1+' days')}</div>`;
- window._subCalc={months,price,disc,gstp,gstAmt,woGst,final:base,start,end}}
+ $('s_calc').innerHTML=`<div class="grid g6">${stat('Amount w/o GST',inr(woGst))}${stat('GST Amount',inr(gstAmt))}${stat('Discount',inr(disc))}${stat('Final Amount','<b>'+inr(final)+'</b>','br')}${stat('End Date',fmtD(end))}${stat('Validity',daysBetween(start,end)+1+' days')}</div>`;
+ window._subCalc={months,price,disc,gstp,gstAmt,woGst,final,start,end}}
 function saveSub(clientId,wizard){
  const x=window._subCalc;if(!x||x.final<=0){toast('Enter a valid package price');return}
  const type=val('s_type');
@@ -706,15 +707,15 @@ function seedDemo(){
   const created=addDays(today(),-(i*11)%60);
   db.clients.push({id,name:n[0],gender:n[1],mobile:'98'+String(10000000+i*137).slice(0,8),joined:created,ref:['Walk-in','Instagram','Google','Reference'][i%4],branch:db.settings.branch,goal:'General Fitness',notes:[]});
   const pkg=db.settings.packages[i%4];const gstp=db.settings.gstPct;
-  const gstAmt=+(pkg.price*gstp/(100+gstp)).toFixed(2);
+  const woGst=pkg.price,gstAmt=+(woGst*gstp/100).toFixed(2),final=+(woGst+gstAmt).toFixed(2);
   const start=created,end=addDays(addMonths(start,pkg.months),-1);
-  const sub={id:'S'+Date.now()+i,clientId:id,type:i%3===2?'PT':'Membership',kind:i%4===3?'Renew':'New',pkg:pkg.name,price:pkg.price,disc:0,gstPct:gstp,gstAmt,woGst:pkg.price-gstAmt,final:pkg.price,start,end,trainer:'Suresh Trainer',branch:db.settings.branch,status:'',created};
+  const sub={id:'S'+Date.now()+i,clientId:id,type:i%3===2?'PT':'Membership',kind:i%4===3?'Renew':'New',pkg:pkg.name,price:pkg.price,disc:0,gstPct:gstp,gstAmt,woGst,final,start,end,trainer:'Suresh Trainer',branch:db.settings.branch,status:'',created};
   db.subs.push(sub);
-  const inv={id:'I'+Date.now()+i,no:nextNo('invoice','INV-'),date:created,clientId:id,subId:sub.id,desc:sub.type+' · '+pkg.name,woGst:sub.woGst,gstPct:gstp,gst:gstAmt,grand:pkg.price,paid:0,pending:pkg.price,dueDate:created,payments:[],by:['Super Admin','Front Office'][i%2],trainer:'Suresh Trainer'};
+  const inv={id:'I'+Date.now()+i,no:nextNo('invoice','INV-'),date:created,clientId:id,subId:sub.id,desc:sub.type+' · '+pkg.name,woGst,gstPct:gstp,gst:gstAmt,grand:final,paid:0,pending:final,dueDate:created,payments:[],by:['Super Admin','Front Office'][i%2],trainer:'Suresh Trainer'};
   const mode=['Cash','UPI','Card','Bank Transfer'][i%4];
-  const payAmt=i%5===4?Math.round(pkg.price*0.6):pkg.price;
+  const payAmt=i%5===4?Math.round(final*0.6):final;
   inv.payments.push({date:created,mode,amt:payAmt,receipt:nextNo('receipt','RCP-'),by:inv.by});
-  inv.paid=payAmt;inv.pending=pkg.price-payAmt;
+  inv.paid=payAmt;inv.pending=+(final-payAmt).toFixed(2);
   db.invoices.push(inv);
   db.cashbook.push({id:'CB'+Date.now()+i,date:created,type:'in',no:'RCP-'+i,particulars:inv.desc,category:sub.type+' Payment',party:n[0],mode,amount:payAmt,by:inv.by,notes:'Invoice '+inv.no});
  });
