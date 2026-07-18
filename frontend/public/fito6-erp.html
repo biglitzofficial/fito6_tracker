@@ -703,8 +703,9 @@ function openClient(id){const c=client(id);if(!c)return;
  <div class="sub" style="margin-top:4px"><b>Bill Rep:</b> ${esc(c.billRep||'—')} <span class="mut">(staff handling / collecting)</span></div></div>
  <button class="btn" onclick="openSubForm('${id}')">➕ New / Renew Plan</button></div>
  <div class="grid g4" style="margin:12px 0">${stat('Total Paid',inr(paid),'ok')}${stat('Outstanding',inr(due),due>0?'bad':'')}${stat('Bill Rep',esc(c.billRep||'-'),'br')}${stat('Goal',esc(c.goal||'-'))}</div>
- <h3>Subscriptions</h3><div class="tbl"><table><tr><th>Type</th><th>Package</th><th>Start</th><th>End</th><th class="r">Amount</th><th>Status</th></tr>
- ${subs.map(s=>`<tr><td>${s.type} <span class="mut">(${s.kind})</span></td><td>${esc(s.pkg)}</td><td>${fmtD(s.start)}</td><td>${fmtD(s.end)}</td><td class="r">${inr(s.final)}</td><td><span class="badge ${subStatus(s)==='Active'?'b-ok':subStatus(s)==='Frozen'?'b-warn':'b-bad'}">${subStatus(s)}</span></td></tr>`).join('')||'<tr><td colspan=6 class="mut">None</td></tr>'}</table></div>
+ <h3>Subscriptions</h3><div class="tbl"><table><tr><th>Type</th><th>Package</th><th>Start</th><th>End</th><th class="r">Amount</th><th>Status</th><th></th></tr>
+ ${subs.map(s=>`<tr><td>${s.type} <span class="mut">(${s.kind})</span></td><td>${esc(s.pkg)}</td><td>${fmtD(s.start)}</td><td>${fmtD(s.end)}</td><td class="r">${inr(s.final)}</td><td><span class="badge ${subStatus(s)==='Active'?'b-ok':subStatus(s)==='Frozen'?'b-warn':'b-bad'}">${subStatus(s)}</span></td>
+ <td class="r"><button class="btn sm sec" onclick="openEditSub('${s.id}')">Edit</button></td></tr>`).join('')||'<tr><td colspan=7 class="mut">None</td></tr>'}</table></div>
  <h3 style="margin-top:12px">Invoices & Payments</h3><div class="tbl"><table><tr><th>Invoice</th><th>Date</th><th class="r">Total</th><th class="r">Paid</th><th class="r">Pending</th><th></th></tr>
  ${invs.map(i=>`<tr><td>${i.no}</td><td>${fmtD(i.date)}</td><td class="r">${inr(i.grand)}</td><td class="r">${inr(i.paid)}</td><td class="r">${inr(i.pending)}</td><td><button class="btn sm sec" onclick="showInvoice('${i.id}')">View</button>${i.pending>0?` <button class="btn sm" onclick="openModal('<h2>Collect</h2>'+payFormHTML('${i.id}',false))">Collect</button>`:''}</td></tr>`).join('')||'<tr><td colspan=6 class="mut">None</td></tr>'}</table></div>
  <h3 style="margin-top:12px">Recent Attendance</h3><div class="sub">${att.map(a=>fmtD(a.date)+' '+a.time).join(' · ')||'No check-ins yet'}</div>
@@ -716,6 +717,90 @@ function openClient(id){const c=client(id);if(!c)return;
   <button class="btn sec" onclick="closeModal()">Close</button>
  </div>`)}
 function addNote(id){const c=client(id);const n=val('cn_note');if(!n)return;c.notes=c.notes||[];c.notes.unshift(fmtD(today())+': '+n);save();audit('Note Added',c.id);openClient(id)}
+function openEditSub(subId){
+ const s=db.subs.find(x=>x.id===subId);if(!s){toast('Subscription not found');return}
+ const c=client(s.clientId)||{};
+ const trainers=trainerStaffList();
+ const statusVal=s.status==='Frozen'?'Frozen':(subStatus(s)==='Expired'?'Expired':'Active');
+ openModal(`<h2>Edit Subscription — ${esc(c.name||'')}</h2>
+ <div class="sub" style="margin-bottom:10px">${esc(s.type)} · ${esc(s.kind||'New')}</div>
+ <div class="grid g3">
+  ${fld('es_pkg','Package Name',s.pkg)}
+  ${fld('es_price','Package Price',s.price||s.woGst||0,'number')}
+  ${fld('es_sell','Selling Price ₹',s.sell??s.woGst??s.price??0,'number')}
+  ${fld('es_gst','GST %',s.gstPct??db.settings.gstPct,'number')}
+  ${fld('es_start','Start Date',s.start,'date')}
+  ${fld('es_end','End Date',s.end,'date')}
+  <div class="field"><label>Status</label>
+   <select id="es_status">
+    <option value="Active" ${statusVal==='Active'?'selected':''}>Active</option>
+    <option value="Frozen" ${statusVal==='Frozen'?'selected':''}>Frozen</option>
+    <option value="Expired" ${statusVal==='Expired'?'selected':''}>Expired</option>
+   </select></div>
+  <div class="field"><label>Branch</label><input id="es_branch" value="${esc(s.branch||db.settings.branch||'')}"></div>
+  ${billRepSelect('es_billrep',s.billRep||c.billRep,s.billRepId||c.billRepId)}
+  ${s.type==='PT'?`<div class="field"><label>Trainer (Staff)</label>
+   <select id="es_trainer"><option value="">— Select trainer —</option>
+   ${trainers.map(t=>`<option value="${esc(t.id)}" data-name="${esc(t.name)}" ${s.trainerId===t.id||s.trainer===t.name?'selected':''}>${esc(t.name)}${t.dept?' ('+esc(t.dept)+')':''}</option>`).join('')}
+   </select></div>`:''}
+ </div>
+ <div class="card" style="background:#fafbfd;margin-top:10px" id="es_calc"></div>
+ <p class="sub" style="margin-top:8px">GST &amp; final amount use selling price. Linked unpaid invoice totals are updated when you save.</p>
+ <div class="row" style="justify-content:flex-end;margin-top:12px;gap:8px">
+  <button class="btn sec" onclick="openClient('${s.clientId}')">Cancel</button>
+  <button class="btn" onclick="saveEditSub('${subId}')">Save Changes</button>
+ </div>
+ <script>
+  ['es_price','es_sell','es_gst','es_start'].forEach(id=>{const el=$(id);if(el)el.oninput=el.onchange=calcEditSub});
+  calcEditSub();
+ <\/script>`)}
+function calcEditSub(){
+ const price=num('es_price');let sell=num('es_sell');if(!sell||sell<=0)sell=price;
+ const gstp=num('es_gst');
+ const woGst=+(Math.max(0,sell)).toFixed(2),gstAmt=+(woGst*gstp/100).toFixed(2),final=+(woGst+gstAmt).toFixed(2);
+ const start=val('es_start')||today();
+ let end=val('es_end');
+ if($('es_calc'))$('es_calc').innerHTML=`<div class="grid g4">${stat('Package',inr(price))}${stat('Selling',inr(woGst),'br')}${stat('GST',inr(gstAmt))}${stat('Final','<b>'+inr(final)+'</b>','br')}</div>`;
+ window._editSubCalc={price,sell:woGst,disc:+(Math.max(0,price-woGst)).toFixed(2),gstp,gstAmt,woGst,final,start,end};
+}
+function saveEditSub(subId){
+ calcEditSub();
+ const s=db.subs.find(x=>x.id===subId);if(!s){toast('Subscription not found');return}
+ const x=window._editSubCalc;if(!x||x.final<=0){toast('Enter a valid selling price');return}
+ const pkg=val('es_pkg');if(!pkg){toast('Package name required');return}
+ const br=readBillRep('es_billrep');
+ if(!br.billRep){toast('Select Bill Rep');return}
+ let trainer=s.trainer||'',trainerId=s.trainerId||'';
+ if(s.type==='PT'){
+  const tr=(()=>{const el=$('es_trainer');if(!el||!el.value)return{trainerId:'',trainer:''};const opt=el.selectedOptions[0];return{trainerId:el.value,trainer:(opt&&opt.dataset.name)||opt.textContent.split(' (')[0]}})();
+  if(!tr.trainer){toast('Select trainer for PT');return}
+  trainer=tr.trainer;trainerId=tr.trainerId;
+ }
+ const st=val('es_status');
+ const oldFinal=s.final;
+ Object.assign(s,{
+  pkg,price:x.price,sell:x.sell,disc:x.disc,gstPct:x.gstp,gstAmt:x.gstAmt,woGst:x.woGst,final:x.final,
+  start:val('es_start')||s.start,end:val('es_end')||s.end,branch:val('es_branch'),
+  billRep:br.billRep,billRepId:br.billRepId,trainer,trainerId,
+  status:st==='Frozen'?'Frozen':(st==='Expired'?'Expired':'')
+ });
+ const c=client(s.clientId);
+ if(c){c.billRep=br.billRep;c.billRepId=br.billRepId;if(trainer){c.trainer=trainer;c.trainerId=trainerId}}
+ // Update linked invoice if found and not overpaid
+ const inv=db.invoices.find(i=>i.subId===subId)||db.invoices.filter(i=>i.clientId===s.clientId).find(i=>i.desc&&i.desc.includes(s.pkg));
+ if(inv){
+  const paid=Number(inv.paid||0);
+  inv.woGst=x.woGst;inv.gstPct=x.gstp;inv.gst=x.gstAmt;inv.grand=x.final;
+  inv.pending=+Math.max(0,x.final-paid).toFixed(2);
+  inv.billRep=br.billRep;inv.billRepId=br.billRepId;inv.by=br.billRep;
+  if(trainer){inv.trainer=trainer;inv.trainerId=trainerId}
+  inv.desc=`${s.type} · ${s.pkg} (${fmtD(s.start)} → ${fmtD(s.end)})`;
+ }
+ save();
+ audit('Subscription Updated',(c?c.name:'')+' · '+s.pkg+' · '+inr(oldFinal)+' → '+inr(x.final));
+ toast('Subscription updated');
+ openClient(s.clientId);
+}
 /* ================= CASHBOOK ================= */
 function pgCashbook(){
  const t=today();
