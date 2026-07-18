@@ -816,12 +816,38 @@ function pgCashbook(){
  <div class="tbl" id="cb_tbl">${cbTable(e=>true)}</div>`}
 function cbTable(f){const rows=db.cashbook.filter(f).slice().reverse().slice(0,300).map(e=>`
  <tr><td>${fmtD(e.date)}</td><td>${e.no}</td><td>${esc(e.particulars)}</td><td>${esc(e.category)}</td><td>${esc(e.party||'')}</td><td>${e.mode}</td>
- <td class="r bold" style="color:${e.type==='in'?'var(--ok)':'var(--bad)'}">${e.type==='in'?'+':'−'}${inr(e.amount)}</td><td>${esc(e.by||'')}</td></tr>`).join('');
- return`<table><tr><th>Date</th><th>Rcpt/Vchr</th><th>Particulars</th><th>Category</th><th>Party</th><th>Mode</th><th class="r">Amount</th><th>By</th></tr>${rows||'<tr><td colspan=8 class="mut">No entries</td></tr>'}</table>`}
+ <td class="r bold" style="color:${e.type==='in'?'var(--ok)':'var(--bad)'}">${e.type==='in'?'+':'−'}${inr(e.amount)}</td><td>${esc(e.by||'')}</td>
+ <td class="r"><button class="btn sm dgr" onclick="deleteCashbookEntry('${e.id}')">Delete</button></td></tr>`).join('');
+ return`<table><tr><th>Date</th><th>Rcpt/Vchr</th><th>Particulars</th><th>Category</th><th>Party</th><th>Mode</th><th class="r">Amount</th><th>By</th><th></th></tr>${rows||'<tr><td colspan=9 class="mut">No entries</td></tr>'}</table>`}
 function cbTab(btn,t){document.querySelectorAll('.tabs button').forEach(b=>b.classList.remove('on'));btn.classList.add('on');
  $('cb_tbl').innerHTML=cbTable(e=>t==='all'||e.type===t)}
 function pgCashbookFiltered(){const f=val('cb_f'),to=val('cb_t');$('cb_tbl').innerHTML=cbTable(e=>e.date>=f&&e.date<=to)}
 function exportCashbook(){csvExport([['Date','No','Particulars','Category','Party','Mode','Type','Amount','By'],...db.cashbook.map(e=>[e.date,e.no,e.particulars,e.category,e.party,e.mode,e.type,e.amount,e.by])],'cashbook')}
+function deleteCashbookEntry(id){
+ const e=db.cashbook.find(x=>x.id===id);if(!e)return;
+ if(!confirm(`Delete cashbook entry ${e.no}?\n${e.particulars||e.category} · ${inr(e.amount)}\n\nThis cannot be undone.`))return;
+ // If linked to an invoice payment (notes like "Invoice INV-0001"), reverse that payment
+ const m=(e.notes||'').match(/Invoice\s+(\S+)/i);
+ if(m&&e.type==='in'){
+  const inv=db.invoices.find(i=>i.no===m[1]);
+  if(inv){
+   const payIdx=(inv.payments||[]).findIndex(p=>p.receipt===e.no||(Number(p.amt)===Number(e.amount)&&p.mode===e.mode));
+   if(payIdx>=0){
+    inv.payments.splice(payIdx,1);
+    inv.paid=+Math.max(0,(inv.payments||[]).reduce((s,p)=>s+Number(p.amt||0),0)).toFixed(2);
+    inv.pending=+Math.max(0,Number(inv.grand)-inv.paid).toFixed(2);
+   }
+  }
+ }
+ db.cashbook=db.cashbook.filter(x=>x.id!==id);
+ save();audit('Cashbook Deleted',e.no+' · '+e.type+' · '+inr(e.amount)+' · '+(e.particulars||e.category||''));
+ toast('Cashbook entry deleted');
+ if(PAGE==='expenses')go('expenses');else if($('cb_tbl')){
+  const on=document.querySelector('.tabs button.on');
+  const tab=on&&on.textContent.includes('In')&&!on.textContent.includes('Out')?'in':on&&on.textContent.includes('Out')?'out':'all';
+  $('cb_tbl').innerHTML=cbTable(x=>tab==='all'||x.type===tab);
+ }else go('cashbook');
+}
 function cashForm(type){
  const cats=type==='in'?db.settings.incCats:db.settings.expCats;
  openModal(`<h2>${type==='in'?'Cash In — Other Income':'Cash Out — Expense Voucher'}</h2>
