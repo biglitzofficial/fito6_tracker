@@ -511,13 +511,14 @@ function savePayment(invId){
 function pgBilling(){
  const rows=db.invoices.slice().reverse().map(iv=>{const c=client(iv.clientId);
   return`<tr><td class="bold clickable" onclick="showInvoice('${iv.id}')">${iv.no}</td><td>${fmtD(iv.date)}</td><td class="clickable" onclick="openClient('${iv.clientId}')">${esc(c?c.name:'?')}</td>
+  <td>${esc(iv.billRep||iv.by||c?.billRep||'-')}</td>
   <td>${esc(iv.desc)}</td><td class="r">${inr(iv.grand)}</td><td class="r" style="color:var(--ok)">${inr(iv.paid)}</td>
   <td class="r" style="color:${iv.pending>0?'var(--bad)':'var(--mut)'}">${inr(iv.pending)}</td>
   <td>${iv.pending<=0?'<span class="badge b-ok">Paid</span>':iv.paid>0?'<span class="badge b-warn">Partial</span>':'<span class="badge b-bad">Unpaid</span>'}</td>
   <td>${iv.pending>0?`<button class="btn sm" onclick="openModal('<h2>Collect Payment</h2>'+payFormHTML('${iv.id}',false))">Collect</button>`:''} <button class="btn sm sec" onclick="showInvoice('${iv.id}')">View</button></td></tr>`}).join('');
  $('content').innerHTML=`<div class="row" style="justify-content:space-between"><div><h2>Billing / Invoices</h2><div class="sub">${db.invoices.length} invoices · Pending total ${inr(db.invoices.reduce((s,i)=>s+i.pending,0))}</div></div>
  <button class="btn" onclick="openWizard()">➕ New Client</button></div>
- <div class="tbl" style="margin-top:12px"><table><tr><th>Invoice</th><th>Date</th><th>Customer</th><th>Description</th><th class="r">Total</th><th class="r">Paid</th><th class="r">Pending</th><th>Status</th><th></th></tr>${rows||'<tr><td colspan=9 class="mut">No invoices yet</td></tr>'}</table></div>`}
+ <div class="tbl" style="margin-top:12px"><table><tr><th>Invoice</th><th>Date</th><th>Customer</th><th>Bill Rep</th><th>Description</th><th class="r">Total</th><th class="r">Paid</th><th class="r">Pending</th><th>Status</th><th></th></tr>${rows||'<tr><td colspan=10 class="mut">No invoices yet</td></tr>'}</table></div>`}
 function invoiceHTML(iv){const c=client(iv.clientId);const st=db.settings;
  return`<div class="inv">
  <div class="row" style="justify-content:space-between"><div><h1>${esc(st.gymName)}</h1><div>${esc(st.branch)}${st.gstNo?' · GSTIN: '+esc(st.gstNo):''}</div></div>
