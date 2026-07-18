@@ -270,7 +270,12 @@ function pgClients(){
   const badge=st==='Active'?'b-ok':st==='Expired'?'b-bad':st==='Frozen'?'b-warn':'b-mut';
   return`<tr><td class="bold">${c.id}</td><td class="clickable" onclick="openClient('${c.id}')">${esc(c.name)}</td><td>${esc(c.mobile)}</td>
   <td>${ms?esc(ms.pkg):'-'}</td><td>${ms?fmtD(ms.end):'-'}</td><td><span class="badge ${badge}">${st}</span></td>
-  <td>${esc(c.billRep||'-')}</td><td>${esc(c.trainer||'-')}</td><td><button class="btn sm sec" onclick="openClient('${c.id}')">Profile</button> <button class="btn sm" onclick="openSubForm('${c.id}')">＋ Plan</button></td></tr>`}).join('');
+  <td>${esc(c.billRep||'-')}</td><td>${esc(c.trainer||'-')}</td>
+  <td class="r" style="white-space:nowrap">
+   <button class="btn sm sec" onclick="openClient('${c.id}')">Profile</button>
+   <button class="btn sm" onclick="openSubForm('${c.id}')">＋ Plan</button>
+   <button class="btn sm dgr" onclick="deleteClient('${c.id}')">Delete</button>
+  </td></tr>`}).join('');
  $('content').innerHTML=`
  <div class="row" style="justify-content:space-between"><div><h2>Clients</h2><div class="sub">${db.clients.length} registered</div></div>
  <button class="btn" onclick="openWizard()">➕ New Client</button></div>
@@ -278,6 +283,23 @@ function pgClients(){
  <div class="tbl"><table id="cl_tbl"><tr><th>ID</th><th>Name</th><th>Mobile</th><th>Package</th><th>Valid Till</th><th>Status</th><th>Bill Rep</th><th>Trainer</th><th></th></tr>${rows||'<tr><td colspan=9 class="mut">No clients yet — click New Client</td></tr>'}</table></div>`;
 }
 function filterClients(){const q=val('cl_f').toLowerCase();document.querySelectorAll('#cl_tbl tr').forEach((tr,i)=>{if(i===0)return;tr.style.display=tr.textContent.toLowerCase().includes(q)?'':'none'})}
+function deleteClient(id){
+ const c=client(id);if(!c)return;
+ const subN=db.subs.filter(s=>s.clientId===id).length;
+ const invN=db.invoices.filter(i=>i.clientId===id).length;
+ if(!confirm(`Delete client "${c.name}" (${c.id})?\n\nThis will also remove:\n• ${subN} subscription(s)\n• ${invN} invoice(s)\n• related check-ins\n\nCashbook payment history for this client will be kept.\nThis cannot be undone.`))return;
+ const invNos=new Set(db.invoices.filter(i=>i.clientId===id).map(i=>i.no));
+ db.clients=db.clients.filter(x=>x.id!==id);
+ db.subs=db.subs.filter(s=>s.clientId!==id);
+ db.invoices=db.invoices.filter(i=>i.clientId!==id);
+ db.memberAtt=(db.memberAtt||[]).filter(a=>a.clientId!==id);
+ db.leads=(db.leads||[]).filter(l=>l.clientId!==id);
+ save();
+ audit('Member Deleted',c.id+' '+c.name+(invNos.size?' · invoices: '+[...invNos].join(', '):''));
+ toast('Client deleted');
+ closeModal();
+ go('clients');
+}
 
 /* ---- Registration Wizard ---- */
 let WIZ={};
@@ -593,7 +615,10 @@ function openClient(id){const c=client(id);if(!c)return;
  <h3 style="margin-top:12px">Notes</h3>
  <div class="row"><input id="cn_note" placeholder="Add a note (follow-up, measurement, etc.)" style="flex:1"><button class="btn sm" onclick="addNote('${id}')">Add</button></div>
  <div class="sub" style="margin-top:8px">${(c.notes||[]).map(n=>'• '+esc(n)).join('<br>')}</div>
- <div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn sec" onclick="closeModal()">Close</button></div>`)}
+ <div class="row" style="justify-content:flex-end;margin-top:14px;gap:8px;flex-wrap:wrap">
+  <button class="btn dgr" onclick="deleteClient('${id}')">🗑 Delete Client</button>
+  <button class="btn sec" onclick="closeModal()">Close</button>
+ </div>`)}
 function addNote(id){const c=client(id);const n=val('cn_note');if(!n)return;c.notes=c.notes||[];c.notes.unshift(fmtD(today())+': '+n);save();audit('Note Added',c.id);openClient(id)}
 /* ================= CASHBOOK ================= */
 function pgCashbook(){
