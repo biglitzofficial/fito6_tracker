@@ -270,12 +270,12 @@ function pgClients(){
   const badge=st==='Active'?'b-ok':st==='Expired'?'b-bad':st==='Frozen'?'b-warn':'b-mut';
   return`<tr><td class="bold">${c.id}</td><td class="clickable" onclick="openClient('${c.id}')">${esc(c.name)}</td><td>${esc(c.mobile)}</td>
   <td>${ms?esc(ms.pkg):'-'}</td><td>${ms?fmtD(ms.end):'-'}</td><td><span class="badge ${badge}">${st}</span></td>
-  <td>${esc(c.trainer||'-')}</td><td><button class="btn sm sec" onclick="openClient('${c.id}')">Profile</button> <button class="btn sm" onclick="openSubForm('${c.id}')">＋ Plan</button></td></tr>`}).join('');
+  <td>${esc(c.billRep||'-')}</td><td>${esc(c.trainer||'-')}</td><td><button class="btn sm sec" onclick="openClient('${c.id}')">Profile</button> <button class="btn sm" onclick="openSubForm('${c.id}')">＋ Plan</button></td></tr>`}).join('');
  $('content').innerHTML=`
  <div class="row" style="justify-content:space-between"><div><h2>Clients</h2><div class="sub">${db.clients.length} registered</div></div>
  <button class="btn" onclick="openWizard()">➕ New Client</button></div>
- <div class="toolbar" style="margin-top:12px"><div class="field" style="width:280px"><label>Filter</label><input id="cl_f" placeholder="name / phone / id" oninput="filterClients()"></div></div>
- <div class="tbl"><table id="cl_tbl"><tr><th>ID</th><th>Name</th><th>Mobile</th><th>Package</th><th>Valid Till</th><th>Status</th><th>Trainer</th><th></th></tr>${rows||'<tr><td colspan=8 class="mut">No clients yet — click New Client</td></tr>'}</table></div>`;
+ <div class="toolbar" style="margin-top:12px"><div class="field" style="width:280px"><label>Filter</label><input id="cl_f" placeholder="name / phone / id / bill rep" oninput="filterClients()"></div></div>
+ <div class="tbl"><table id="cl_tbl"><tr><th>ID</th><th>Name</th><th>Mobile</th><th>Package</th><th>Valid Till</th><th>Status</th><th>Bill Rep</th><th>Trainer</th><th></th></tr>${rows||'<tr><td colspan=9 class="mut">No clients yet — click New Client</td></tr>'}</table></div>`;
 }
 function filterClients(){const q=val('cl_f').toLowerCase();document.querySelectorAll('#cl_tbl tr').forEach((tr,i)=>{if(i===0)return;tr.style.display=tr.textContent.toLowerCase().includes(q)?'':'none'})}
 
@@ -287,6 +287,28 @@ function renderWizard(){
  openModal(`<h2>New Client Registration</h2>
  <div class="steps"><div class="${s===1?'on':'done'}">1 · Personal Details</div><div class="${s===2?'on':s>2?'done':''}">2 · Subscription</div><div class="${s===3?'on':''}">3 · Billing & Payment</div></div>
  <div id="wizbody">${s===1?wizStep1():s===2?subFormHTML(WIZ.clientId,'New Membership',true):payFormHTML(WIZ.invId,true)}</div>`)}
+function fld(id,l,v,t){return`<div class="field"><label>${l}</label><input id="${id}" type="${t||'text'}" value="${esc(v||'')}"></div>`}
+function sel(id,l,opts,v){return`<div class="field"><label>${l}</label><select id="${id}">${opts.map(o=>`<option ${o===v?'selected':''}>${o}</option>`).join('')}</select></div>`}
+function staffBillRepList(){
+ const list=(db.staff||[]).filter(s=>s.status!=='Inactive');
+ if(list.length)return list;
+ return (db.users||[]).map(u=>({id:u.u,name:u.name,dept:u.role}));
+}
+function billRepSelect(id,selectedName,selectedId){
+ const staff=staffBillRepList();
+ const opts=['<option value="">— Select staff —</option>']
+  .concat(staff.map(s=>{
+   const label=s.dept?`${s.name} (${s.dept})`:s.name;
+   const sel=(selectedId&&s.id===selectedId)||(!selectedId&&selectedName&&s.name===selectedName)?'selected':'';
+   return`<option value="${esc(s.id)}" data-name="${esc(s.name)}" ${sel}>${esc(label)}</option>`;
+  }));
+ return`<div class="field"><label>Bill Rep (Staff handling / collecting)</label><select id="${id}">${opts.join('')}</select></div>`;
+}
+function readBillRep(selectId){
+ const el=$(selectId);if(!el||!el.value)return{billRepId:'',billRep:''};
+ const opt=el.selectedOptions[0];
+ return{billRepId:el.value,billRep:(opt&&opt.dataset.name)||opt.textContent.split(' (')[0]};
+}
 function wizStep1(){const c=WIZ.c||{};return `
  <div class="grid g3">
   ${fld('w_name','Name *',c.name)}${sel('w_gender','Gender',['Male','Female','Other'],c.gender)}${fld('w_dob','DOB',c.dob,'date')}
@@ -298,16 +320,18 @@ function wizStep1(){const c=WIZ.c||{};return `
   ${sel('w_ref','Referral Source',['Walk-in','Facebook','Instagram','Google','Existing Member','Reference','Advertisement','Others'],c.ref)}
   ${sel('w_idt','ID Proof',['','Aadhaar','PAN','Driving License','Passport'],c.idt)}
   ${fld('w_idn','ID Number',c.idn)}${fld('w_emg','Emergency Contact Name',c.emg)}${fld('w_emgp','Emergency Contact No.',c.emgp)}
+  ${billRepSelect('w_billrep',c.billRep,c.billRepId)}
  </div>
+ <p class="sub" style="margin-top:4px">Bill Rep = staff who handles this client / collects payment. Shown on profile and invoices.</p>
  <div class="row" style="justify-content:flex-end;margin-top:10px"><button class="btn sec" onclick="closeModal()">Cancel</button><button class="btn" onclick="wizSave1()">Save & Next ➜</button></div>`}
-function fld(id,l,v,t){return`<div class="field"><label>${l}</label><input id="${id}" type="${t||'text'}" value="${esc(v||'')}"></div>`}
-function sel(id,l,opts,v){return`<div class="field"><label>${l}</label><select id="${id}">${opts.map(o=>`<option ${o===v?'selected':''}>${o}</option>`).join('')}</select></div>`}
 function wizSave1(){
  if(!val('w_name')||!val('w_mobile')){toast('Name and Mobile are required');return}
+ const br=readBillRep('w_billrep');
+ if(!br.billRep){toast('Select Bill Rep (staff handling this client)');return}
  const id='M'+nextNo('client','');
- const c={id,name:val('w_name'),gender:val('w_gender'),dob:val('w_dob'),mobile:val('w_mobile'),wa:val('w_wa')||val('w_mobile'),email:val('w_email'),addr:val('w_addr'),city:val('w_city'),state:val('w_state'),pin:val('w_pin'),occ:val('w_occ'),blood:val('w_blood'),ht:val('w_ht'),wt:val('w_wt'),med:val('w_med'),goal:val('w_goal'),ref:val('w_ref'),idt:val('w_idt'),idn:val('w_idn'),emg:val('w_emg'),emgp:val('w_emgp'),joined:today(),branch:db.settings.branch,notes:[]};
+ const c={id,name:val('w_name'),gender:val('w_gender'),dob:val('w_dob'),mobile:val('w_mobile'),wa:val('w_wa')||val('w_mobile'),email:val('w_email'),addr:val('w_addr'),city:val('w_city'),state:val('w_state'),pin:val('w_pin'),occ:val('w_occ'),blood:val('w_blood'),ht:val('w_ht'),wt:val('w_wt'),med:val('w_med'),goal:val('w_goal'),ref:val('w_ref'),idt:val('w_idt'),idn:val('w_idn'),emg:val('w_emg'),emgp:val('w_emgp'),billRepId:br.billRepId,billRep:br.billRep,joined:today(),branch:db.settings.branch,notes:[]};
  const h=parseFloat(c.ht),w=parseFloat(c.wt);if(h&&w)c.bmi=(w/((h/100)**2)).toFixed(1);
- db.clients.push(c);save();audit('Member Added',c.id+' '+c.name);
+ db.clients.push(c);save();audit('Member Added',c.id+' '+c.name+' · Bill Rep: '+c.billRep);
  WIZ.clientId=id;WIZ.step=2;renderWizard();toast('Client '+id+' saved')}
 
 /* ---- Membership packages (customizable) ---- */
@@ -399,6 +423,7 @@ function deletePkg(kind,idx){
 /* ---- Subscription ---- */
 function openSubForm(clientId,type){openModal(`<h2>Subscription — ${esc(client(clientId).name)}</h2>`+subFormHTML(clientId,type||'New Membership',false))}
 function subFormHTML(clientId,type,wizard){
+ const c=client(clientId)||{};
  const trainers=db.staff.filter(s=>s.dept==='Trainer'&&s.status==='Active').map(s=>s.name);
  return`
  <div class="grid g3">
@@ -406,9 +431,9 @@ function subFormHTML(clientId,type,wizard){
   <div class="field"><label>Package</label><select id="s_pkg" onchange="calcSub()"></select></div>
   ${fld('s_price','Package Price','','number')}
   ${fld('s_disc','Discount ₹','0','number')}${fld('s_gst','GST %',db.settings.gstPct,'number')}${fld('s_start','Start Date',today(),'date')}
-  <div class="field"><label>Trainer Assigned</label><select id="s_trainer"><option></option>${trainers.map(t=>`<option>${esc(t)}</option>`).join('')}</select></div>
+  <div class="field"><label>Trainer Assigned</label><select id="s_trainer"><option></option>${trainers.map(t=>`<option ${t===c.trainer?'selected':''}>${esc(t)}</option>`).join('')}</select></div>
   <div class="field"><label>Branch</label><input id="s_branch" value="${esc(db.settings.branch)}"></div>
-  ${fld('s_sales','Sales Executive',USER?USER.name:'')}
+  ${billRepSelect('s_billrep',c.billRep,c.billRepId)}
  </div>
  <div class="card" style="background:#fafbfd" id="s_calc"></div>
  <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn sec" onclick="closeModal()">Cancel</button><button class="btn" onclick="saveSub('${clientId}',${wizard})">${wizard?'Save & Next ➜':'Save Subscription ➜ Billing'}</button></div>
@@ -430,11 +455,14 @@ function saveSub(clientId,wizard){
  if(type==='Freeze Membership'){const ms=db.subs.filter(s=>s.clientId===clientId&&s.type==='Membership').pop();if(ms){ms.status=ms.status==='Frozen'?'':'Frozen';save();audit('Package Changed','Freeze toggled for '+clientId);toast('Membership freeze updated');closeModal();go('clients')}return}
  const kind=type.startsWith('Renew')?'Renew':type.startsWith('Upgrade')?'Upgrade':'New';
  const t=type.includes('PT')?'PT':type.includes('Dance')?'Dance':'Membership';
- const sub={id:'S'+Date.now(),clientId,type:t,kind,pkg:val('s_pkg')?$('s_pkg').selectedOptions[0].text.split(' — ')[0]:'Custom',price:x.price,disc:x.disc,gstPct:x.gstp,gstAmt:x.gstAmt,woGst:x.woGst,final:x.final,start:x.start,end:x.end,trainer:val('s_trainer'),branch:val('s_branch'),status:'',created:today()};
+ const br=readBillRep('s_billrep');
+ if(!br.billRep){toast('Select Bill Rep (staff handling this client)');return}
+ const sub={id:'S'+Date.now(),clientId,type:t,kind,pkg:val('s_pkg')?$('s_pkg').selectedOptions[0].text.split(' — ')[0]:'Custom',price:x.price,disc:x.disc,gstPct:x.gstp,gstAmt:x.gstAmt,woGst:x.woGst,final:x.final,start:x.start,end:x.end,trainer:val('s_trainer'),branch:val('s_branch'),billRepId:br.billRepId,billRep:br.billRep,status:'',created:today()};
  db.subs.push(sub);
  const c=client(clientId);if(val('s_trainer'))c.trainer=val('s_trainer');
+ c.billRepId=br.billRepId;c.billRep=br.billRep;
  // auto-generate invoice
- const inv={id:'I'+Date.now(),no:nextNo('invoice','INV-'),date:today(),clientId,subId:sub.id,desc:t+' · '+sub.pkg+' ('+fmtD(sub.start)+' → '+fmtD(sub.end)+')',woGst:x.woGst,gstPct:x.gstp,gst:x.gstAmt,grand:x.final,paid:0,pending:x.final,dueDate:today(),payments:[],by:val('s_sales')||USER.name,trainer:val('s_trainer')};
+ const inv={id:'I'+Date.now(),no:nextNo('invoice','INV-'),date:today(),clientId,subId:sub.id,desc:t+' · '+sub.pkg+' ('+fmtD(sub.start)+' → '+fmtD(sub.end)+')',woGst:x.woGst,gstPct:x.gstp,gst:x.gstAmt,grand:x.final,paid:0,pending:x.final,dueDate:today(),payments:[],by:br.billRep,billRep:br.billRep,billRepId:br.billRepId,trainer:val('s_trainer')};
  db.invoices.push(inv);save();
  audit('Subscription Created',c.name+' · '+type+' · '+sub.pkg+' · '+inr(x.final));
  toast('Invoice '+inv.no+' generated');
@@ -495,7 +523,7 @@ function invoiceHTML(iv){const c=client(iv.clientId);const st=db.settings;
  <div class="row" style="justify-content:space-between"><div><h1>${esc(st.gymName)}</h1><div>${esc(st.branch)}${st.gstNo?' · GSTIN: '+esc(st.gstNo):''}</div></div>
  <div style="text-align:right"><h2>TAX INVOICE</h2><div>${iv.no}</div><div>${fmtD(iv.date)}</div></div></div><hr>
  <div class="row" style="justify-content:space-between;margin:10px 0"><div><b>Billed To</b><br>${esc(c.name)} (${c.id})<br>${esc(c.mobile)}<br>${esc(c.addr||'')} ${esc(c.city||'')}</div>
- <div style="text-align:right"><b>Sales Executive:</b> ${esc(iv.by)}<br>${iv.trainer?'<b>Trainer:</b> '+esc(iv.trainer):''}</div></div>
+ <div style="text-align:right"><b>Bill Rep:</b> ${esc(iv.billRep||iv.by)}<br>${iv.trainer?'<b>Trainer:</b> '+esc(iv.trainer):''}</div></div>
  <table><tr><th>Description</th><th class="r">Taxable</th><th class="r">GST ${iv.gstPct}%</th><th class="r">Amount</th></tr>
  <tr><td>${esc(iv.desc)}</td><td class="r">${inr(iv.woGst)}</td><td class="r">${inr(iv.gst)}</td><td class="r">${inr(iv.grand-(iv.late||0))}</td></tr>
  ${iv.late?`<tr><td>Late Fee</td><td class="r">-</td><td class="r">-</td><td class="r">${inr(iv.late)}</td></tr>`:''}
@@ -520,9 +548,10 @@ function openClient(id){const c=client(id);if(!c)return;
  const att=db.memberAtt.filter(a=>a.clientId===id).slice(-15).reverse();
  const paid=invs.reduce((s,i)=>s+i.paid,0),due=invs.reduce((s,i)=>s+i.pending,0);
  openModal(`<div class="row" style="justify-content:space-between"><div><h2>${esc(c.name)} <span class="badge b-br">${c.id}</span></h2>
- <div class="sub">${esc(c.mobile)} · ${esc(c.email||'')} · Joined ${fmtD(c.joined)} · ${esc(c.ref||'')}</div></div>
+ <div class="sub">${esc(c.mobile)} · ${esc(c.email||'')} · Joined ${fmtD(c.joined)} · ${esc(c.ref||'')}</div>
+ <div class="sub" style="margin-top:4px"><b>Bill Rep:</b> ${esc(c.billRep||'—')} <span class="mut">(staff handling / collecting)</span></div></div>
  <button class="btn" onclick="openSubForm('${id}')">➕ New / Renew Plan</button></div>
- <div class="grid g4" style="margin:12px 0">${stat('Total Paid',inr(paid),'ok')}${stat('Outstanding',inr(due),due>0?'bad':'')}${stat('BMI',c.bmi||'-')}${stat('Goal',esc(c.goal||'-'))}</div>
+ <div class="grid g4" style="margin:12px 0">${stat('Total Paid',inr(paid),'ok')}${stat('Outstanding',inr(due),due>0?'bad':'')}${stat('Bill Rep',esc(c.billRep||'-'),'br')}${stat('Goal',esc(c.goal||'-'))}</div>
  <h3>Subscriptions</h3><div class="tbl"><table><tr><th>Type</th><th>Package</th><th>Start</th><th>End</th><th class="r">Amount</th><th>Status</th></tr>
  ${subs.map(s=>`<tr><td>${s.type} <span class="mut">(${s.kind})</span></td><td>${esc(s.pkg)}</td><td>${fmtD(s.start)}</td><td>${fmtD(s.end)}</td><td class="r">${inr(s.final)}</td><td><span class="badge ${subStatus(s)==='Active'?'b-ok':subStatus(s)==='Frozen'?'b-warn':'b-bad'}">${subStatus(s)}</span></td></tr>`).join('')||'<tr><td colspan=6 class="mut">None</td></tr>'}</table></div>
  <h3 style="margin-top:12px">Invoices & Payments</h3><div class="tbl"><table><tr><th>Invoice</th><th>Date</th><th class="r">Total</th><th class="r">Paid</th><th class="r">Pending</th><th></th></tr>
