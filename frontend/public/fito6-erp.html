@@ -286,7 +286,7 @@ function go(p,arg){if(!MENUS[USER.role].includes(p)){toast('No permission');retu
 function payListFor(dateFrom,dateTo){const out=[];db.invoices.forEach(iv=>iv.payments.forEach(p=>{if(p.date>=dateFrom&&p.date<=dateTo)out.push({...p,inv:iv})}));return out}
 function cashIn(d1,d2,mode){return db.cashbook.filter(e=>e.type==='in'&&e.date>=d1&&e.date<=d2&&(!mode||e.mode===mode)).reduce((s,e)=>s+e.amount,0)}
 function cashOut(d1,d2,mode){return db.cashbook.filter(e=>e.type==='out'&&e.date>=d1&&e.date<=d2&&(!mode||e.mode===mode)).reduce((s,e)=>s+e.amount,0)}
-function subStatus(s){if(s.status==='Frozen')return'Frozen';return s.end>=today()?'Active':'Expired'}
+function subStatus(s){if(s.status==='Frozen')return'Frozen';if(s.status==='Expired')return'Expired';return s.end>=today()?'Active':'Expired'}
 function activeSubs(type){return db.subs.filter(s=>s.type===type&&subStatus(s)==='Active')}
 function expiredSubs(type){return db.subs.filter(s=>s.type===type&&subStatus(s)==='Expired')}
 function barChart(data,cls){ // data:[{x,y}]
