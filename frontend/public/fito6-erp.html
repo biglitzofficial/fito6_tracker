@@ -94,10 +94,11 @@ hr.sep{border:none;border-top:1px solid var(--line);margin:14px 0}
   <div class="box">
     <div class="logo">FITO<span>6</span> ERP</div>
     <div class="sub" style="margin-bottom:20px">Gym Management + Accounts + Cashbook</div>
-    <div class="field"><label>Username</label><input id="lg_u" value="admin"></div>
-    <div class="field"><label>Password</label><input id="lg_p" type="password" value="admin"></div>
-    <button class="btn" style="width:100%" onclick="doLogin()">Login</button>
-    <div class="sub" style="margin-top:14px;line-height:1.7">Demo logins — admin/admin (Super Admin), office/office (Front Office), accounts/accounts (Accountant), trainer/trainer (Trainer)</div>
+    <div class="field"><label>Email</label><input id="lg_u" type="email" placeholder="you@company.com" autocomplete="username"></div>
+    <div class="field"><label>Password</label><input id="lg_p" type="password" placeholder="Your password" autocomplete="current-password"></div>
+    <button class="btn" style="width:100%" id="lg_btn" onclick="doLogin()">Login</button>
+    <div class="sub" style="margin-top:14px;line-height:1.7" id="lg_hint">Data saves to your <b>Firestore</b> business database (cloud). Use your Fito6 admin/staff email login.</div>
+    <div class="sub" style="margin-top:8px;color:var(--bad);display:none" id="lg_err"></div>
   </div>
 </div>
 
@@ -123,9 +124,34 @@ hr.sep{border:none;border-top:1px solid var(--line);margin:14px 0}
 <div id="printarea"></div>
 
 <script>
-/* ================= DATABASE ================= */
+/* ================= CLOUD API + DATABASE ================= */
 const DBKEY='fito6_erp_v1';
+const AUTHKEY='fito6_erp_auth';
+let API_URL='http://localhost:4000/api';
+let AUTH={token:null,businessId:null,user:null};
 let db=null;
+let _saveTimer=null;
+let _cloudReady=false;
+
+async function initApiConfig(){
+ try{const r=await fetch('/fito6-config.json',{cache:'no-store'});if(r.ok){const j=await r.json();if(j.apiUrl)API_URL=j.apiUrl}}catch(e){}
+ const override=localStorage.getItem('fito6_api_url');if(override)API_URL=override;
+}
+
+async function api(path,opts={}){
+ const headers={'Content-Type':'application/json',...(opts.headers||{})};
+ if(AUTH.token)headers.Authorization='Bearer '+AUTH.token;
+ if(AUTH.businessId)headers['X-Business-Id']=AUTH.businessId;
+ const res=await fetch(API_URL+path,{...opts,headers,body:opts.body!==undefined?JSON.stringify(opts.body):undefined});
+ let json=null;try{json=await res.json()}catch(e){}
+ if(!res.ok)throw new Error((json&&json.error)||('Request failed '+res.status));
+ return json&&json.data!==undefined?json.data:json;
+}
+
+function persistAuth(){localStorage.setItem(AUTHKEY,JSON.stringify({token:AUTH.token,businessId:AUTH.businessId,user:AUTH.user}))}
+function clearAuth(){AUTH={token:null,businessId:null,user:null};localStorage.removeItem(AUTHKEY)}
+function restoreAuth(){try{const a=JSON.parse(localStorage.getItem(AUTHKEY)||'null');if(a&&a.token)AUTH=a}catch(e){}}
+
 function defaults(){return{
  settings:{gymName:'FITO6 FITNESS STUDIO',branch:'Main Branch',branches:['Main Branch'],gstNo:'',gstPct:18,
   packages:[{name:'1 Month',months:1,price:1500},{name:'3 Month',months:3,price:4000},{name:'6 Month',months:6,price:7000},{name:'12 Month',months:12,price:12000},{name:'Couple 12 Month',months:12,price:20000},{name:'Student 3 Month',months:3,price:3200},{name:'Corporate 12 Month',months:12,price:10000}],
@@ -134,11 +160,44 @@ function defaults(){return{
   expCats:['Rent','Electricity','Salary','Petrol','Marketing','Maintenance','Repairs','Office Expense','Cleaning','Stationery','Equipment Purchase','Water','Internet','Tea','Misc'],
   incCats:['Product Sales','Owner Investment','Misc Income','Interest','Other Income'],
   payModes:['Cash','UPI','Card','Cheque','Bank Transfer'],openingCash:0},
- users:[{u:'admin',p:'admin',role:'superadmin',name:'Super Admin'},{u:'office',p:'office',role:'frontoffice',name:'Front Office'},{u:'accounts',p:'accounts',role:'accountant',name:'Accountant'},{u:'trainer',p:'trainer',role:'trainer',name:'Trainer'}],
+ users:[],
  seq:{client:1000,invoice:1,receipt:1,voucher:1,staff:100},
  clients:[],subs:[],invoices:[],cashbook:[],staff:[],staffAtt:[],memberAtt:[],payroll:[],audit:[],leads:[]};}
-function load(){try{db=JSON.parse(localStorage.getItem(DBKEY))}catch(e){} if(!db)db=defaults(); ensurePkgSettings(); }
-function save(){localStorage.setItem(DBKEY,JSON.stringify(db))}
+
+function cacheLocal(){try{localStorage.setItem(DBKEY,JSON.stringify(db))}catch(e){}}
+function loadLocalCache(){try{return JSON.parse(localStorage.getItem(DBKEY))}catch(e){return null}}
+
+async function loadFromCloud(){
+ const res=await api('/erp-store');
+ if(res&&res.data){db=res.data;ensurePkgSettings();cacheLocal();_cloudReady=true;return 'firestore'}
+ const local=loadLocalCache();
+ if(local&&((local.clients&&local.clients.length)||(local.invoices&&local.invoices.length))){
+  db=local;ensurePkgSettings();
+  await api('/erp-store',{method:'PUT',body:{data:db}});
+  _cloudReady=true;return 'migrated';
+ }
+ db=defaults();ensurePkgSettings();
+ await api('/erp-store',{method:'PUT',body:{data:db}});
+ cacheLocal();_cloudReady=true;return 'new';
+}
+
+function save(){
+ ensurePkgSettings();
+ cacheLocal();
+ if(!_cloudReady||!AUTH.token||!AUTH.businessId)return;
+ clearTimeout(_saveTimer);
+ _saveTimer=setTimeout(()=>{persistCloud()},500);
+}
+async function persistCloud(){
+ if(!AUTH.token||!AUTH.businessId||!db)return;
+ try{
+  await api('/erp-store',{method:'PUT',body:{data:db}});
+ }catch(e){
+  console.error('Cloud save failed',e);
+  toast('Cloud save failed — check connection. Data kept in this browser until retry.');
+ }
+}
+
 function ensurePkgSettings(){
  if(!db.settings)db.settings=defaults().settings;
  const d=defaults().settings;
@@ -179,10 +238,45 @@ const MENUS={
  accountant:['dashboard','cashbook','expenses','payroll','reports','accounts'],
  trainer:['dashboard','clients','attendance']};
 const PAGES={dashboard:['📊','Dashboard'],clients:['🧍','Clients'],memberships:['🎫','Memberships'],billing:['🧾','Billing / Invoices'],cashbook:['💰','Cashbook'],expenses:['📤','Expenses'],staff:['👥','Staff'],attendance:['🕒','Attendance'],payroll:['💵','Payroll'],reports:['📑','Reports'],accounts:['📚','Accounts / P&L'],audit:['🛡️','Audit Log'],settings:['⚙️','Settings']};
-function doLogin(){const u=val('lg_u'),p=val('lg_p');const f=db.users.find(x=>x.u===u&&x.p===p);if(!f){toast('Invalid username or password');return}
- USER=f;$('login').style.display='none';$('app').style.display='block';$('tb_user').textContent=f.name+' · '+f.role;$('sb_role').textContent=db.settings.gymName;
- audit('Login','User logged in');buildNav();go('dashboard')}
-function logout(){audit('Logout','User logged out');USER=null;$('app').style.display='none';$('login').style.display='flex'}
+function mapCloudRole(role){
+ if(role==='ADMIN')return'superadmin';
+ return'frontoffice';
+}
+function showLoginError(msg){const el=$('lg_err');if(!el)return;el.style.display=msg?'block':'none';el.textContent=msg||''}
+async function doLogin(){
+ showLoginError('');
+ const email=val('lg_u').toLowerCase(),password=val('lg_p');
+ if(!email||!password){showLoginError('Enter email and password');return}
+ const btn=$('lg_btn');if(btn){btn.disabled=true;btn.textContent='Signing in…'}
+ try{
+  await initApiConfig();
+  const result=await api('/auth/login',{method:'POST',body:{email,password}});
+  AUTH.token=result.token;
+  AUTH.user=result.user;
+  const businesses=await api('/businesses');
+  if(!businesses||!businesses.length)throw new Error('No business found for this account');
+  AUTH.businessId=businesses[0].id;
+  persistAuth();
+  const source=await loadFromCloud();
+  USER={u:AUTH.user.email,p:'',role:mapCloudRole(AUTH.user.role),name:AUTH.user.name,cloudRole:AUTH.user.role};
+  $('login').style.display='none';$('app').style.display='block';
+  $('tb_user').textContent=USER.name+' · '+AUTH.user.role+(source==='firestore'?' · cloud':' · synced');
+  $('sb_role').textContent=(db.settings&&db.settings.gymName)||businesses[0].name||'FITO6';
+  audit('Login','Cloud login · '+email);
+  buildNav();go('dashboard');
+  toast(source==='migrated'?'Local data uploaded to cloud database':source==='new'?'Cloud database ready':'Loaded from cloud database');
+ }catch(e){
+  showLoginError(e.message||'Login failed');
+  toast(e.message||'Login failed');
+ }finally{
+  if(btn){btn.disabled=false;btn.textContent='Login'}
+ }
+}
+function logout(){
+ try{if(db&&USER)audit('Logout','User logged out')}catch(e){}
+ USER=null;_cloudReady=false;clearAuth();
+ $('app').style.display='none';$('login').style.display='flex';
+}
 function buildNav(){$('nav').innerHTML=MENUS[USER.role].map(p=>`<a href="#" id="nav_${p}" onclick="go('${p}');return false"><i>${PAGES[p][0]}</i><span>${PAGES[p][1]}</span></a>`).join('')}
 function go(p,arg){if(!MENUS[USER.role].includes(p)){toast('No permission');return} PAGE=p;
  document.querySelectorAll('#sidebar a').forEach(a=>a.classList.remove('on'));const n=$('nav_'+p);if(n)n.classList.add('on');
@@ -905,7 +999,25 @@ function seedDemo(){
  save();audit('Demo Data Loaded','Sample clients, staff, invoices, expenses');toast('Demo data loaded!');go('dashboard')}
 
 /* ================= INIT ================= */
-load();save();
+(async function boot(){
+ await initApiConfig();
+ restoreAuth();
+ if(AUTH.token&&AUTH.businessId){
+  try{
+   const source=await loadFromCloud();
+   USER={u:AUTH.user.email,p:'',role:mapCloudRole(AUTH.user.role),name:AUTH.user.name,cloudRole:AUTH.user.role};
+   $('login').style.display='none';$('app').style.display='block';
+   $('tb_user').textContent=USER.name+' · '+AUTH.user.role+' · cloud';
+   $('sb_role').textContent=(db.settings&&db.settings.gymName)||'FITO6';
+   buildNav();go('dashboard');
+   if(source)toast('Session restored from cloud');
+  }catch(e){
+   clearAuth();_cloudReady=false;
+   console.warn('Session restore failed',e);
+  }
+ }
+ const pw=$('lg_p');if(pw)pw.addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
+})();
 
 </script>
 </body>

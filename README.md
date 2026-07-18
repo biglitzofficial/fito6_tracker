@@ -1,23 +1,14 @@
 # Fito6 — Gym ERP
 
-## Active product (Claude ERP replica)
+## Active product (Claude ERP + Firestore)
 
-On **`develop`**, the primary app is the **Claude FITO6 single-file ERP** (HTML/JS + `localStorage`):
+Primary app is the **Claude FITO6 ERP UI** at **`/fito6-erp.html`** (`/` and `/login` redirect there).
 
-- Open `/` or `/login` → redirects to **`/fito6-erp.html`**
-- Frontend and “backend” both run in the browser (no Firestore calls for gym ops)
-- Express/Firestore SaaS code remains in the repo for rollback; it is unused by this UI
+- Login with your **real Fito6 email/password** (same accounts as before)
+- Gym data (clients, invoices, cashbook, packages, etc.) is saved to **Firestore** via `PUT/GET /api/erp-store` (per business)
+- Browser cache is used only as a local backup; cloud is the source of truth after login
 
-### Demo logins
-
-| Username | Password | Role |
-|----------|----------|------|
-| `admin` | `admin` | Super Admin |
-| `office` | `office` | Front Office |
-| `accounts` | `accounts` | Accountant |
-| `trainer` | `trainer` | Trainer |
-
-Data is stored **per browser**. Use Settings → backup/export in the Claude UI if you need a copy. See [docs/references/FITO6-ERP-design.md](./docs/references/FITO6-ERP-design.md).
+See [docs/references/FITO6-ERP-design.md](./docs/references/FITO6-ERP-design.md).
 
 ### Run Claude ERP locally
 

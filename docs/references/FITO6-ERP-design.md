@@ -1,33 +1,31 @@
-﻿# FITO6 ERP (Claude) — Active product mode
+﻿# FITO6 ERP (Claude UI + Firestore)
 
-On the `develop` branch, the **primary app** is the Claude single-file ERP SPA:
+Primary app: [`/fito6-erp.html`](../../frontend/public/fito6-erp.html)
 
-- Served at [`/fito6-erp.html`](../../frontend/public/fito6-erp.html)
-- Root `/` and `/login` redirect to that page
-- **Frontend + backend** run in the browser (`localStorage` via `load()` / `save()`)
-- Express / Firestore SaaS routes remain in the repo for rollback but are **not** used by this UI
+## Storage
 
-## Demo logins
+| Layer | Role |
+|-------|------|
+| Firestore `erp_stores/{businessId}` | Source of truth for Claude ERP JSON database |
+| `localStorage` | Offline cache / migration upload of old browser-only data |
+| Auth | JWT via `POST /api/auth/login` + `X-Business-Id` |
 
-| Username | Password | Role |
-|----------|----------|------|
-| `admin` | `admin` | Super Admin |
-| `office` | `office` | Front Office |
-| `accounts` | `accounts` | Accountant |
-| `trainer` | `trainer` | Trainer |
+## Login
 
-Data is **per browser** (localStorage). Clearing site data resets the demo DB unless you export a backup from Settings.
+Use real admin/staff **email + password** (not demo `admin`/`admin`).
+
+On first login for a business:
+
+1. If cloud store is empty and the browser has older local data → that data is **uploaded** once to Firestore  
+2. Otherwise a fresh empty ERP database is created in Firestore  
+
+## API
+
+- `GET /api/erp-store` — load ERP JSON for active business  
+- `PUT /api/erp-store` — `{ data: { ...claudeDb } }` save full store  
+
+Config for the static HTML: [`/fito6-config.json`](../../frontend/public/fito6-config.json) (written at frontend build from `NEXT_PUBLIC_API_URL`).
 
 ## Visual tokens
 
-- bg: `#f4f6fa`
-- card: `#ffffff`
-- ink: `#1a2233`
-- muted: `#6b7688`
-- brand: `#ff6a00` / `#ff8c33`
-- sidebar dark: `#141b2d` / `#1d2740`
-- ok: `#18a558` · bad: `#e0393e` · warn: `#e8a10c` · line: `#e6eaf2`
-
-## Rollback to Firestore SaaS
-
-Checkout an earlier commit / `master` that still used Next.js dashboard + Express APIs, and redeploy. Firebase data is unchanged by the Claude SPA.
+- bg: `#f4f6fa` · brand: `#ff6a00` · sidebar: `#141b2d`

@@ -24,6 +24,7 @@ export const COL = {
   auditLogs: 'audit_logs',
   settings: 'settings',
   counters: 'counters',
+  erpStores: 'erp_stores',
 } as const;
 
 const DATE_FIELDS = new Set([
