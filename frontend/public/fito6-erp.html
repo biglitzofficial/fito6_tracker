@@ -422,24 +422,53 @@ function deletePkg(kind,idx){
 
 /* ---- Subscription ---- */
 function openSubForm(clientId,type){openModal(`<h2>Subscription — ${esc(client(clientId).name)}</h2>`+subFormHTML(clientId,type||'New Membership',false))}
+function trainerStaffList(){
+ let list=(db.staff||[]).filter(s=>s.status!=='Inactive'&&(s.dept==='Trainer'||/train/i.test(s.dept||'')));
+ if(!list.length)list=(db.staff||[]).filter(s=>s.status!=='Inactive');
+ return list;
+}
+function isPtType(t){return /PT/i.test(t||'')}
+function trainerSelectHTML(client){
+ const trainers=trainerStaffList();
+ const opts=['<option value="">— Select trainer staff —</option>']
+  .concat(trainers.map(s=>{
+   const sel=client.trainerId===s.id||(!client.trainerId&&client.trainer===s.name)?'selected':'';
+   return`<option value="${esc(s.id)}" data-name="${esc(s.name)}" ${sel}>${esc(s.name)}${s.dept?' ('+esc(s.dept)+')':''}</option>`;
+  }));
+ return`<div class="field" id="s_trainer_wrap" style="display:none;grid-column:1/-1">
+  <label>Assign Trainer (Staff) *</label>
+  <select id="s_trainer">${opts.join('')}</select>
+  <div class="sub" style="margin-top:4px">Required for <b>New PT</b> / <b>Renew PT</b>. Add trainers under Staff → Department = Trainer.</div>
+ </div>`;
+}
+function syncTrainerField(){
+ const wrap=$('s_trainer_wrap');if(!wrap)return;
+ const show=isPtType(val('s_type'));
+ wrap.style.display=show?'block':'none';
+ if(!show&&$('s_trainer'))$('s_trainer').value='';
+}
+function readTrainer(){
+ const el=$('s_trainer');if(!el||!el.value)return{trainerId:'',trainer:''};
+ const opt=el.selectedOptions[0];
+ return{trainerId:el.value,trainer:(opt&&opt.dataset.name)||opt.textContent.split(' (')[0]};
+}
 function subFormHTML(clientId,type,wizard){
  const c=client(clientId)||{};
- const trainers=db.staff.filter(s=>s.dept==='Trainer'&&s.status==='Active').map(s=>s.name);
  return`
  <div class="grid g3">
   ${sel('s_type','Subscription Type',['New Membership','Renew Membership','Upgrade Membership','New PT','Renew PT','Dance','Freeze Membership','Transfer Membership'],type)}
   <div class="field"><label>Package</label><select id="s_pkg" onchange="calcSub()"></select></div>
   ${fld('s_price','Package Price','','number')}
   ${fld('s_disc','Discount ₹','0','number')}${fld('s_gst','GST %',db.settings.gstPct,'number')}${fld('s_start','Start Date',today(),'date')}
-  <div class="field"><label>Trainer Assigned</label><select id="s_trainer"><option></option>${trainers.map(t=>`<option ${t===c.trainer?'selected':''}>${esc(t)}</option>`).join('')}</select></div>
   <div class="field"><label>Branch</label><input id="s_branch" value="${esc(db.settings.branch)}"></div>
   ${billRepSelect('s_billrep',c.billRep,c.billRepId)}
+  ${trainerSelectHTML(c)}
  </div>
  <div class="card" style="background:#fafbfd" id="s_calc"></div>
  <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn sec" onclick="closeModal()">Cancel</button><button class="btn" onclick="saveSub('${clientId}',${wizard})">${wizard?'Save & Next ➜':'Save Subscription ➜ Billing'}</button></div>
- <script>fillPkgs();calcSub()<\/script>`}
+ <script>fillPkgs();syncTrainerField();calcSub()<\/script>`}
 function fillPkgs(){const t=val('s_type');const list=pkgListFor(t);$('s_pkg').innerHTML=list.map(p=>`<option data-p="${p.price}" data-m="${p.months}">${esc(p.name)} — ${inr(p.price)}</option>`).join('')+'<option data-p="0" data-m="1">Custom</option>';
- $('s_type').onchange=()=>{fillPkgs();calcSub()};$('s_price').oninput=calcSub;$('s_disc').oninput=calcSub;$('s_gst').oninput=calcSub;$('s_start').onchange=calcSub;
+ $('s_type').onchange=()=>{fillPkgs();syncTrainerField();calcSub()};$('s_price').oninput=calcSub;$('s_disc').oninput=calcSub;$('s_gst').oninput=calcSub;$('s_start').onchange=calcSub;
  const o=$('s_pkg').selectedOptions[0];$('s_price').value=o?o.dataset.p:0;calcSub()}
 function calcSub(){const o=$('s_pkg').selectedOptions[0];if(!o)return;
  if($('s_pkg')._last!==o.text){$('s_price').value=o.dataset.p;$('s_pkg')._last=o.text}
@@ -457,12 +486,15 @@ function saveSub(clientId,wizard){
  const t=type.includes('PT')?'PT':type.includes('Dance')?'Dance':'Membership';
  const br=readBillRep('s_billrep');
  if(!br.billRep){toast('Select Bill Rep (staff handling this client)');return}
- const sub={id:'S'+Date.now(),clientId,type:t,kind,pkg:val('s_pkg')?$('s_pkg').selectedOptions[0].text.split(' — ')[0]:'Custom',price:x.price,disc:x.disc,gstPct:x.gstp,gstAmt:x.gstAmt,woGst:x.woGst,final:x.final,start:x.start,end:x.end,trainer:val('s_trainer'),branch:val('s_branch'),billRepId:br.billRepId,billRep:br.billRep,status:'',created:today()};
+ const tr=readTrainer();
+ if(isPtType(type)&&!tr.trainer){toast('Select trainer staff for PT / Renew PT');return}
+ const sub={id:'S'+Date.now(),clientId,type:t,kind,pkg:val('s_pkg')?$('s_pkg').selectedOptions[0].text.split(' — ')[0]:'Custom',price:x.price,disc:x.disc,gstPct:x.gstp,gstAmt:x.gstAmt,woGst:x.woGst,final:x.final,start:x.start,end:x.end,trainer:tr.trainer,trainerId:tr.trainerId,branch:val('s_branch'),billRepId:br.billRepId,billRep:br.billRep,status:'',created:today()};
  db.subs.push(sub);
- const c=client(clientId);if(val('s_trainer'))c.trainer=val('s_trainer');
+ const c=client(clientId);
+ if(tr.trainer){c.trainer=tr.trainer;c.trainerId=tr.trainerId}
  c.billRepId=br.billRepId;c.billRep=br.billRep;
  // auto-generate invoice
- const inv={id:'I'+Date.now(),no:nextNo('invoice','INV-'),date:today(),clientId,subId:sub.id,desc:t+' · '+sub.pkg+' ('+fmtD(sub.start)+' → '+fmtD(sub.end)+')',woGst:x.woGst,gstPct:x.gstp,gst:x.gstAmt,grand:x.final,paid:0,pending:x.final,dueDate:today(),payments:[],by:br.billRep,billRep:br.billRep,billRepId:br.billRepId,trainer:val('s_trainer')};
+ const inv={id:'I'+Date.now(),no:nextNo('invoice','INV-'),date:today(),clientId,subId:sub.id,desc:t+' · '+sub.pkg+' ('+fmtD(sub.start)+' → '+fmtD(sub.end)+')',woGst:x.woGst,gstPct:x.gstp,gst:x.gstAmt,grand:x.final,paid:0,pending:x.final,dueDate:today(),payments:[],by:br.billRep,billRep:br.billRep,billRepId:br.billRepId,trainer:tr.trainer,trainerId:tr.trainerId};
  db.invoices.push(inv);save();
  audit('Subscription Created',c.name+' · '+type+' · '+sub.pkg+' · '+inr(x.final));
  toast('Invoice '+inv.no+' generated');
