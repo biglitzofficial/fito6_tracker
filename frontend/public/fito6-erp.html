@@ -575,7 +575,7 @@ function subFormHTML(clientId,type,wizard){
   ${sel('s_type','Subscription Type',['New Membership','Renew Membership','Upgrade Membership','New PT','Renew PT','Dance','Freeze Membership','Transfer Membership'],type)}
   <div class="field"><label>Package</label><select id="s_pkg" onchange="calcSub()"></select></div>
   ${fld('s_price','Package Price','','number')}
-  ${fld('s_disc','Discount ₹','0','number')}${fld('s_gst','GST %',db.settings.gstPct,'number')}${fld('s_start','Start Date',today(),'date')}
+  ${fld('s_sell','Selling Price ₹','','number')}${fld('s_gst','GST %',db.settings.gstPct,'number')}${fld('s_start','Start Date',today(),'date')}
   <div class="field"><label>Branch</label><input id="s_branch" value="${esc(db.settings.branch)}"></div>
   ${billRepSelect('s_billrep',c.billRep,c.billRepId)}
   ${trainerSelectHTML(c)}
@@ -584,18 +584,20 @@ function subFormHTML(clientId,type,wizard){
  <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn sec" onclick="closeModal()">Cancel</button><button class="btn" onclick="saveSub('${clientId}',${wizard})">${wizard?'Save & Next ➜':'Save Subscription ➜ Billing'}</button></div>
  <script>fillPkgs();syncTrainerField();calcSub()<\/script>`}
 function fillPkgs(){const t=val('s_type');const list=pkgListFor(t);$('s_pkg').innerHTML=list.map(p=>`<option data-p="${p.price}" data-m="${p.months}">${esc(p.name)} — ${inr(p.price)}</option>`).join('')+'<option data-p="0" data-m="1">Custom</option>';
- $('s_type').onchange=()=>{fillPkgs();syncTrainerField();calcSub()};$('s_price').oninput=calcSub;$('s_disc').oninput=calcSub;$('s_gst').oninput=calcSub;$('s_start').onchange=calcSub;
- const o=$('s_pkg').selectedOptions[0];$('s_price').value=o?o.dataset.p:0;calcSub()}
+ $('s_type').onchange=()=>{fillPkgs();syncTrainerField();calcSub()};$('s_price').oninput=()=>{if($('s_sell')&&!num('s_sell'))$('s_sell').value=$('s_price').value;calcSub()};$('s_sell').oninput=calcSub;$('s_gst').oninput=calcSub;$('s_start').onchange=calcSub;
+ const o=$('s_pkg').selectedOptions[0];$('s_price').value=o?o.dataset.p:0;if($('s_sell'))$('s_sell').value=$('s_price').value;calcSub()}
 function calcSub(){const o=$('s_pkg').selectedOptions[0];if(!o)return;
- if($('s_pkg')._last!==o.text){$('s_price').value=o.dataset.p;$('s_pkg')._last=o.text}
- const months=parseInt(o.dataset.m)||1,price=num('s_price'),disc=num('s_disc'),gstp=num('s_gst');
- // Package price is exclusive of GST — GST is added on top
- const woGst=+(Math.max(0,price-disc)).toFixed(2),gstAmt=+(woGst*gstp/100).toFixed(2),final=+(woGst+gstAmt).toFixed(2);
+ if($('s_pkg')._last!==o.text){$('s_price').value=o.dataset.p;if($('s_sell'))$('s_sell').value=o.dataset.p;$('s_pkg')._last=o.text}
+ const months=parseInt(o.dataset.m)||1,price=num('s_price'),gstp=num('s_gst');
+ // Selling price = what customer pays (before GST). Package price is MRP/list.
+ let sell=num('s_sell');if(!sell||sell<=0)sell=price;if($('s_sell')&&!val('s_sell'))$('s_sell').value=String(sell);
+ const disc=+(Math.max(0,price-sell)).toFixed(2);
+ const woGst=+(Math.max(0,sell)).toFixed(2),gstAmt=+(woGst*gstp/100).toFixed(2),final=+(woGst+gstAmt).toFixed(2);
  const start=val('s_start')||today(),end=addDays(addMonths(start,months),-1);
- $('s_calc').innerHTML=`<div class="grid g6">${stat('Amount w/o GST',inr(woGst))}${stat('GST Amount',inr(gstAmt))}${stat('Discount',inr(disc))}${stat('Final Amount','<b>'+inr(final)+'</b>','br')}${stat('End Date',fmtD(end))}${stat('Validity',daysBetween(start,end)+1+' days')}</div>`;
- window._subCalc={months,price,disc,gstp,gstAmt,woGst,final,start,end}}
+ $('s_calc').innerHTML=`<div class="grid g6">${stat('Package Price',inr(price))}${stat('Selling Price',inr(woGst),'br')}${stat('GST Amount',inr(gstAmt))}${stat('Final Amount','<b>'+inr(final)+'</b>','br')}${stat('End Date',fmtD(end))}${stat('Validity',daysBetween(start,end)+1+' days')}</div>`;
+ window._subCalc={months,price,sell:woGst,disc,gstp,gstAmt,woGst,final,start,end}}
 function saveSub(clientId,wizard){
- const x=window._subCalc;if(!x||x.final<=0){toast('Enter a valid package price');return}
+ const x=window._subCalc;if(!x||x.final<=0){toast('Enter a valid selling price');return}
  const type=val('s_type');
  if(type==='Freeze Membership'){const ms=db.subs.filter(s=>s.clientId===clientId&&s.type==='Membership').pop();if(ms){ms.status=ms.status==='Frozen'?'':'Frozen';save();audit('Package Changed','Freeze toggled for '+clientId);toast('Membership freeze updated');closeModal();go('clients')}return}
  const kind=type.startsWith('Renew')?'Renew':type.startsWith('Upgrade')?'Upgrade':'New';
@@ -604,7 +606,7 @@ function saveSub(clientId,wizard){
  if(!br.billRep){toast('Select Bill Rep (staff handling this client)');return}
  const tr=readTrainer();
  if(isPtType(type)&&!tr.trainer){toast('Select trainer staff for PT / Renew PT');return}
- const sub={id:'S'+Date.now(),clientId,type:t,kind,pkg:val('s_pkg')?$('s_pkg').selectedOptions[0].text.split(' — ')[0]:'Custom',price:x.price,disc:x.disc,gstPct:x.gstp,gstAmt:x.gstAmt,woGst:x.woGst,final:x.final,start:x.start,end:x.end,trainer:tr.trainer,trainerId:tr.trainerId,branch:val('s_branch'),billRepId:br.billRepId,billRep:br.billRep,status:'',created:today()};
+ const sub={id:'S'+Date.now(),clientId,type:t,kind,pkg:val('s_pkg')?$('s_pkg').selectedOptions[0].text.split(' — ')[0]:'Custom',price:x.price,sell:x.sell,disc:x.disc,gstPct:x.gstp,gstAmt:x.gstAmt,woGst:x.woGst,final:x.final,start:x.start,end:x.end,trainer:tr.trainer,trainerId:tr.trainerId,branch:val('s_branch'),billRepId:br.billRepId,billRep:br.billRep,status:'',created:today()};
  db.subs.push(sub);
  const c=client(clientId);
  if(tr.trainer){c.trainer=tr.trainer;c.trainerId=tr.trainerId}
