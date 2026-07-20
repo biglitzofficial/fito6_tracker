@@ -612,7 +612,7 @@ function saveSub(clientId,wizard){
  if(tr.trainer){c.trainer=tr.trainer;c.trainerId=tr.trainerId}
  c.billRepId=br.billRepId;c.billRep=br.billRep;
  // auto-generate invoice
- const inv={id:'I'+Date.now(),no:nextNo('invoice','INV-'),date:today(),clientId,subId:sub.id,desc:t+' · '+sub.pkg+' ('+fmtD(sub.start)+' → '+fmtD(sub.end)+')',woGst:x.woGst,gstPct:x.gstp,gst:x.gstAmt,grand:x.final,paid:0,pending:x.final,dueDate:today(),payments:[],by:br.billRep,billRep:br.billRep,billRepId:br.billRepId,trainer:tr.trainer,trainerId:tr.trainerId};
+ const inv={id:'I'+Date.now(),no:nextNo('invoice','INV-'),date:today(),clientId,subId:sub.id,desc:t+' · '+sub.pkg+' ('+fmtD(sub.start)+' → '+fmtD(sub.end)+')',woGst:x.woGst,gstPct:x.gstp,gst:x.gstAmt,grand:x.final,paid:0,pending:x.final,dueDate:today(),payments:[],by:br.billRep,billRep:br.billRep,billRepId:br.billRepId,trainer:tr.trainer,trainerId:tr.trainerId,branch:val('s_branch')||db.settings.branch};
  db.invoices.push(inv);save();
  audit('Subscription Created',c.name+' · '+type+' · '+sub.pkg+' · '+inr(x.final));
  toast('Invoice '+inv.no+' generated');
