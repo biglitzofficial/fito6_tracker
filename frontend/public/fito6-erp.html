@@ -670,19 +670,45 @@ function pgBilling(){
  <button class="btn" onclick="openWizard()">➕ New Client</button></div>
  <div class="tbl" style="margin-top:12px"><table><tr><th>Invoice</th><th>Date</th><th>Customer</th><th>Bill Rep</th><th>Description</th><th class="r">Total</th><th class="r">Paid</th><th class="r">Pending</th><th>Status</th><th></th></tr>${rows||'<tr><td colspan=10 class="mut">No invoices yet</td></tr>'}</table></div>`}
 function invoiceHTML(iv){const c=client(iv.clientId);const st=db.settings;
+ const branch=iv.branch||c.branch||st.branch||'';
  return`<div class="inv">
- <div class="row" style="justify-content:space-between"><div><h1>${esc(st.gymName)}</h1><div>${esc(st.branch)}${st.gstNo?' · GSTIN: '+esc(st.gstNo):''}</div></div>
- <div style="text-align:right"><h2>TAX INVOICE</h2><div>${iv.no}</div><div>${fmtD(iv.date)}</div></div></div><hr>
- <div class="row" style="justify-content:space-between;margin:10px 0"><div><b>Billed To</b><br>${esc(c.name)} (${c.id})<br>${esc(c.mobile)}<br>${esc(c.addr||'')} ${esc(c.city||'')}</div>
- <div style="text-align:right"><b>Bill Rep:</b> ${esc(iv.billRep||iv.by)}<br>${iv.trainer?'<b>Trainer:</b> '+esc(iv.trainer):''}</div></div>
+ <div class="row" style="justify-content:space-between;align-items:flex-start">
+  <div>
+   <div style="font-size:12px;font-weight:800;letter-spacing:1px;color:#ff6a00;margin-bottom:4px">#FITO6</div>
+   <h1>${esc(st.gymName)}</h1>
+   <div>${st.gstNo?'GSTIN: '+esc(st.gstNo):''}</div>
+  </div>
+  <div style="text-align:right">
+   <h2>TAX INVOICE</h2>
+   <div style="margin-top:6px"><b>Invoice ID:</b> ${esc(iv.no)}</div>
+   <div><b>Date:</b> ${fmtD(iv.date)}</div>
+   <div><b>Branch:</b> ${esc(branch||'—')}</div>
+  </div>
+ </div>
+ <hr>
+ <div class="row" style="justify-content:space-between;margin:10px 0">
+  <div>
+   <b>Billed To</b><br>
+   ${esc(c?c.name:'Unknown')}<br>
+   <b>Customer ID:</b> ${esc(c?c.id:'—')}<br>
+   ${esc(c&&c.mobile?c.mobile:'')}<br>
+   ${esc((c&&c.addr)||'')} ${esc((c&&c.city)||'')}
+  </div>
+  <div style="text-align:right">
+   <b>Bill Rep:</b> ${esc(iv.billRep||iv.by||'—')}<br>
+   ${iv.trainer?'<b>Trainer:</b> '+esc(iv.trainer)+'<br>':''}
+   <b>Invoice ID:</b> ${esc(iv.no)}<br>
+   <b>Branch:</b> ${esc(branch||'—')}
+  </div>
+ </div>
  <table><tr><th>Description</th><th class="r">Taxable</th><th class="r">GST ${iv.gstPct}%</th><th class="r">Amount</th></tr>
  <tr><td>${esc(iv.desc)}</td><td class="r">${inr(iv.woGst)}</td><td class="r">${inr(iv.gst)}</td><td class="r">${inr(iv.grand-(iv.late||0))}</td></tr>
  ${iv.late?`<tr><td>Late Fee</td><td class="r">-</td><td class="r">-</td><td class="r">${inr(iv.late)}</td></tr>`:''}
  <tr><td colspan="3" class="r bold">Grand Total</td><td class="r bold">${inr(iv.grand)}</td></tr>
  <tr><td colspan="3" class="r">Paid</td><td class="r">${inr(iv.paid)}</td></tr>
  <tr><td colspan="3" class="r bold">Balance Due ${iv.pending>0?'(by '+fmtD(iv.dueDate)+')':''}</td><td class="r bold">${inr(iv.pending)}</td></tr></table>
- ${iv.payments.length?`<b>Payments:</b> ${iv.payments.map(p=>p.receipt+' · '+p.mode+' · '+inr(p.amt)+' ('+fmtD(p.date)+')').join(' | ')}`:''}
- <p style="margin-top:20px;font-size:11px">This is a computer generated invoice. Thank you for training with ${esc(st.gymName)}!</p></div>`}
+ ${iv.payments&&iv.payments.length?`<b>Payments:</b> ${iv.payments.map(p=>p.receipt+' · '+p.mode+' · '+inr(p.amt)+' ('+fmtD(p.date)+')').join(' | ')}`:''}
+ <p style="margin-top:20px;font-size:11px">#FITO6 · This is a computer generated invoice. Thank you for training with ${esc(st.gymName)}!</p></div>`}
 function showInvoice(id){const iv=db.invoices.find(i=>i.id===id);
  openModal(`${invoiceHTML(iv)}<div class="row" style="justify-content:flex-end;margin-top:12px">
  <button class="btn sec" onclick="closeModal()">Close</button>
