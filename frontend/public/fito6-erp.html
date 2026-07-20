@@ -650,7 +650,9 @@ function savePayment(invId){
   const rc=nextNo('receipt','RCP-');
   iv.payments.push({date:today(),mode:p.mode,amt:p.amt,receipt:rc,by});
   // AUTOMATION → Cashbook entry
-  db.cashbook.push({id:'CB'+Date.now()+Math.random().toString(36).slice(2,6),date:today(),type:'in',no:rc,particulars:iv.desc,category:iv.desc.split(' ·')[0]+' Payment',party:c.name,mode:p.mode,amount:p.amt,by,notes:'Invoice '+iv.no});
+  const mType=(iv.desc||'').match(/\b(PT|Dance|Membership)\b/i);
+  const salesType=mType?({pt:'PT',dance:'Dance',membership:'Membership'}[mType[1].toLowerCase()]||'Membership'):'Membership';
+  db.cashbook.push({id:'CB'+Date.now()+Math.random().toString(36).slice(2,6),date:today(),type:'in',no:rc,particulars:iv.desc,category:iv.desc.split(' ·')[0]+' Payment',party:c.name,mode:p.mode,amount:p.amt,by,notes:'Invoice '+iv.no,salesType});
  });
  iv.paid+=totalPay;iv.pending=+(iv.grand-iv.paid).toFixed(2);iv.dueDate=val('p_due');
  save();audit('Payment Received',c.name+' · '+iv.no+' · '+inr(totalPay));
@@ -828,31 +830,94 @@ function saveEditSub(subId){
  openClient(s.clientId);
 }
 /* ================= CASHBOOK ================= */
+function cbDetectSalesType(e){
+ if(e.salesType)return e.salesType;
+ const t=((e.category||'')+' '+(e.particulars||'')).toLowerCase();
+ if(/\bpt\b|personal train/.test(t))return 'PT';
+ if(/dance/.test(t))return 'Dance';
+ if(/membership|renew|upgrade|freeze|transfer/.test(t))return 'Membership';
+ if(/product/.test(t))return 'Product Sales';
+ if(e.type==='out')return 'Expense';
+ return 'Other Income';
+}
+function cbOpt(id,label,opts,v){
+ return`<div class="field"><label>${label}</label><select id="${id}"><option value="">All</option>${opts.map(o=>`<option value="${esc(o)}" ${o===v?'selected':''}>${esc(o)}</option>`).join('')}</select></div>`;
+}
+function cbFilterState(){
+ return{
+  month:($('cb_month')&&val('cb_month'))||'',
+  cat:($('cb_cat')&&val('cb_cat'))||'',
+  party:($('cb_party')&&val('cb_party').trim().toLowerCase())||'',
+  flow:($('cb_flow')&&val('cb_flow'))||'',
+  mode:($('cb_mode')&&val('cb_mode'))||'',
+  sales:($('cb_sales')&&val('cb_sales'))||''
+ };
+}
+function cbMatch(e,f){
+ if(f.month&&!(e.date||'').startsWith(f.month))return false;
+ if(f.cat&&e.category!==f.cat)return false;
+ if(f.party&&!(e.party||'').toLowerCase().includes(f.party))return false;
+ if(f.flow==='in'&&e.type!=='in')return false;
+ if(f.flow==='out'&&e.type!=='out')return false;
+ if(f.mode&&e.mode!==f.mode)return false;
+ if(f.sales&&cbDetectSalesType(e)!==f.sales)return false;
+ return true;
+}
+function applyCbFilters(){
+ if(!$('cb_tbl'))return;
+ const f=cbFilterState();
+ const matched=db.cashbook.filter(e=>cbMatch(e,f));
+ const cin=matched.filter(e=>e.type==='in').reduce((s,e)=>s+e.amount,0);
+ const cout=matched.filter(e=>e.type==='out').reduce((s,e)=>s+e.amount,0);
+ if($('cb_sum'))$('cb_sum').innerHTML=`${stat('Filtered Cash In',inr(cin),'ok')}${stat('Filtered Cash Out',inr(cout),'bad')}${stat('Net',inr(cin-cout),cin-cout>=0?'ok':'bad')}${stat('Entries',matched.length)}`;
+ $('cb_tbl').innerHTML=cbTable(e=>cbMatch(e,f));
+}
+function resetCbFilters(){
+ if($('cb_month'))$('cb_month').value=thisMonth();
+ ['cb_cat','cb_party','cb_flow','cb_mode','cb_sales'].forEach(id=>{if($(id))$(id).value=''});
+ applyCbFilters();
+}
 function pgCashbook(){
- const t=today();
+ const t=today(),m=thisMonth();
  const openCash=db.settings.openingCash+cashIn('0000',addDays(t,-1),'Cash')-cashOut('0000',addDays(t,-1),'Cash');
+ const cats=[...new Set([...(db.settings.incCats||[]),...(db.settings.expCats||[]),...db.cashbook.map(e=>e.category).filter(Boolean)])].sort();
+ const modes=[...new Set([...(db.settings.payModes||['Cash','UPI','Card','Cheque','Bank Transfer']),...db.cashbook.map(e=>e.mode).filter(Boolean)])];
+ const salesTypes=['Membership','PT','Dance','Product Sales','Other Income','Expense'];
  $('content').innerHTML=`
- <div class="row" style="justify-content:space-between"><div><h2>Cashbook</h2><div class="sub">Payments post here automatically — no duplicate entry</div></div>
+ <div class="row" style="justify-content:space-between"><div><h2>Cashbook</h2><div class="sub">Filter by month, category, party, cash in/out, payment mode &amp; sales type</div></div>
  <div class="row"><button class="btn sec" onclick="cashForm('in')">＋ Cash In (other income)</button><button class="btn" onclick="cashForm('out')">－ Cash Out (expense)</button></div></div>
  <div class="grid g4" style="margin:12px 0">${stat('Opening Cash',inr(openCash))}${stat("Today's Cash In",inr(cashIn(t,t,'Cash')),'ok')}${stat("Today's Cash Out",inr(cashOut(t,t,'Cash')),'bad')}${stat('Closing Cash','<b>'+inr(openCash+cashIn(t,t,'Cash')-cashOut(t,t,'Cash'))+'</b>','br')}</div>
- <div class="toolbar"><div class="field"><label>From</label><input type="date" id="cb_f" value="${addDays(t,-7)}"></div><div class="field"><label>To</label><input type="date" id="cb_t" value="${t}"></div>
- <button class="btn sec sm" onclick="pgCashbookFiltered()">Filter</button>
- <button class="btn sec sm" onclick="exportCashbook()">⬇ Export CSV</button></div>
- <div class="tabs"><button class="on" onclick="cbTab(this,'all')">All</button><button onclick="cbTab(this,'in')">Cash In</button><button onclick="cbTab(this,'out')">Cash Out</button></div>
- <div class="tbl" id="cb_tbl">${cbTable(e=>true)}</div>`}
+ <div class="toolbar">
+  <div class="field"><label>Month</label><input type="month" id="cb_month" value="${m}"></div>
+  ${cbOpt('cb_cat','Category',cats)}
+  <div class="field"><label>Party Name</label><input id="cb_party" placeholder="Search party…"></div>
+  <div class="field"><label>Cash In / Out</label><select id="cb_flow"><option value="">All</option><option value="in">Cash In</option><option value="out">Cash Out</option></select></div>
+  ${cbOpt('cb_mode','Payment Mode',modes)}
+  ${cbOpt('cb_sales','Sales Type',salesTypes)}
+  <button class="btn sec sm" onclick="applyCbFilters()">Filter</button>
+  <button class="btn sec sm" onclick="resetCbFilters()">Reset</button>
+  <button class="btn sec sm" onclick="exportCashbook()">⬇ Export CSV</button>
+ </div>
+ <div class="grid g4" id="cb_sum" style="margin-bottom:12px"></div>
+ <div class="tbl" id="cb_tbl"></div>`;
+ applyCbFilters();
+ ['cb_month','cb_cat','cb_flow','cb_mode','cb_sales'].forEach(id=>{const el=$(id);if(el)el.onchange=applyCbFilters});
+ if($('cb_party'))$('cb_party').oninput=()=>{clearTimeout(window._cbPartyT);window._cbPartyT=setTimeout(applyCbFilters,250)};
+}
 function cbTable(f){const rows=db.cashbook.filter(f).slice().reverse().slice(0,300).map(e=>`
- <tr><td>${fmtD(e.date)}</td><td>${e.no}</td><td>${esc(e.particulars)}</td><td>${esc(e.category)}</td><td>${esc(e.party||'')}</td><td>${e.mode}</td>
+ <tr><td>${fmtD(e.date)}</td><td>${e.no}</td><td>${esc(e.particulars||'')}</td><td>${esc(e.category||'')}</td><td>${esc(e.party||'')}</td>
+ <td>${esc(cbDetectSalesType(e))}</td><td>${esc(e.mode||'')}</td>
  <td class="r bold" style="color:${e.type==='in'?'var(--ok)':'var(--bad)'}">${e.type==='in'?'+':'−'}${inr(e.amount)}</td><td>${esc(e.by||'')}</td>
  <td class="r"><button class="btn sm dgr" onclick="deleteCashbookEntry('${e.id}')">Delete</button></td></tr>`).join('');
- return`<table><tr><th>Date</th><th>Rcpt/Vchr</th><th>Particulars</th><th>Category</th><th>Party</th><th>Mode</th><th class="r">Amount</th><th>By</th><th></th></tr>${rows||'<tr><td colspan=9 class="mut">No entries</td></tr>'}</table>`}
-function cbTab(btn,t){document.querySelectorAll('.tabs button').forEach(b=>b.classList.remove('on'));btn.classList.add('on');
- $('cb_tbl').innerHTML=cbTable(e=>t==='all'||e.type===t)}
-function pgCashbookFiltered(){const f=val('cb_f'),to=val('cb_t');$('cb_tbl').innerHTML=cbTable(e=>e.date>=f&&e.date<=to)}
-function exportCashbook(){csvExport([['Date','No','Particulars','Category','Party','Mode','Type','Amount','By'],...db.cashbook.map(e=>[e.date,e.no,e.particulars,e.category,e.party,e.mode,e.type,e.amount,e.by])],'cashbook')}
+ return`<table><tr><th>Date</th><th>Rcpt/Vchr</th><th>Particulars</th><th>Category</th><th>Party Name</th><th>Sales Type</th><th>Mode</th><th class="r">Amount</th><th>By</th><th></th></tr>${rows||'<tr><td colspan=10 class="mut">No entries</td></tr>'}</table>`}
+function exportCashbook(){
+ const f=cbFilterState();
+ const rows=db.cashbook.filter(e=>cbMatch(e,f));
+ csvExport([['Date','No','Particulars','Category','Party Name','Sales Type','Mode','Type','Amount','By'],...rows.map(e=>[e.date,e.no,e.particulars,e.category,e.party,cbDetectSalesType(e),e.mode,e.type,e.amount,e.by])],'cashbook');
+}
 function deleteCashbookEntry(id){
  const e=db.cashbook.find(x=>x.id===id);if(!e)return;
  if(!confirm(`Delete cashbook entry ${e.no}?\n${e.particulars||e.category} · ${inr(e.amount)}\n\nThis cannot be undone.`))return;
- // If linked to an invoice payment (notes like "Invoice INV-0001"), reverse that payment
  const m=(e.notes||'').match(/Invoice\s+(\S+)/i);
  if(m&&e.type==='in'){
   const inv=db.invoices.find(i=>i.no===m[1]);
@@ -868,11 +933,9 @@ function deleteCashbookEntry(id){
  db.cashbook=db.cashbook.filter(x=>x.id!==id);
  save();audit('Cashbook Deleted',e.no+' · '+e.type+' · '+inr(e.amount)+' · '+(e.particulars||e.category||''));
  toast('Cashbook entry deleted');
- if(PAGE==='expenses')go('expenses');else if($('cb_tbl')){
-  const on=document.querySelector('.tabs button.on');
-  const tab=on&&on.textContent.includes('In')&&!on.textContent.includes('Out')?'in':on&&on.textContent.includes('Out')?'out':'all';
-  $('cb_tbl').innerHTML=cbTable(x=>tab==='all'||x.type===tab);
- }else go('cashbook');
+ if(PAGE==='expenses')go('expenses');
+ else if($('cb_tbl'))applyCbFilters();
+ else go('cashbook');
 }
 function cashForm(type){
  const cats=type==='in'?db.settings.incCats:db.settings.expCats;
@@ -901,7 +964,9 @@ function saveCash(type){
  if(type==='out'&&!val('cf_part')){toast('Enter particular');return}
  if(type==='out'&&!val('cf_party')){toast('Enter party name');return}
  const no=type==='in'?nextNo('receipt','RCP-'):nextNo('voucher','VCH-');
- db.cashbook.push({id:'CB'+Date.now(),date:val('cf_date')||today(),type,no,particulars:val('cf_part')||val('cf_cat'),category:val('cf_cat'),party:val('cf_party'),mode:val('cf_mode'),amount:amt,gst:type==='out'?num('cf_gst'):0,by:val('cf_by'),notes:val('cf_notes')});
+ const cat=val('cf_cat');
+ const salesType=type==='out'?'Expense':(/product/i.test(cat)?'Product Sales':'Other Income');
+ db.cashbook.push({id:'CB'+Date.now(),date:val('cf_date')||today(),type,no,particulars:val('cf_part')||cat,category:cat,party:val('cf_party'),mode:val('cf_mode'),amount:amt,gst:type==='out'?num('cf_gst'):0,by:val('cf_by'),notes:val('cf_notes'),salesType});
  save();audit(type==='in'?'Income Added':'Expense Added',val('cf_cat')+' · '+inr(amt));
  toast('Saved — cashbook, P&L & dashboard updated');closeModal();
  go(PAGE==='expenses'?'expenses':'cashbook')}
@@ -1014,7 +1079,7 @@ function savePayroll(){
  const p={id:'PR'+Date.now(),month:val('pr_month'),staffId:sid,basic,incentive,commission,bonus,deduction,advance,net,date:today(),mode:val('pr_mode')};
  db.payroll.push(p);
  // AUTOMATION → cashbook expense
- db.cashbook.push({id:'CB'+Date.now(),date:today(),type:'out',no:nextNo('voucher','VCH-'),particulars:'Salary '+p.month+' — '+s.name,category:'Salary',party:s.name,mode:p.mode,amount:net,by:USER.name,notes:'Payroll '+p.id});
+ db.cashbook.push({id:'CB'+Date.now(),date:today(),type:'out',no:nextNo('voucher','VCH-'),particulars:'Salary '+p.month+' — '+s.name,category:'Salary',party:s.name,mode:p.mode,amount:net,by:USER.name,notes:'Payroll '+p.id,salesType:'Expense'});
  save();audit('Salary Updated',s.name+' · '+p.month+' · '+inr(net));
  toast('Salary generated & posted to cashbook');closeModal();go('payroll')}
 function printSlip(id){
