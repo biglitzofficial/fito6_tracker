@@ -876,36 +876,59 @@ function deleteCashbookEntry(id){
 }
 function cashForm(type){
  const cats=type==='in'?db.settings.incCats:db.settings.expCats;
- openModal(`<h2>${type==='in'?'Cash In — Other Income':'Cash Out — Expense Voucher'}</h2>
+ if(type==='out'){
+  openModal(`<h2>Expense Voucher</h2>
+  <div class="grid g2">
+   ${fld('cf_part','Particular')}${fld('cf_party','Party Name')}
+   ${fld('cf_gst','GST IN BILL ₹','0','number')}${sel('cf_cat','Category',cats)}
+  </div>
+  <div class="grid g3" style="margin-top:8px">
+   ${fld('cf_date','Date',today(),'date')}${sel('cf_mode','Payment Mode',['Cash','UPI','Bank Transfer','Card','Cheque'])}${fld('cf_amt','Amount ₹','','number')}
+   ${fld('cf_by','Paid By',USER.name)}${fld('cf_notes','Notes')}
+  </div>
+  <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn sec" onclick="closeModal()">Cancel</button><button class="btn" onclick="saveCash('out')">Save Expense</button></div>`);
+  return;
+ }
+ openModal(`<h2>Cash In — Other Income</h2>
  <div class="grid g3">
   ${fld('cf_date','Date',today(),'date')}${sel('cf_cat','Category',cats)}${fld('cf_part','Particulars')}
-  ${fld('cf_party',type==='in'?'Received From':'Vendor / Paid To')}${sel('cf_mode','Payment Mode',['Cash','UPI','Bank Transfer','Card','Cheque'])}${fld('cf_amt','Amount ₹','','number')}
-  ${type==='out'?fld('cf_gst','GST in bill ₹','0','number'):''}${fld('cf_by',type==='in'?'Collected By':'Paid By',USER.name)}${fld('cf_notes','Notes')}
+  ${fld('cf_party','Received From')}${sel('cf_mode','Payment Mode',['Cash','UPI','Bank Transfer','Card','Cheque'])}${fld('cf_amt','Amount ₹','','number')}
+  ${fld('cf_by','Collected By',USER.name)}${fld('cf_notes','Notes')}
  </div>
- <div class="row" style="justify-content:flex-end"><button class="btn sec" onclick="closeModal()">Cancel</button><button class="btn" onclick="saveCash('${type}')">Save Entry</button></div>`)}
+ <div class="row" style="justify-content:flex-end"><button class="btn sec" onclick="closeModal()">Cancel</button><button class="btn" onclick="saveCash('in')">Save Entry</button></div>`)}
 function saveCash(type){
  const amt=num('cf_amt');if(amt<=0){toast('Enter amount');return}
+ if(type==='out'&&!val('cf_part')){toast('Enter particular');return}
+ if(type==='out'&&!val('cf_party')){toast('Enter party name');return}
  const no=type==='in'?nextNo('receipt','RCP-'):nextNo('voucher','VCH-');
- db.cashbook.push({id:'CB'+Date.now(),date:val('cf_date')||today(),type,no,particulars:val('cf_part')||val('cf_cat'),category:val('cf_cat'),party:val('cf_party'),mode:val('cf_mode'),amount:amt,gst:num('cf_gst'),by:val('cf_by'),notes:val('cf_notes')});
+ db.cashbook.push({id:'CB'+Date.now(),date:val('cf_date')||today(),type,no,particulars:val('cf_part')||val('cf_cat'),category:val('cf_cat'),party:val('cf_party'),mode:val('cf_mode'),amount:amt,gst:type==='out'?num('cf_gst'):0,by:val('cf_by'),notes:val('cf_notes')});
  save();audit(type==='in'?'Income Added':'Expense Added',val('cf_cat')+' · '+inr(amt));
  toast('Saved — cashbook, P&L & dashboard updated');closeModal();
  go(PAGE==='expenses'?'expenses':'cashbook')}
 
 /* ================= EXPENSES ================= */
+function expTable(rows){
+ const list=(rows||[]).slice().reverse().slice(0,300);
+ const body=list.map(e=>`
+ <tr><td>${fmtD(e.date)}</td><td>${e.no}</td><td>${esc(e.particulars||'')}</td><td>${esc(e.party||'')}</td>
+ <td class="r">${inr(e.gst||0)}</td><td>${esc(e.category||'')}</td><td>${e.mode||''}</td>
+ <td class="r bold" style="color:var(--bad)">−${inr(e.amount)}</td><td>${esc(e.by||'')}</td>
+ <td class="r"><button class="btn sm dgr" onclick="deleteCashbookEntry('${e.id}')">Delete</button></td></tr>`).join('');
+ return`<table><tr><th>Date</th><th>Voucher</th><th>Particular</th><th>Party Name</th><th class="r">GST IN BILL</th><th>Category</th><th>Mode</th><th class="r">Amount</th><th>Paid By</th><th></th></tr>${body||'<tr><td colspan=10 class="mut">No expenses</td></tr>'}</table>`}
 function pgExpenses(){
  const m=thisMonth();
  const exps=db.cashbook.filter(e=>e.type==='out');
  const monthExp=exps.filter(e=>e.date.slice(0,7)===m);
  const byCat={};monthExp.forEach(e=>byCat[e.category]=(byCat[e.category]||0)+e.amount);
  $('content').innerHTML=`
- <div class="row" style="justify-content:space-between"><div><h2>Expenses</h2><div class="sub">This month: <b>${inr(monthExp.reduce((s,e)=>s+e.amount,0))}</b></div></div>
+ <div class="row" style="justify-content:space-between"><div><h2>Expenses</h2><div class="sub">Particular · Party Name · GST IN BILL · Category — this month: <b>${inr(monthExp.reduce((s,e)=>s+e.amount,0))}</b></div></div>
  <button class="btn" onclick="cashForm('out')">－ Add Expense</button></div>
  <div class="grid g2" style="margin-top:12px">
  <div class="card"><h3>Category-wise (${m})</h3>${barChart(Object.entries(byCat).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([k,v])=>({x:k.slice(0,8),y:v})),'r')||''}</div>
  <div class="card"><h3>Expense Ledger (${m})</h3><div class="tbl"><table><tr><th>Category</th><th class="r">Amount</th></tr>
  ${Object.entries(byCat).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<tr><td>${esc(k)}</td><td class="r">${inr(v)}</td></tr>`).join('')||'<tr><td colspan=2 class="mut">No expenses this month</td></tr>'}</table></div></div></div>
  <h3 style="margin-top:16px">All Expense Vouchers</h3>
- <div class="tbl">${cbTable(e=>e.type==='out')}</div>`}
+ <div class="tbl">${expTable(exps)}</div>`}
 
 /* ================= STAFF ================= */
 function pgStaff(){
@@ -1015,7 +1038,7 @@ const REPORTS={
  'Dance Report':()=>[['Member','Package','Start','End','Status','Amount'],...db.subs.filter(s=>s.type==='Dance').map(s=>[client(s.clientId)?.name,s.pkg,s.start,s.end,subStatus(s),s.final])],
  'Staff Sales Report':()=>{const m={};db.invoices.forEach(iv=>{m[iv.by]=(m[iv.by]||0)+iv.grand});return[['Sold By','Total Sales'],...Object.entries(m)]},
  'Trainer Sales Report':()=>{const m={};db.invoices.filter(iv=>iv.trainer).forEach(iv=>{m[iv.trainer]=(m[iv.trainer]||0)+iv.grand});return[['Trainer','Total Sales'],...Object.entries(m)]},
- 'Expense Report':()=>[['Date','Voucher','Category','Vendor','Mode','Amount','Paid By'],...db.cashbook.filter(e=>e.type==='out').map(e=>[e.date,e.no,e.category,e.party,e.mode,e.amount,e.by])],
+ 'Expense Report':()=>[['Date','Voucher','Particular','Party Name','GST IN BILL','Category','Mode','Amount','Paid By'],...db.cashbook.filter(e=>e.type==='out').map(e=>[e.date,e.no,e.particulars,e.party,e.gst||0,e.category,e.mode,e.amount,e.by])],
  'Attendance Report (Staff)':()=>[['Date','Staff','Status','Time'],...db.staffAtt.map(a=>[a.date,staffById(a.staffId)?.name,a.status,a.time])],
  'Attendance Report (Members)':()=>[['Date','Member','Time'],...db.memberAtt.map(a=>[a.date,client(a.clientId)?.name,a.time])],
  'Payroll Report':()=>[['Month','Staff','Basic','Additions','Deductions','Net'],...db.payroll.map(p=>[p.month,staffById(p.staffId)?.name,p.basic,p.incentive+p.commission+p.bonus,p.deduction+p.advance,p.net])],
