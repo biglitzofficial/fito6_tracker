@@ -40,6 +40,15 @@ h2{font-size:20px;margin-bottom:4px} h3{font-size:15px;margin-bottom:10px}
 .stat.clickable{cursor:pointer}.stat.clickable:hover{border-color:var(--brand)}
 .photo-av{width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid var(--line);background:#eef1f6}
 .linechart{width:100%;height:160px}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.cal .hd{font-size:11px;font-weight:700;color:var(--mut);text-align:center;padding:6px}
+.cal .day{background:#fff;border:1px solid var(--line);border-radius:8px;min-height:88px;padding:6px;cursor:pointer;display:flex;flex-direction:column;gap:2px}
+.cal .day:hover{border-color:var(--brand)}
+.cal .day.mut{background:#f7f8fb;cursor:default;opacity:.55}
+.cal .day .dn{font-size:11px;font-weight:800}
+.cal .day .sm{font-size:10px;color:var(--mut);line-height:1.35}
+.cal .day .fv{font-size:12px;font-weight:800;color:var(--brand);margin-top:auto}
+.cal .day.has{background:#fff8f2;border-color:#ffd2b0}
 input.caps{text-transform:uppercase}
 .ro{background:#f4f6fa!important;color:var(--mut)}
 /* CARDS/GRIDS */
@@ -188,7 +197,7 @@ function defaults(){return{
   payModes:['Cash','UPI','Card','Cheque','Bank Transfer'],openingCash:0},
  users:[],
  seq:{client:1000,invoice:1,receipt:1,voucher:1,staff:100,trainer:0,payroll:0,clientByYear:{}},
- clients:[],subs:[],invoices:[],cashbook:[],staff:[],staffAtt:[],memberAtt:[],payroll:[],audit:[],leads:[],batches:[],classes:[],todos:[]};}
+ clients:[],subs:[],invoices:[],cashbook:[],staff:[],staffAtt:[],memberAtt:[],payroll:[],audit:[],leads:[],batches:[],classes:[],todos:[],meterReadings:[]};}
 
 function cacheLocal(){try{localStorage.setItem(DBKEY,JSON.stringify(db))}catch(e){}}
 function loadLocalCache(){try{return JSON.parse(localStorage.getItem(DBKEY))}catch(e){return null}}
@@ -250,6 +259,7 @@ function ensurePkgSettings(){
  if(!Array.isArray(db.batches))db.batches=[];
  if(!Array.isArray(db.classes))db.classes=[];
  if(!Array.isArray(db.todos))db.todos=[];
+ if(!Array.isArray(db.meterReadings))db.meterReadings=[];
  (db.clients||[]).forEach(c=>{if(!c.status)c.status='Active'});
  (db.cashbook||[]).forEach(e=>{if(!e.status)e.status='Active'});
 }
@@ -326,11 +336,11 @@ function isGroupClassType(t){return/group\s*class|dance|boxing|zumba|yoga/i.test
 /* ================= AUTH & NAV ================= */
 let USER=null,PAGE='dashboard';
 const MENUS={
- superadmin:['dashboard','clients','memberships','billing','cashbook','expenses','staff','attendance','payroll','batches','reports','accounts','audit','settings'],
+ superadmin:['dashboard','clients','memberships','billing','cashbook','expenses','meter','staff','attendance','payroll','batches','reports','accounts','audit','settings'],
  frontoffice:['dashboard','clients','memberships','billing','cashbook','attendance','batches'],
- accountant:['dashboard','cashbook','expenses','payroll','reports','accounts'],
+ accountant:['dashboard','cashbook','expenses','meter','payroll','reports','accounts'],
  trainer:['dashboard','clients','attendance','batches','todos']};
-const PAGES={dashboard:['📊','Dashboard'],clients:['🧍','Clients'],memberships:['🎫','Memberships'],billing:['🧾','Billing / Invoices'],cashbook:['💰','Cashbook'],expenses:['📤','Expenses'],staff:['👥','Staff'],attendance:['🕒','Attendance'],payroll:['💵','Payroll'],batches:['🗓️','Batches / Classes'],todos:['✅','My Todos'],reports:['📑','Reports'],accounts:['📚','Accounts / P&L'],audit:['🛡️','Audit Log'],settings:['⚙️','Settings']};
+const PAGES={dashboard:['📊','Dashboard'],clients:['🧍','Clients'],memberships:['🎫','Memberships'],billing:['🧾','Billing / Invoices'],cashbook:['💰','Cashbook'],expenses:['📤','Expenses'],meter:['⚡','Electricity Meter'],staff:['👥','Staff'],attendance:['🕒','Attendance'],payroll:['💵','Payroll'],batches:['🗓️','Batches / Classes'],todos:['✅','My Todos'],reports:['📑','Reports'],accounts:['📚','Accounts / P&L'],audit:['🛡️','Audit Log'],settings:['⚙️','Settings']};
 function mapCloudRole(role,email,name){
  if(role==='ADMIN')return'superadmin';
  const tip=((email||'')+' '+(name||'')+' '+(USER&&USER.jobType||'')).toLowerCase();
@@ -377,7 +387,7 @@ function buildNav(){$('nav').innerHTML=MENUS[USER.role].map(p=>`<a href="#" id="
 function go(p,arg){if(!MENUS[USER.role].includes(p)){toast('No permission');return} PAGE=p;
  document.querySelectorAll('#sidebar a').forEach(a=>a.classList.remove('on'));const n=$('nav_'+p);if(n)n.classList.add('on');
  closeTbDrops();
- ({dashboard:pgDashboard,clients:pgClients,memberships:pgMemberships,billing:pgBilling,cashbook:pgCashbook,expenses:pgExpenses,staff:pgStaff,attendance:pgAttendance,payroll:pgPayroll,batches:pgBatches,todos:pgTodos,reports:pgReports,accounts:pgAccounts,audit:pgAudit,settings:pgSettings})[p](arg);
+ ({dashboard:pgDashboard,clients:pgClients,memberships:pgMemberships,billing:pgBilling,cashbook:pgCashbook,expenses:pgExpenses,meter:pgMeter,staff:pgStaff,attendance:pgAttendance,payroll:pgPayroll,batches:pgBatches,todos:pgTodos,reports:pgReports,accounts:pgAccounts,audit:pgAudit,settings:pgSettings})[p](arg);
  refreshTopbarNotifs()}
 
 /* ================= COMPUTED HELPERS ================= */
@@ -1416,6 +1426,113 @@ function pgAudit(){
  $('content').innerHTML=`<h2>Audit Log</h2><div class="sub">Every action is tracked · ${db.audit.length} entries</div>
  <div class="tbl" style="margin-top:12px"><table><tr><th>Date & Time</th><th>User</th><th>Role</th><th>Action</th><th>Detail</th><th>Old → New</th></tr>
  ${db.audit.slice(0,400).map(a=>`<tr><td>${new Date(a.ts).toLocaleString('en-IN')}</td><td>${esc(a.user)}</td><td>${esc(a.role)}</td><td class="bold">${esc(a.action)}</td><td>${esc(a.detail)}</td><td class="mut">${esc(a.oldV)}${a.newV?' → '+esc(a.newV):''}</td></tr>`).join('')||'<tr><td colspan=6 class="mut">Empty</td></tr>'}</table></div>`}
+
+/* ================= ELECTRICITY METER ================= */
+let METER_MONTH='';
+function meterFor(date){return(db.meterReadings||[]).find(r=>r.date===date)}
+function meterDayFinal(night,day){
+ const n=Number(night),d=Number(day);
+ if(!Number.isFinite(n)||!Number.isFinite(d))return null;
+ return +(d-n).toFixed(2);
+}
+function meterMonthTotal(ym){
+ return(db.meterReadings||[]).filter(r=>(r.date||'').startsWith(ym)&&r.final!=null)
+  .reduce((s,r)=>s+Number(r.final||0),0);
+}
+function pgMeter(){
+ if(!Array.isArray(db.meterReadings))db.meterReadings=[];
+ const ym=METER_MONTH||thisMonth();
+ METER_MONTH=ym;
+ const [y,mo]=ym.split('-').map(Number);
+ const first=new Date(y,mo-1,1);
+ const daysInMonth=new Date(y,mo,0).getDate();
+ const startPad=first.getDay(); // 0 Sun
+ const monthRows=(db.meterReadings||[]).filter(r=>(r.date||'').startsWith(ym)).sort((a,b)=>a.date.localeCompare(b.date));
+ const monthFinal=meterMonthTotal(ym);
+ const cells=[];
+ for(let i=0;i<startPad;i++)cells.push(`<div class="day mut"></div>`);
+ for(let d=1;d<=daysInMonth;d++){
+  const date=ym+'-'+String(d).padStart(2,'0');
+  const r=meterFor(date);
+  const has=!!r&&(r.night!=null||r.day!=null);
+  cells.push(`<div class="day ${has?'has':''}" onclick="meterEntry('${date}')">
+   <div class="dn">${d}</div>
+   ${has?`<div class="sm">N: ${r.night??'—'}<br>D: ${r.day??'—'}</div>
+   <div class="fv">${r.final!=null?r.final+' u':'—'}</div>`:`<div class="sm">No entry</div>`}
+  </div>`);
+ }
+ $('content').innerHTML=`
+ <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:10px">
+  <div><h2>Electricity Meter</h2>
+   <div class="sub">Enter <b>Night</b> and <b>Day</b> readings · Daily final = Day − Night · Month total sums daily finals</div></div>
+  <div class="row" style="gap:8px;align-items:end">
+   <div class="field" style="margin:0"><label>Month</label><input type="month" id="mt_month" value="${ym}" onchange="METER_MONTH=this.value;pgMeter()"></div>
+   <button class="btn" onclick="meterEntry(today())">＋ Today’s Entry</button>
+  </div>
+ </div>
+ <div class="grid g4" style="margin:14px 0">
+  ${stat('Days entered',monthRows.length,'ok')}
+  ${stat('Month final (units)',monthFinal.toFixed(2),'br')}
+  ${stat('Avg / day',monthRows.length?(monthFinal/monthRows.length).toFixed(2):'0')}
+  ${stat('Formula','Day − Night')}
+ </div>
+ <div class="card">
+  <div class="cal">
+   ${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(h=>`<div class="hd">${h}</div>`).join('')}
+   ${cells.join('')}
+  </div>
+ </div>
+ <h3 style="margin-top:16px">Day-wise log (${ym})</h3>
+ <div class="tbl"><table><tr><th>Date</th><th class="r">Night</th><th class="r">Day</th><th class="r">Final (Day−Night)</th><th>By</th><th>Notes</th><th></th></tr>
+  ${monthRows.slice().reverse().map(r=>`<tr>
+   <td class="clickable" onclick="meterEntry('${r.date}')">${fmtD(r.date)}</td>
+   <td class="r">${r.night??'—'}</td><td class="r">${r.day??'—'}</td>
+   <td class="r bold">${r.final!=null?r.final:'—'}</td>
+   <td>${esc(r.by||'')}</td><td>${esc(r.notes||'')}</td>
+   <td class="r"><button class="btn sm sec" onclick="meterEntry('${r.date}')">Edit</button>
+   <button class="btn sm dgr" onclick="deleteMeterEntry('${r.date}')">Delete</button></td>
+  </tr>`).join('')||'<tr><td colspan=7 class="mut">No readings this month — click a calendar day</td></tr>'}
+  <tr><td class="bold" colspan="3">Month total</td><td class="r bold" style="color:var(--brand)">${monthFinal.toFixed(2)}</td><td colspan="3"></td></tr>
+ </table></div>`;
+}
+function meterEntry(date){
+ const r=meterFor(date)||{date,night:'',day:'',notes:''};
+ const preview=meterDayFinal(r.night,r.day);
+ openModal(`<h2>Meter Reading — ${fmtD(date)}</h2>
+ <p class="sub" style="margin-bottom:12px">Enter twice daily: <b>Night</b> reading and <b>Day</b> reading. Final for the day = <b>Day − Night</b>.</p>
+ <div class="grid g3">
+  ${fld('mt_night','Night reading',r.night??'','number')}
+  ${fld('mt_day','Day reading',r.day??'','number')}
+  <div class="field"><label>Daily final (auto)</label><input id="mt_final" readonly class="ro" value="${preview!=null?preview:''}"></div>
+  ${fld('mt_notes','Notes',r.notes||'')}
+  ${fld('mt_by','Entered By',r.by||(USER?USER.name:''))}
+ </div>
+ <div class="row" style="justify-content:flex-end;gap:8px;margin-top:12px">
+  <button class="btn sec" onclick="closeModal()">Cancel</button>
+  <button class="btn" onclick="saveMeterEntry('${date}')">Save Reading</button>
+ </div>
+ <script>
+  function _mtRecalc(){const f=meterDayFinal(num('mt_night'),num('mt_day'));$('mt_final').value=f==null?'':f}
+  ['mt_night','mt_day'].forEach(id=>{const el=$(id);if(el){el.oninput=_mtRecalc;el.onchange=_mtRecalc}})
+ <\/script>`)}
+function saveMeterEntry(date){
+ const nightRaw=val('mt_night'),dayRaw=val('mt_day');
+ if(nightRaw===''||dayRaw===''){toast('Enter both night and day readings');return}
+ const night=parseFloat(nightRaw),day=parseFloat(dayRaw);
+ if(!Number.isFinite(night)||!Number.isFinite(day)){toast('Invalid readings');return}
+ const final=meterDayFinal(night,day);
+ if(final==null){toast('Invalid readings');return}
+ let r=meterFor(date);
+ if(!r){r={date};db.meterReadings.push(r)}
+ Object.assign(r,{night,day,final,notes:val('mt_notes'),by:val('mt_by')||USER.name,updated:today()});
+ save();audit('Meter Reading',date+' · N '+night+' · D '+day+' · Final '+final);
+ toast('Saved · Final '+final);closeModal();pgMeter();
+}
+function deleteMeterEntry(date){
+ if(!confirm('Delete meter reading for '+fmtD(date)+'?'))return;
+ db.meterReadings=(db.meterReadings||[]).filter(r=>r.date!==date);
+ save();audit('Meter Reading Deleted',date);toast('Deleted');pgMeter();
+}
 
 /* ================= BATCHES / CLASSES ================= */
 function pgBatches(){
