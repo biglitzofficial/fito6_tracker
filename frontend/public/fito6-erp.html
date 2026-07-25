@@ -58,6 +58,14 @@ input.caps{text-transform:uppercase}
 .stat .v{font-size:20px;font-weight:800;margin-top:2px}
 .stat .l{font-size:11px;color:var(--mut);font-weight:600;text-transform:uppercase;letter-spacing:.3px}
 .stat.ok .v{color:var(--ok)}.stat.bad .v{color:var(--bad)}.stat.br .v{color:var(--brand)}.stat.warn .v{color:var(--warn)}
+.money-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:14px 0}
+.money-card{border-radius:8px;padding:14px 16px;color:#fff;font-weight:700;font-size:14px;display:flex;align-items:center;gap:10px;min-height:56px}
+.money-card .ico{width:32px;height:32px;border-radius:6px;background:rgba(255,255,255,.25);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.money-card.blue{background:#2f6fed}.money-card.green{background:#2e9b4f}.money-card.orange{background:#c45a2c}.money-card.yellow{background:#d4a017;color:#1a2233}
+.pay-row{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:10px 0 18px}
+.pay-box{background:#fff;border:1px solid #c9cdd4;border-radius:4px;padding:12px 14px;font-weight:700;font-size:14px;text-align:center}
+.pay-box u{text-decoration:underline;cursor:pointer}
+@media(max-width:900px){.money-row,.pay-row{grid-template-columns:1fr 1fr}}
 /* TABLE */
 table{width:100%;border-collapse:collapse;background:#fff}
 th{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--mut);text-align:left;padding:9px 10px;border-bottom:2px solid var(--line);background:#fafbfd}
@@ -1522,33 +1530,69 @@ function renderReport(){const rows=REPORTS[window._rep]();
 /* ================= ACCOUNTS / P&L / LEDGER ================= */
 function pgAccounts(){
  const m=val('ac_m')||thisMonth();
- $('content').innerHTML=`<h2>Accounts</h2>
- <div class="toolbar" style="margin-top:10px"><div class="field"><label>Month</label><input type="month" id="ac_m" value="${m}" onchange="renderPL()"></div>
- <div class="field"><label>View</label><select id="ac_v" onchange="renderPL()"><option>Monthly</option><option>Quarterly</option><option>Yearly</option></select></div></div>
+ $('content').innerHTML=`<div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:10px">
+  <div><h2>Accounts</h2><div class="sub">Bill totals, collection by mode, P&amp;L and ledgers</div></div>
+  <div class="toolbar" style="margin:0">
+   <div class="field" style="margin:0"><label>Month</label><input type="month" id="ac_m" value="${m}" onchange="renderAccounts()"></div>
+   <div class="field" style="margin:0"><label>View</label><select id="ac_v" onchange="renderAccounts()"><option>Monthly</option><option>Quarterly</option><option>Yearly</option></select></div>
+  </div>
+ </div>
+ <div id="ac_summary"></div>
  <div id="pl_area"></div>
  <h3 style="margin-top:20px">Customer Ledger (Outstanding)</h3>
- <div class="tbl"><table><tr><th>Customer</th><th class="r">Billed (Dr)</th><th class="r">Paid (Cr)</th><th class="r">Balance</th></tr>
- ${db.clients.map(c=>{const invs=db.invoices.filter(i=>i.clientId===c.id);if(!invs.length)return'';const dr=invs.reduce((s,i)=>s+i.grand,0),cr=invs.reduce((s,i)=>s+i.paid,0);
-  return`<tr><td class="clickable" onclick="openClient('${c.id}')">${esc(c.name)}</td><td class="r">${inr(dr)}</td><td class="r">${inr(cr)}</td><td class="r bold" style="color:${dr-cr>0?'var(--bad)':'var(--ok)'}">${inr(dr-cr)}</td></tr>`}).join('')||'<tr><td colspan=4 class="mut">No entries</td></tr>'}</table></div>
+ <div class="tbl" id="ac_cust_ledger"></div>
  <h3 style="margin-top:20px">Owner Ledger</h3>
- <div class="tbl">${cbTable(e=>e.category==='Owner Investment'||e.category==='Owner Withdrawal')}</div>`;
- renderPL()}
+ <div class="tbl" id="ac_owner_ledger"></div>`;
+ renderAccounts();
+}
 function plRange(){const m=val('ac_m')||thisMonth(),v=val('ac_v')||'Monthly';
  if(v==='Yearly')return[m.slice(0,4)+'-01-01',m.slice(0,4)+'-12-31',m.slice(0,4)];
  if(v==='Quarterly'){const mm=parseInt(m.slice(5,7)),q=Math.floor((mm-1)/3);const f=String(q*3+1).padStart(2,'0'),l=String(q*3+3).padStart(2,'0');return[m.slice(0,4)+'-'+f+'-01',m.slice(0,4)+'-'+l+'-31','Q'+(q+1)+' '+m.slice(0,4)]}
  return[m+'-01',m+'-31',m]}
+function moneyCard(cls,label,amount){return`<div class="money-card ${cls}"><div class="ico">👛</div><div>${label} : ${inr(amount)}</div></div>`}
+function renderAccounts(){renderPL();renderAccountSummary();renderAccountLedgers()}
+function renderAccountSummary(){
+ const[f,t]=plRange();
+ const invs=db.invoices.filter(i=>i.date>=f&&i.date<=t&&i.status!=='Cancelled'&&!i.cancelled);
+ const cancelled=db.invoices.filter(i=>i.date>=f&&i.date<=t&&(i.status==='Cancelled'||i.cancelled));
+ const totalBill=invs.reduce((s,i)=>s+Number(i.grand||0),0);
+ const paidAmt=invs.reduce((s,i)=>s+Number(i.paid||0),0);
+ const cancelAmt=cancelled.reduce((s,i)=>s+Number(i.grand||0),0);
+ const balanceAmt=invs.reduce((s,i)=>s+Number(i.pending||0),0);
+ const payCash=cashIn(f,t,'Cash');
+ const payUpi=cashIn(f,t,'UPI');
+ const payCard=cashIn(f,t,'Card');
+ if($('ac_summary'))$('ac_summary').innerHTML=`
+  <div class="money-row">
+   ${moneyCard('blue','Total Bill Amount',totalBill)}
+   ${moneyCard('green','Paid Amount',paidAmt)}
+   ${moneyCard('orange','Cancel Amount',cancelAmt)}
+   ${moneyCard('yellow','Balance Amount',balanceAmt)}
+  </div>
+  <div class="pay-row">
+   <div class="pay-box"><u onclick="go('cashbook');setTimeout(()=>{if($('cb_mode')){$('cb_mode').value='Cash';applyCbFilters()}},80)">Cash : ${inr(payCash)}</u></div>
+   <div class="pay-box"><u onclick="go('cashbook');setTimeout(()=>{if($('cb_mode')){$('cb_mode').value='UPI';applyCbFilters()}},80)">UPI : ${inr(payUpi)}</u></div>
+   <div class="pay-box"><u onclick="go('cashbook');setTimeout(()=>{if($('cb_mode')){$('cb_mode').value='Card';applyCbFilters()}},80)">Credit Card : ${inr(payCard)}</u></div>
+  </div>`;
+}
+function renderAccountLedgers(){
+ if($('ac_cust_ledger'))$('ac_cust_ledger').innerHTML=`<table><tr><th>Customer</th><th class="r">Billed (Dr)</th><th class="r">Paid (Cr)</th><th class="r">Balance</th></tr>
+ ${db.clients.map(c=>{const invs=db.invoices.filter(i=>i.clientId===c.id&&i.status!=='Cancelled');if(!invs.length)return'';const dr=invs.reduce((s,i)=>s+i.grand,0),cr=invs.reduce((s,i)=>s+i.paid,0);
+  return`<tr><td class="clickable" onclick="openClient('${c.id}')">${esc(c.name)}</td><td class="r">${inr(dr)}</td><td class="r">${inr(cr)}</td><td class="r bold" style="color:${dr-cr>0?'var(--bad)':'var(--ok)'}">${inr(dr-cr)}</td></tr>`}).join('')||'<tr><td colspan=4 class="mut">No entries</td></tr>'}</table>`;
+ if($('ac_owner_ledger'))$('ac_owner_ledger').innerHTML=cbTable(e=>e.status!=='Inactive'&&(e.category==='Owner Investment'||e.category==='Owner Withdrawal'));
+}
 function renderPL(){
  const[f,t,label]=plRange();
- // Revenue: payments received by category (cash basis)
- const rev={};db.cashbook.filter(e=>e.type==='in'&&e.date>=f&&e.date<=t).forEach(e=>{rev[e.category]=(rev[e.category]||0)+e.amount});
- const exp={};db.cashbook.filter(e=>e.type==='out'&&e.date>=f&&e.date<=t).forEach(e=>{exp[e.category]=(exp[e.category]||0)+e.amount});
+ const rev={};db.cashbook.filter(e=>e.status!=='Inactive'&&e.type==='in'&&e.date>=f&&e.date<=t).forEach(e=>{rev[e.category]=(rev[e.category]||0)+e.amount});
+ const exp={};db.cashbook.filter(e=>e.status!=='Inactive'&&e.type==='out'&&e.date>=f&&e.date<=t).forEach(e=>{exp[e.category]=(exp[e.category]||0)+e.amount});
  const R=Object.values(rev).reduce((a,b)=>a+b,0),E=Object.values(exp).reduce((a,b)=>a+b,0);
- $('pl_area').innerHTML=`
+ if($('pl_area'))$('pl_area').innerHTML=`
+ <h3 style="margin-top:8px">Profit &amp; Loss (${label})</h3>
  <div class="grid g3" style="margin-bottom:12px">${stat('Revenue ('+label+')',inr(R),'ok')}${stat('Expenses',inr(E),'bad')}${stat('Net Profit',inr(R-E),R-E>=0?'ok':'bad')}</div>
  <div class="grid g2">
  <div class="card"><h3 style="color:var(--ok)">Revenue</h3><div class="tbl"><table>${Object.entries(rev).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<tr><td>${esc(k)}</td><td class="r">${inr(v)}</td></tr>`).join('')||'<tr><td class="mut">No revenue in period</td></tr>'}<tr><td class="bold">Total Revenue</td><td class="r bold">${inr(R)}</td></tr></table></div></div>
- <div class="card"><h3 style="color:var(--bad)">Expenses</h3><div class="tbl"><table>${Object.entries(exp).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<tr><td>${esc(k)}</td><td class="r">${inr(v)}</td></tr>`).join('')||'<tr><td class="mut">No expenses in period</td></tr>'}<tr><td class="bold">Total Expenses</td><td class="r bold">${inr(E)}</td></tr><tr><td class="bold">NET PROFIT</td><td class="r bold" style="color:${R-E>=0?'var(--ok)':'var(--bad)'}">${inr(R-E)}</td></tr></table></div></div></div>`}
-
+ <div class="card"><h3 style="color:var(--bad)">Expenses</h3><div class="tbl"><table>${Object.entries(exp).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<tr><td>${esc(k)}</td><td class="r">${inr(v)}</td></tr>`).join('')||'<tr><td class="mut">No expenses in period</td></tr>'}<tr><td class="bold">Total Expenses</td><td class="r bold">${inr(E)}</td></tr><tr><td class="bold">NET PROFIT</td><td class="r bold" style="color:${R-E>=0?'var(--ok)':'var(--bad)'}">${inr(R-E)}</td></tr></table></div></div></div>`;
+}
 /* ================= AUDIT LOG ================= */
 function pgAudit(){
  $('content').innerHTML=`<h2>Audit Log</h2><div class="sub">Every action is tracked · ${db.audit.length} entries</div>
