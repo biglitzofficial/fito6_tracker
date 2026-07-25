@@ -103,6 +103,11 @@ tr:hover td{background:#fbfcff}
 .steps div.done{background:#e3f6ec;color:var(--ok)}
 /* TOAST */
 #toast{position:fixed;bottom:22px;right:22px;background:var(--dark);color:#fff;padding:12px 18px;border-radius:8px;font-size:13px;display:none;z-index:99;box-shadow:0 8px 30px rgba(0,0,0,.3)}
+@media(max-width:700px){
+ #sidebar{width:64px}#sidebar span{display:none}#main{margin-left:64px}
+ .trainer-portal .btn{font-size:17px!important}
+ .g6{grid-template-columns:repeat(2,1fr)}.g4{grid-template-columns:repeat(2,1fr)}.g3{grid-template-columns:1fr}
+}
 /* PRINT */
 #printarea{display:none}
 @media print{ body *{visibility:hidden} #printarea,#printarea *{visibility:visible} #printarea{display:block;position:absolute;left:0;top:0;width:100%} }
@@ -194,7 +199,7 @@ function clearAuth(){AUTH={token:null,businessId:null,user:null};localStorage.re
 function restoreAuth(){try{const a=JSON.parse(localStorage.getItem(AUTHKEY)||'null');if(a&&a.token)AUTH=a}catch(e){}}
 
 function defaults(){return{
- settings:{gymName:'FITO6 FITNESS STUDIO',branch:'Main Branch',branches:['Main Branch'],gstNo:'',gstPct:18,
+ settings:{gymName:'FITO6 FITNESS STUDIO',branch:'Main Branch',branches:['Main Branch'],branchCode:'BR01',gstNo:'',gstPct:18,
   packages:[{name:'1 Month',months:1,price:1500},{name:'3 Month',months:3,price:4000},{name:'6 Month',months:6,price:7000},{name:'12 Month',months:12,price:12000},{name:'Couple 12 Month',months:12,price:20000},{name:'Student 3 Month',months:3,price:3200},{name:'Corporate 12 Month',months:12,price:10000}],
   ptPackages:[{name:'PT 1 Month',months:1,price:5000},{name:'PT 3 Month',months:3,price:13500},{name:'PT 12 Sessions',months:1,price:4000}],
   dancePackages:[{name:'Dance 1 Month',months:1,price:1200},{name:'Dance 3 Month',months:3,price:3000},{name:'Boxing 1 Month',months:1,price:2500}],
@@ -202,7 +207,8 @@ function defaults(){return{
   subTypes:['New Membership','Renew Membership','Upgrade Membership','New PT','Renew PT','Group Class','Freeze Membership','Transfer Membership'],
   expCats:['Rent','Electricity','Salary','Petrol','Marketing','Maintenance','Repairs','Office Expense','Cleaning','Stationery','Equipment Purchase','Water','Internet','Tea','Misc'],
   incCats:['Product Sales','Owner Investment','Misc Income','Interest','Other Income'],
-  payModes:['Cash','UPI','Card','Cheque','Bank Transfer'],openingCash:0},
+  payModes:['Cash','UPI','Card','Cheque','Bank Transfer'],openingCash:0,openingBank:0,
+  adminIds:{superAdmin:'',admin:''}},
  users:[],
  seq:{client:1000,invoice:1,receipt:1,voucher:1,staff:100,trainer:0,payroll:0,clientByYear:{}},
  clients:[],subs:[],invoices:[],cashbook:[],staff:[],staffAtt:[],memberAtt:[],payroll:[],audit:[],leads:[],batches:[],classes:[],todos:[],meterReadings:[]};}
@@ -301,11 +307,34 @@ function nextClientId(){
  return yy+'FIT'+String(db.seq.clientByYear[yy]).padStart(3,'0');
 }
 function nextStaffId(dept){
- const isTr=/train/i.test(dept||'');
- const key=isTr?'trainer':'staff';
- if(db.seq[key]==null)db.seq[key]=isTr?0:100;
- const n=++db.seq[key];save();
- return(isTr?'TR':'ST')+String(n).padStart(4,'0');
+ const yy=String(new Date().getFullYear()).slice(2);
+ const d=(dept||'').toLowerCase();
+ let code='FOM',key='fom';
+ if(/train/.test(d)){code='TR';key='trainer'}
+ else if(/account/.test(d)){code='ACC';key='accountant'}
+ else{code='FOM';key='fom'} // Reception, Management, Manager, Cleaner → FOM series
+ if(!db.seq.staffByYear)db.seq.staffByYear={};
+ if(!db.seq.staffByYear[yy])db.seq.staffByYear[yy]={};
+ if(!db.seq.staffByYear[yy][key])db.seq.staffByYear[yy][key]=0;
+ db.seq.staffByYear[yy][key]++;
+ save();
+ return yy+code+String(db.seq.staffByYear[yy][key]).padStart(3,'0');
+}
+function nextAdminId(kind){
+ const yy=String(new Date().getFullYear()).slice(2);
+ const key=kind==='super'?'superAdmin':'admin';
+ const code=kind==='super'?'SA':'ADM';
+ if(!db.seq.adminByYear)db.seq.adminByYear={};
+ if(!db.seq.adminByYear[yy])db.seq.adminByYear[yy]={};
+ if(!db.seq.adminByYear[yy][key])db.seq.adminByYear[yy][key]=0;
+ db.seq.adminByYear[yy][key]++;
+ save();
+ return yy+code+String(db.seq.adminByYear[yy][key]).padStart(3,'0');
+}
+function nextBranchCode(){
+ if(!db.seq.branch)db.seq.branch=1;
+ const n=++db.seq.branch;save();
+ return'BR'+String(n).padStart(2,'0');
 }
 function nextPayrollId(){if(!db.seq.payroll)db.seq.payroll=0;const n=++db.seq.payroll;save();return'PR'+String(n).padStart(6,'0')}
 function caps(s){return String(s||'').toUpperCase()}
@@ -344,11 +373,11 @@ function isGroupClassType(t){return/group\s*class|dance|boxing|zumba|yoga/i.test
 /* ================= AUTH & NAV ================= */
 let USER=null,PAGE='dashboard';
 const MENUS={
- superadmin:['dashboard','clients','memberships','billing','cashbook','expenses','meter','staff','attendance','payroll','batches','reports','accounts','audit','settings'],
- frontoffice:['dashboard','clients','memberships','billing','cashbook','meter','attendance','batches'],
+ superadmin:['dashboard','clients','leads','followups','memberships','billing','cashbook','expenses','meter','staff','attendance','payroll','batches','todos','reports','accounts','audit','settings'],
+ frontoffice:['dashboard','clients','leads','followups','memberships','billing','cashbook','meter','attendance','batches','todos'],
  accountant:['dashboard','cashbook','expenses','meter','payroll','reports','accounts'],
- trainer:['dashboard','clients','attendance','batches','todos']};
-const PAGES={dashboard:['📊','Dashboard'],clients:['🧍','Clients'],memberships:['🎫','Memberships'],billing:['🧾','Billing / Invoices'],cashbook:['💰','Cashbook'],expenses:['📤','Expenses'],meter:['⚡','Electricity Meter'],staff:['👥','Staff'],attendance:['🕒','Attendance'],payroll:['💵','Payroll'],batches:['🗓️','Batches / Classes'],todos:['✅','My Todos'],reports:['📑','Reports'],accounts:['📚','Accounts / P&L'],audit:['🛡️','Audit Log'],settings:['⚙️','Settings']};
+ trainer:['trainer','clients','attendance','batches','todos']};
+const PAGES={dashboard:['📊','Dashboard'],trainer:['📱','Trainer Portal'],clients:['🧍','Clients'],leads:['📋','Leads / Enquiries'],followups:['📞','Follow-ups'],memberships:['🎫','Memberships'],billing:['🧾','Billing / Invoices'],cashbook:['💰','Cashbook'],expenses:['📤','Expenses'],meter:['⚡','EB Meter'],staff:['👥','Staff'],attendance:['🕒','Attendance'],payroll:['💵','Payroll'],batches:['🗓️','Batches / Classes'],todos:['✅','To-do List'],reports:['📑','Reports'],accounts:['📚','Accounts / P&L'],audit:['🛡️','Audit Log'],settings:['⚙️','Settings']};
 function mapCloudRole(role,email,name){
  if(role==='ADMIN')return'superadmin';
  const tip=((email||'')+' '+(name||'')+' '+(USER&&USER.jobType||'')).toLowerCase();
@@ -377,7 +406,7 @@ async function doLogin(){
   $('tb_user').textContent=USER.name+' · '+USER.role+(source==='firestore'?' · cloud':' · synced');
   $('sb_role').textContent=(db.settings&&db.settings.gymName)||businesses[0].name||'FITO6';
   audit('Login','Cloud login · '+email);
-  buildNav();go('dashboard');refreshTopbarNotifs();
+  buildNav();go(USER.role==='trainer'?'trainer':'dashboard');refreshTopbarNotifs();
   toast(source==='migrated'?'Local data uploaded to cloud database':source==='new'?'Cloud database ready':'Loaded from cloud database');
  }catch(e){
   showLoginError(e.message||'Login failed');
@@ -395,7 +424,7 @@ function buildNav(){$('nav').innerHTML=MENUS[USER.role].map(p=>`<a href="#" id="
 function go(p,arg){if(!MENUS[USER.role].includes(p)){toast('No permission');return} PAGE=p;
  document.querySelectorAll('#sidebar a').forEach(a=>a.classList.remove('on'));const n=$('nav_'+p);if(n)n.classList.add('on');
  closeTbDrops();
- ({dashboard:pgDashboard,clients:pgClients,memberships:pgMemberships,billing:pgBilling,cashbook:pgCashbook,expenses:pgExpenses,meter:pgMeter,staff:pgStaff,attendance:pgAttendance,payroll:pgPayroll,batches:pgBatches,todos:pgTodos,reports:pgReports,accounts:pgAccounts,audit:pgAudit,settings:pgSettings})[p](arg);
+ ({dashboard:pgDashboard,trainer:pgTrainerPortal,clients:pgClients,leads:pgLeads,followups:pgFollowups,memberships:pgMemberships,billing:pgBilling,cashbook:pgCashbook,expenses:pgExpenses,meter:pgMeter,staff:pgStaff,attendance:pgAttendance,payroll:pgPayroll,batches:pgBatches,todos:pgTodos,reports:pgReports,accounts:pgAccounts,audit:pgAudit,settings:pgSettings})[p](arg);
  refreshTopbarNotifs()}
 
 /* ================= COMPUTED HELPERS ================= */
@@ -465,15 +494,21 @@ function pgDashboard(){
   ${stat("Group Class",inr(groupSales))}${stat("Walk-ins",db.leads.filter(l=>l.date===t).length)}${stat("Birthdays",bdays.length)}
   ${stat("Anniversaries",annivs.length)}${stat("Expiring (7d)",expiring7.length,'br')}${clickStat("Balance Due",inr(pendingDue.reduce((s,i)=>s+i.pending,0)),'br',"go('billing')")}
  </div>
- <h3 style="margin-top:18px">Collection Cards (Today)</h3>
- <div class="grid g6">${stat('Cash',inr(cashTot))}${stat('Bank / UPI / Card',inr(bankTot))}${stat('Total','<b style="color:var(--brand)">'+inr(collToday)+'</b>')}${stat('Cash',inr(byMode('Cash')))}${stat('UPI',inr(byMode('UPI')))}${stat('Card',inr(byMode('Card')))}</div>
+ <h3 style="margin-top:18px">Cash / Bank</h3>
+ <div class="grid g2">
+  ${clickStat('Cash in hand',inr(openCash+cin-cout),'ok',"go('cashbook')")}
+  ${clickStat('Bank (UPI + Card + Transfer + Cheque)',inr(
+   (db.settings.openingBank||0)+cashIn('0000',t,'UPI')+cashIn('0000',t,'Card')+cashIn('0000',t,'Bank Transfer')+cashIn('0000',t,'Cheque')
+   -cashOut('0000',t,'UPI')-cashOut('0000',t,'Card')-cashOut('0000',t,'Bank Transfer')-cashOut('0000',t,'Cheque')
+  ),'br',"go('cashbook')")}
+ </div>
  <div class="grid g3" style="margin-top:18px">
-  <div class="card clickable" onclick="go('cashbook')"><h3>💰 Cash Dashboard</h3>
-   ${line('Opening Cash',inr(openCash))}${line('Cash In',inr(cin))}${line('Cash Out',inr(cout))}<hr class="sep">${line('<b>Closing Cash</b>','<b>'+inr(openCash+cin-cout)+'</b>')}</div>
   <div class="card"><h3>🧍 Membership</h3>
    ${line('Active Members',activeSubs('Membership').length)}${line('Expired',expiredN)}${line('Frozen',db.subs.filter(s=>s.status==='Frozen').length)}${line('Pending Renewal (7d)',expiring7.length)}</div>
   <div class="card"><h3>🏋️ PT & Staff</h3>
    ${line('Active PT',activeSubs('PT').length)}${line('Expired PT',expiredSubs('PT').length)}${line('Staff Present / Absent',pres+' / '+abs)}${line('Late / Half Day',late+' / '+half)}</div>
+  <div class="card"><h3>Today collection split</h3>
+   ${line('Cash today',inr(cashTot))}${line('Bank today',inr(bankTot))}${line('Total today',inr(collToday))}</div>
  </div>
  <div class="grid g2" style="margin-top:18px">
   <div class="card"><h3>Daily Collection Graph (7 days)</h3>${lineChart(dailyColl,'#ff6a00')}</div>
@@ -605,6 +640,8 @@ function pgClients(){
   <button class="btn" onclick="openWizard()">Add Member</button>
   <button class="btn sec" style="border-color:var(--bad);color:var(--bad)" onclick="CL_F.status='Inactive';pgClients()">Deactivated Members</button>
   ${MENUS[USER.role].includes('meter')?`<button class="btn sec" onclick="go('meter')">⚡ Electricity Meter</button>`:''}
+  <button class="btn sec" onclick="document.querySelectorAll('.cl_sel').forEach(c=>c.checked=true)">Select All</button>
+  <button class="btn sec" onclick="document.querySelectorAll('.cl_sel').forEach(c=>c.checked=false)">Deselect All</button>
   <button class="btn dgr sm" onclick="bulkDeactivateClients()">Deactivate Selected</button>
  </div>
  <div class="card" style="margin-top:14px">
@@ -1064,6 +1101,13 @@ function invoiceHTML(iv){const c=client(iv.clientId);const st=db.settings;
  <tr><td colspan="3" class="r">Paid</td><td class="r">${inr(iv.paid)}</td></tr>
  <tr><td colspan="3" class="r bold">Balance Due ${iv.pending>0?'(by '+fmtD(iv.dueDate)+')':''}</td><td class="r bold">${inr(iv.pending)}</td></tr></table>
  ${iv.payments&&iv.payments.length?`<b>Payments:</b> ${iv.payments.map(p=>p.receipt+' · '+p.mode+' · '+inr(p.amt)+' ('+fmtD(p.date)+')').join(' | ')}`:''}
+ <div class="row" style="justify-content:space-between;align-items:flex-end;margin-top:48px;gap:24px">
+  <div style="flex:1"></div>
+  <div style="min-width:220px;text-align:center">
+   <div style="font-size:12px;font-weight:800;letter-spacing:.5px;margin-bottom:36px">FITO6 FITNESS STUDIO</div>
+   <div style="border-top:1px solid #333;padding-top:6px;font-size:11px">Authorised Signatory</div>
+  </div>
+ </div>
  <p style="margin-top:20px;font-size:11px">#FITO6 · This is a computer generated invoice. Thank you for training with ${esc(st.gymName)}!</p></div>`}
 function showInvoice(id){const iv=db.invoices.find(i=>i.id===id);
  openModal(`${invoiceHTML(iv)}<div class="row" style="justify-content:flex-end;margin-top:12px">
@@ -1134,10 +1178,15 @@ function openEditSub(subId){
  const c=client(s.clientId)||{};
  const trainers=trainerStaffList();
  const statusVal=s.status==='Frozen'?'Frozen':(subStatus(s)==='Expired'?'Expired':'Active');
+ ensurePkgSettings();
+ const pkgs=pkgListFor(s.type==='PT'?'PT':s.type==='Group Class'||s.type==='Dance'?'Group Class':'Membership');
+ const pkgOpts=pkgs.map(p=>`<option value="${esc(p.name)}" data-p="${p.price}" data-m="${p.months}" ${p.name===s.pkg?'selected':''}>${esc(p.name)} — ${inr(p.price)}</option>`).join('')
+  +`<option value="__custom__" ${pkgs.every(p=>p.name!==s.pkg)?'selected':''}>Custom / Other</option>`;
  openModal(`<h2>Edit Subscription — ${esc(c.name||'')}</h2>
  <div class="sub" style="margin-bottom:10px">${esc(s.type)} · ${esc(s.kind||'New')}</div>
  <div class="grid g3">
-  ${fld('es_pkg','Package Name',s.pkg)}
+  <div class="field"><label>Package</label><select id="es_pkg_sel" onchange="onEditPkgPick()">${pkgOpts}</select></div>
+  ${fld('es_pkg','Package Name (edit)',s.pkg)}
   ${fld('es_price','Package Price',s.price||s.woGst||0,'number')}
   ${fld('es_sell','Selling Price ₹',s.sell??s.woGst??s.price??0,'number')}
   ${fld('es_gst','GST %',s.gstPct??db.settings.gstPct,'number')}
@@ -1148,6 +1197,7 @@ function openEditSub(subId){
     <option value="Active" ${statusVal==='Active'?'selected':''}>Active</option>
     <option value="Frozen" ${statusVal==='Frozen'?'selected':''}>Frozen</option>
     <option value="Expired" ${statusVal==='Expired'?'selected':''}>Expired</option>
+    <option value="Used" ${s.status==='Used'?'selected':''}>Used</option>
    </select></div>
   <div class="field"><label>Branch</label><input id="es_branch" value="${esc(s.branch||db.settings.branch||'')}"></div>
   ${billRepSelect('es_billrep',s.billRep||c.billRep,s.billRepId||c.billRepId)}
@@ -1157,13 +1207,24 @@ function openEditSub(subId){
    </select></div>`:''}
  </div>
  <div class="card" style="background:#fafbfd;margin-top:10px" id="es_calc"></div>
- <p class="sub" style="margin-top:8px">GST &amp; final amount use selling price. Linked unpaid invoice totals are updated when you save.</p>
+ <p class="sub" style="margin-top:8px">Choose package from dropdown — price &amp; end date update. Linked unpaid invoice totals update on save.</p>
  <div class="row" style="justify-content:flex-end;margin-top:12px;gap:8px">
   <button class="btn sec" onclick="openClient('${s.clientId}')">Cancel</button>
   <button class="btn" onclick="saveEditSub('${subId}')">Save Changes</button>
  </div>
  <script>
-  ['es_price','es_sell','es_gst','es_start'].forEach(id=>{const el=$(id);if(el)el.oninput=el.onchange=calcEditSub});
+  window._editSubMonths=1;
+  function onEditPkgPick(){
+   const o=$('es_pkg_sel').selectedOptions[0];if(!o)return;
+   if(o.value==='__custom__')return;
+   $('es_pkg').value=o.value;$('es_price').value=o.dataset.p||0;
+   if($('es_sell'))$('es_sell').value=o.dataset.p||0;
+   window._editSubMonths=parseInt(o.dataset.m,10)||1;
+   const start=val('es_start')||today();
+   $('es_end').value=addDays(addMonths(start,window._editSubMonths),-1);
+   calcEditSub();
+  }
+  ['es_price','es_sell','es_gst','es_start'].forEach(id=>{const el=$(id);if(el)el.oninput=el.onchange=()=>{if(id==='es_start'&&window._editSubMonths){$('es_end').value=addDays(addMonths(val('es_start')||today(),window._editSubMonths),-1)}calcEditSub()}});
   calcEditSub();
  <\/script>`)}
 function calcEditSub(){
@@ -1194,7 +1255,7 @@ function saveEditSub(subId){
   pkg,price:x.price,sell:x.sell,disc:x.disc,gstPct:x.gstp,gstAmt:x.gstAmt,woGst:x.woGst,final:x.final,
   start:val('es_start')||s.start,end:val('es_end')||s.end,branch:val('es_branch'),
   billRep:br.billRep,billRepId:br.billRepId,trainer,trainerId,
-  status:st==='Frozen'?'Frozen':(st==='Expired'?'Expired':'')
+  status:st==='Frozen'?'Frozen':(st==='Expired'?'Expired':(st==='Used'?'Used':''))
  });
  const c=client(s.clientId);
  if(c){c.billRep=br.billRep;c.billRepId=br.billRepId;if(trainer){c.trainer=trainer;c.trainerId=trainerId}}
@@ -1263,10 +1324,14 @@ function applyCbFilters(){
  $('cb_tbl').innerHTML=cbTable(e=>cbMatch(e,f));
 }
 function resetCbFilters(){
- if($('cb_month'))$('cb_month').value=thisMonth();
+ if($('cb_month'))$('cb_month').value='';
  ['cb_cat','cb_party','cb_flow','cb_mode','cb_sales','cb_role'].forEach(id=>{if($(id))$(id).value=''});
  if($('cb_show'))$('cb_show').value='Active';
  applyCbFilters();
+}
+function clearCbFilters(){
+ resetCbFilters();
+ toast('Cashbook filters cleared');
 }
 function pgCashbook(){
  const t=today(),m=thisMonth();
@@ -1289,7 +1354,8 @@ function pgCashbook(){
   ${cbOpt('cb_role','Admin Category',roles)}
   <div class="field"><label>Show</label><select id="cb_show"><option value="Active">Active</option><option value="Inactive">Inactive</option><option value="All">All</option></select></div>
   <button class="btn sec sm" onclick="applyCbFilters()">Filter</button>
-  <button class="btn sec sm" onclick="resetCbFilters()">Reset</button>
+  <button class="btn sec sm" onclick="clearCbFilters()">Clear</button>
+  <button class="btn sec sm" onclick="editPayModes()">Edit Payment Modes</button>
   <button class="btn dgr sm" onclick="bulkInactiveCash()">Bulk Inactive</button>
   <button class="btn sec sm" onclick="exportCashbook()">⬇ Export CSV</button>
  </div>
@@ -1328,6 +1394,15 @@ function manageCbCats(){
  </div>
  <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn sec" onclick="closeModal()">Cancel</button>
  <button class="btn" onclick="db.settings.incCats=val('cb_inc').split('\\n').map(s=>s.trim()).filter(Boolean);db.settings.expCats=val('cb_exp').split('\\n').map(s=>s.trim()).filter(Boolean);save();audit('Settings Changed','Cashbook categories');toast('Categories saved');closeModal();go('cashbook')">Save</button></div>`)}
+function editPayModes(){
+ ensurePkgSettings();
+ openModal(`<h2>Edit Mode of Payment</h2>
+ <p class="sub" style="margin-bottom:10px">One mode per line. Used in billing, cashbook and expenses.</p>
+ <textarea id="pm_edit" rows="8">${(db.settings.payModes||[]).join('\n')}</textarea>
+ <div class="row" style="justify-content:flex-end;gap:8px;margin-top:12px">
+  <button class="btn sec" onclick="closeModal()">Cancel</button>
+  <button class="btn" onclick="db.settings.payModes=val('pm_edit').split('\\n').map(s=>s.trim()).filter(Boolean);save();audit('Settings Changed','Payment modes');toast('Payment modes saved');closeModal();go(PAGE)">Save Modes</button>
+ </div>`)}
 function exportCashbook(){
  const f=cbFilterState();
  const rows=db.cashbook.filter(e=>cbMatch(e,f));
@@ -1405,14 +1480,14 @@ function staffForm(id){
  if(!canEdit&&id){toast('No permission to edit this profile');return}
  openModal(`<h2>${id?'Edit Staff — '+esc(s.name):'Add Staff'}</h2>
  <div class="grid g3">
- ${fld('st_name','Name *',s.name)}${sel('st_dept','Department',['Trainer','Reception','Cleaner','Manager','Accountant'],s.dept||'Reception')}${sel('st_gender','Gender',['Male','Female','Other'],s.gender)}
+ ${fld('st_name','Name *',s.name)}${sel('st_dept','Department',['Trainer','Management','Reception','Front Office','Cleaner','Manager','Accountant'],s.dept||'Management')}${sel('st_gender','Gender',['Male','Female','Other'],s.gender)}
  ${fld('st_phone','Contact *',s.phone)}${fld('st_email','Email',s.email)}${fld('st_dob','DOB',s.dob,'date')}
  ${fld('st_join','Joining Date',s.joining||today(),'date')}${fld('st_sal','Monthly Salary ₹',s.salary,'number')}${sel('st_shift','Shift',['Morning','Evening','Split Shift','Custom'],s.shift)}
  ${fld('st_bank','Bank A/c & IFSC',s.bank)}${fld('st_aadhaar','Aadhaar',s.aadhaar)}${fld('st_pan','PAN',s.pan)}
  ${fld('st_qual','Qualification',s.qual)}${fld('st_exp','Experience',s.exp)}${sel('st_status','Status',['Active','Inactive','Resigned'],s.status||'Active')}
  <div class="field"><label>Bill Rep?</label><select id="st_billrep"><option value="1" ${s.billRep!==false&&s.isBillRep!==false?'selected':''}>Yes — can collect / appear as Bill Rep</option><option value="0" ${s.billRep===false||s.isBillRep===false?'selected':''}>No</option></select></div>
  </div>
- <p class="sub">Trainer IDs use TR#### · other staff use ST####</p>
+ <p class="sub">IDs: Trainer <b>26TR001</b> · FOM / Management / Reception <b>26FOM001</b> · Accountant <b>26ACC001</b></p>
  <div class="row" style="justify-content:flex-end"><button class="btn sec" onclick="closeModal()">Cancel</button><button class="btn" onclick="saveStaff('${id||''}')">Save</button></div>`)}
 function saveStaff(id){
  if(!val('st_name')||!val('st_phone')){toast('Name and contact required');return}
@@ -1635,8 +1710,8 @@ function pgMeter(){
  }
  $('content').innerHTML=`
  <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:10px">
-  <div><h2>Electricity Meter</h2>
-   <div class="sub">Enter <b>Night</b> and <b>Day</b> readings · Daily final = Day − Night · Month total sums daily finals</div></div>
+  <div><h2>EB Meter Reading</h2>
+   <div class="sub"><b>EB Night Reading</b> + <b>EB Day Reading</b> · Daily final = Day − Night · Month total = sum of daily finals</div></div>
   <div class="row" style="gap:8px;align-items:end">
    <div class="field" style="margin:0"><label>Month</label><input type="month" id="mt_month" value="${ym}" onchange="METER_MONTH=this.value;pgMeter()"></div>
    <button class="btn" onclick="meterEntry(today())">＋ Today’s Entry</button>
@@ -1670,12 +1745,12 @@ function pgMeter(){
 function meterEntry(date){
  const r=meterFor(date)||{date,night:'',day:'',notes:''};
  const preview=meterDayFinal(r.night,r.day);
- openModal(`<h2>Meter Reading — ${fmtD(date)}</h2>
- <p class="sub" style="margin-bottom:12px">Enter twice daily: <b>Night</b> reading and <b>Day</b> reading. Final for the day = <b>Day − Night</b>.</p>
+ openModal(`<h2>EB Meter — ${fmtD(date)}</h2>
+ <p class="sub" style="margin-bottom:12px">Enter <b>EB Night Reading</b> and <b>EB Day Reading</b>. Final for the day = <b>Day − Night</b>.</p>
  <div class="grid g3">
-  ${fld('mt_night','Night reading',r.night??'','number')}
-  ${fld('mt_day','Day reading',r.day??'','number')}
-  <div class="field"><label>Daily final (auto)</label><input id="mt_final" readonly class="ro" value="${preview!=null?preview:''}"></div>
+  ${fld('mt_night','EB Night Reading',r.night??'','number')}
+  ${fld('mt_day','EB Day Reading',r.day??'','number')}
+  <div class="field"><label>Daily final (Day − Night)</label><input id="mt_final" readonly class="ro" value="${preview!=null?preview:''}"></div>
   ${fld('mt_notes','Notes',r.notes||'')}
   ${fld('mt_by','Entered By',r.by||(USER?USER.name:''))}
  </div>
@@ -1755,28 +1830,117 @@ function saveClass(id){
  save();toast('Class saved');closeModal();go('batches');
 }
 
+/* ================= TRAINER PORTAL (mobile-first) ================= */
+function pgTrainerPortal(){
+ const t=today();
+ const myName=USER.name;
+ const myPt=db.subs.filter(s=>s.type==='PT'&&subStatus(s)==='Active'&&(s.trainer===myName||!s.trainer));
+ const myTodos=(db.todos||[]).filter(x=>!x.done&&(x.owner===myName||x.ownerEmail===USER.u));
+ const att=db.memberAtt.filter(a=>a.date===t).length;
+ $('content').innerHTML=`
+ <div class="trainer-portal">
+  <h2>Trainer Portal</h2>
+  <div class="sub">Mobile view · ${esc(myName)}</div>
+  <div class="grid g2" style="margin:16px 0">
+   ${stat('My Active PT',myPt.length,'ok')}${stat('Open Todos',myTodos.length,'br')}
+   ${stat('Check-ins today',att)}${stat('Date',fmtD(t))}
+  </div>
+  <div class="grid g1" style="gap:10px">
+   <button class="btn" style="padding:16px;font-size:16px;width:100%" onclick="go('clients')">🧍 My Members</button>
+   <button class="btn sec" style="padding:16px;font-size:16px;width:100%" onclick="go('attendance')">🕒 Attendance</button>
+   <button class="btn sec" style="padding:16px;font-size:16px;width:100%" onclick="go('todos')">✅ My To-dos (${myTodos.length})</button>
+   <button class="btn sec" style="padding:16px;font-size:16px;width:100%" onclick="go('batches')">🗓️ Batches / Classes</button>
+  </div>
+  <h3 style="margin-top:18px">Today’s PT clients</h3>
+  <div class="tbl"><table><tr><th>Member</th><th>Package</th><th>Ends</th><th></th></tr>
+  ${myPt.slice(0,20).map(s=>{const c=client(s.clientId);return`<tr><td>${esc(c?c.name:'?')}</td><td>${esc(s.pkg)}</td><td>${fmtD(s.end)}</td>
+  <td><button class="btn sm sec" onclick="openClient('${s.clientId}')">Open</button></td></tr>`}).join('')||'<tr><td colspan=4 class="mut">No active PT assigned</td></tr>'}
+  </table></div>
+ </div>`;
+}
+
+/* ================= YDL LEADS / FOLLOW-UPS ================= */
+function pgLeads(){
+ if(!db.leads)db.leads=[];
+ const rows=db.leads.slice().reverse().map(l=>`<tr>
+  <td>${fmtD(l.date)}</td><td class="bold">${esc(l.name)}</td><td>${esc(l.mobile||'')}</td>
+  <td>${esc(l.source||'')}</td><td>${esc(l.status||'New')}</td><td>${fmtD(l.follow)}</td>
+  <td class="r"><button class="btn sm sec" onclick="leadForm('${l.id}')">Edit</button>
+  <button class="btn sm" onclick="convertLead('${l.id}')">→ Client</button></td></tr>`).join('');
+ $('content').innerHTML=`
+ <div class="row" style="justify-content:space-between"><div><h2>Leads / Enquiries</h2><div class="sub">YDL-style walk-ins &amp; enquiries</div></div>
+ <button class="btn" onclick="leadForm()">＋ Add Lead</button></div>
+ <div class="tbl" style="margin-top:12px"><table><tr><th>Date</th><th>Name</th><th>Mobile</th><th>Source</th><th>Status</th><th>Follow-up</th><th></th></tr>
+ ${rows||'<tr><td colspan=7 class="mut">No leads yet</td></tr>'}</table></div>`;
+}
+function pgFollowups(){
+ if(!db.leads)db.leads=[];
+ const due=db.leads.filter(l=>l.follow&&l.status!=='Converted').sort((a,b)=>a.follow.localeCompare(b.follow));
+ $('content').innerHTML=`
+ <div class="row" style="justify-content:space-between"><div><h2>Follow-ups</h2><div class="sub">${due.filter(l=>l.follow<=today()).length} due today or overdue</div></div>
+ <button class="btn" onclick="go('leads')">All Leads</button></div>
+ <div class="tbl" style="margin-top:12px"><table><tr><th>Follow date</th><th>Name</th><th>Mobile</th><th>Status</th><th>Notes</th><th></th></tr>
+ ${due.map(l=>`<tr style="${l.follow<=today()?'background:#fff5f5':''}"><td>${fmtD(l.follow)}</td><td class="bold">${esc(l.name)}</td><td>${esc(l.mobile||'')}</td>
+ <td>${esc(l.status||'New')}</td><td>${esc(l.notes||'')}</td>
+ <td class="r"><button class="btn sm sec" onclick="leadForm('${l.id}')">Update</button></td></tr>`).join('')||'<tr><td colspan=6 class="mut">No follow-ups scheduled</td></tr>'}
+ </table></div>`;
+}
+function leadForm(id){
+ const l=id?(db.leads||[]).find(x=>x.id===id):{};
+ openModal(`<h2>${id?'Edit':'Add'} Lead</h2><div class="grid g3">
+  ${fld('ld_name','Name *',l.name)}${fld('ld_mobile','Mobile',l.mobile)}${sel('ld_src','Source',['Walk-in','Facebook','Instagram','Google','Reference','Call','Other'],l.source||'Walk-in')}
+  ${fld('ld_date','Enquiry Date',l.date||today(),'date')}${fld('ld_follow','Follow-up Date',l.follow||addDays(today(),1),'date')}
+  ${sel('ld_status','Status',['New','Hot','Warm','Cold','Converted','Lost'],l.status||'New')}
+  ${fld('ld_notes','Notes',l.notes||'')}
+ </div><div class="row" style="justify-content:flex-end;gap:8px;margin-top:10px">
+  <button class="btn sec" onclick="closeModal()">Cancel</button>
+  <button class="btn" onclick="saveLead('${id||''}')">Save</button></div>`)}
+function saveLead(id){
+ if(!val('ld_name')){toast('Name required');return}
+ let l=id?(db.leads||[]).find(x=>x.id===id):null;
+ if(!l){l={id:'LD'+Date.now()};db.leads.push(l)}
+ Object.assign(l,{name:caps(val('ld_name')),mobile:val('ld_mobile'),source:val('ld_src'),date:val('ld_date'),follow:val('ld_follow'),status:val('ld_status'),notes:val('ld_notes')});
+ save();toast('Lead saved');closeModal();go(PAGE==='followups'?'followups':'leads');
+}
+function convertLead(id){
+ const l=(db.leads||[]).find(x=>x.id===id);if(!l)return;
+ l.status='Converted';save();
+ WIZ={step:1,c:{name:l.name,mobile:l.mobile,ref:l.source||'Walk-in'},clientId:null,invId:null};
+ renderWizard();toast('Lead → New client wizard');
+}
+
 /* ================= TRAINER TODOS ================= */
 function pgTodos(){
  if(!db.todos)db.todos=[];
- const mine=USER.role==='superadmin'?db.todos:db.todos.filter(t=>!t.owner||t.owner===USER.name||t.ownerEmail===USER.u);
+ const canAssign=USER.role==='superadmin'||USER.role==='frontoffice';
+ const mine=canAssign?db.todos:db.todos.filter(t=>!t.owner||t.owner===USER.name||t.ownerEmail===USER.u||t.assignedTo===USER.name);
  $('content').innerHTML=`
- <div class="row" style="justify-content:space-between"><div><h2>To-do List</h2><div class="sub">Trainer / staff tasks</div></div>
- <button class="btn" onclick="todoForm()">＋ Add Todo</button></div>
- <div class="tbl" style="margin-top:12px"><table><tr><th>Task</th><th>Due</th><th>Owner</th><th>Status</th><th></th></tr>
- ${mine.slice().reverse().map(t=>`<tr><td>${esc(t.text)}</td><td>${fmtD(t.due)}</td><td>${esc(t.owner||'')}</td>
+ <div class="row" style="justify-content:space-between"><div><h2>To-do List</h2><div class="sub">Assign work to staff &amp; trainers</div></div>
+ <button class="btn" onclick="todoForm()">＋ Assign Task</button></div>
+ <div class="tbl" style="margin-top:12px"><table><tr><th>Task</th><th>Due</th><th>Assigned To</th><th>By</th><th>Status</th><th></th></tr>
+ ${mine.slice().reverse().map(t=>`<tr><td>${esc(t.text)}</td><td>${fmtD(t.due)}</td><td>${esc(t.assignedTo||t.owner||'')}</td><td>${esc(t.createdBy||'')}</td>
  <td><span class="badge ${t.done?'b-ok':'b-warn'}">${t.done?'Done':'Open'}</span></td>
  <td class="r"><button class="btn sm" onclick="toggleTodo('${t.id}')">${t.done?'Reopen':'Done'}</button>
- <button class="btn sm dgr" onclick="removeTodo('${t.id}')">Remove</button></td></tr>`).join('')||'<tr><td colspan=5 class="mut">No todos</td></tr>'}</table></div>`;
+ <button class="btn sm dgr" onclick="removeTodo('${t.id}')">Remove</button></td></tr>`).join('')||'<tr><td colspan=6 class="mut">No todos</td></tr>'}</table></div>`;
 }
 function todoForm(){
- openModal(`<h2>Add Todo</h2><div class="grid g2">${fld('td_text','Task')}${fld('td_due','Due Date',today(),'date')}
- <div class="field"><label>Owner</label><select id="td_own">${(db.staff||[]).filter(s=>s.status==='Active').map(s=>`<option ${s.name===USER.name?'selected':''}>${esc(s.name)}</option>`).join('')||`<option>${esc(USER.name)}</option>`}</select></div>
+ const staff=(db.staff||[]).filter(s=>s.status==='Active');
+ openModal(`<h2>Assign Work</h2><div class="grid g2">
+  ${fld('td_text','Task / Work *')}
+  ${fld('td_due','Due Date',today(),'date')}
+  <div class="field"><label>Assign to Staff / Trainer</label>
+   <select id="td_own"><option value="">— Select —</option>
+   ${staff.map(s=>`<option value="${esc(s.name)}" data-dept="${esc(s.dept||'')}">${esc(s.name)} (${esc(s.dept||'Staff')}) · ${esc(s.id)}</option>`).join('')}
+   <option value="${esc(USER.name)}">${esc(USER.name)} (me)</option>
+   </select></div>
+  ${fld('td_notes','Notes','')}
  </div><div class="row" style="justify-content:flex-end;gap:8px"><button class="btn sec" onclick="closeModal()">Cancel</button>
- <button class="btn" onclick="saveTodo()">Save</button></div>`)}
+ <button class="btn" onclick="saveTodo()">Assign</button></div>`)}
 function saveTodo(){
  const text=val('td_text');if(!text){toast('Enter task');return}
- db.todos.push({id:'TD'+Date.now(),text,due:val('td_due'),owner:val('td_own')||USER.name,ownerEmail:USER.u,done:false,created:today()});
- save();toast('Todo added');closeModal();go('todos');
+ const owner=val('td_own')||USER.name;
+ db.todos.push({id:'TD'+Date.now(),text,due:val('td_due'),owner,assignedTo:owner,ownerEmail:USER.u,createdBy:USER.name,notes:val('td_notes'),done:false,created:today()});
+ save();audit('Todo Assigned',owner+' · '+text);toast('Task assigned to '+owner);closeModal();go('todos');
 }
 function toggleTodo(id){const t=db.todos.find(x=>x.id===id);if(!t)return;t.done=!t.done;save();go('todos')}
 function removeTodo(id){db.todos=db.todos.filter(t=>t.id!==id);save();go('todos')}
@@ -1784,40 +1948,74 @@ function removeTodo(id){db.todos=db.todos.filter(t=>t.id!==id);save();go('todos'
 /* ================= SETTINGS ================= */
 function pgSettings(){
  const s=db.settings;ensurePkgSettings();
+ if(!s.adminIds)s.adminIds={superAdmin:'',admin:''};
+ if(!Array.isArray(s.branches))s.branches=[s.branch||'Main Branch'];
  $('content').innerHTML=`<h2>Settings</h2>
  <div class="grid g2" style="margin-top:12px">
  <div class="card"><h3>Business</h3>
-  ${fld('se_name','Gym Name',s.gymName)}${fld('se_branch','Branch',s.branch)}${fld('se_gstno','GST Number',s.gstNo)}${fld('se_gstp','Default GST %',s.gstPct,'number')}${fld('se_open','Opening Cash Balance ₹',s.openingCash,'number')}
+  ${fld('se_name','Gym Name',s.gymName)}${fld('se_branch','Active Branch',s.branch)}${fld('se_gstno','GST Number',s.gstNo)}${fld('se_gstp','Default GST %',s.gstPct,'number')}
+  ${fld('se_open','Opening Cash Balance ₹',s.openingCash,'number')}${fld('se_bank','Opening Bank Balance ₹',s.openingBank||0,'number')}
   <button class="btn" onclick="saveSettings()">Save Settings</button></div>
+ <div class="card"><h3>Admin / Super Admin IDs</h3>
+  <p class="sub">Separate identity codes for login records (year-based).</p>
+  <div class="grid g2">
+   <div class="field"><label>Super Admin ID</label><input id="se_said" readonly class="ro" value="${esc(s.adminIds.superAdmin||'Not generated')}"></div>
+   <div class="field"><label>Admin ID</label><input id="se_aid" readonly class="ro" value="${esc(s.adminIds.admin||'Not generated')}"></div>
+  </div>
+  <div class="row" style="gap:8px;margin-top:10px">
+   <button class="btn sec" onclick="genAdminId('super')">Generate Super Admin ID</button>
+   <button class="btn sec" onclick="genAdminId('admin')">Generate Admin ID</button>
+  </div>
+  <p class="sub" style="margin-top:8px">Format: <b>26SA001</b> (Super Admin) · <b>26ADM001</b> (Admin)</p></div>
+ <div class="card"><h3>Branches — New Branch ID</h3>
+  <p class="sub">Current code: <b>${esc(s.branchCode||'BR01')}</b></p>
+  <div class="tbl"><table><tr><th>Branch</th></tr>${(s.branches||[]).map(b=>`<tr><td>${esc(b)}</td></tr>`).join('')}</table></div>
+  <div class="row" style="gap:8px;margin-top:10px;align-items:end">
+   ${fld('se_newbr','New branch name','')}
+   <button class="btn" onclick="addNewBranch()">Create Branch + ID</button>
+  </div></div>
  <div class="card"><h3>Membership / Subscriptions</h3>
-  <p class="sub" style="margin-bottom:10px">Packages: Membership · PT · Group Class (Dance/Boxing/etc.)</p>
-  <div class="sub" style="margin-bottom:10px">Membership: <b>${(s.packages||[]).length}</b> · PT: <b>${(s.ptPackages||[]).length}</b> · Group Class: <b>${(s.groupClassPackages||s.dancePackages||[]).length}</b></div>
+  <p class="sub" style="margin-bottom:10px">Packages: Membership · PT · Group Class</p>
   <button class="btn" onclick="go('memberships')">Open Memberships Module →</button></div>
  <div class="card"><h3>Subscription Types (editable)</h3>
   <textarea id="se_subtypes" rows="6">${(s.subTypes||[]).join('\n')}</textarea>
-  <button class="btn" style="margin-top:10px" onclick="db.settings.subTypes=val('se_subtypes').split('\\n').map(x=>x.trim()).filter(Boolean);save();audit('Settings Changed','Subscription types');toast('Saved')">Save Types</button></div>
+  <button class="btn" style="margin-top:10px" onclick="db.settings.subTypes=val('se_subtypes').split('\\n').map(x=>x.trim()).filter(Boolean);save();toast('Saved')">Save Types</button></div>
  <div class="card"><h3>Payment Modes (editable)</h3>
   <textarea id="se_pay" rows="5">${(s.payModes||[]).join('\n')}</textarea>
-  <button class="btn" style="margin-top:10px" onclick="db.settings.payModes=val('se_pay').split('\\n').map(x=>x.trim()).filter(Boolean);save();audit('Settings Changed','Payment modes');toast('Saved')">Save Modes</button></div>
+  <button class="btn" style="margin-top:10px" onclick="db.settings.payModes=val('se_pay').split('\\n').map(x=>x.trim()).filter(Boolean);save();audit('Settings Changed','Payment modes');toast('Saved')">Save Modes</button>
+  <button class="btn sec" style="margin-top:8px" onclick="editPayModes()">Quick Edit Modes</button></div>
  <div class="card"><h3>Income Categories</h3><textarea id="se_inc" rows="6">${(s.incCats||[]).join('\n')}</textarea>
   <button class="btn" style="margin-top:10px" onclick="db.settings.incCats=val('se_inc').split('\\n').filter(Boolean);save();toast('Saved')">Save</button></div>
  <div class="card"><h3>Expense Categories</h3><textarea id="se_exp" rows="6">${(s.expCats||[]).join('\n')}</textarea>
-  <button class="btn" style="margin-top:10px" onclick="db.settings.expCats=val('se_exp').split('\\n').filter(Boolean);save();audit('Settings Changed','Expense categories');toast('Saved')">Save Categories</button></div>
+  <button class="btn" style="margin-top:10px" onclick="db.settings.expCats=val('se_exp').split('\\n').filter(Boolean);save();toast('Saved')">Save Categories</button></div>
  <div class="card"><h3>Bill Rep Management</h3>
-  <p class="sub">Toggle which staff appear in Bill Rep dropdowns (also editable on each staff profile).</p>
-  <div class="tbl"><table><tr><th>Staff</th><th>Dept</th><th>Bill Rep</th></tr>
-  ${(db.staff||[]).filter(st=>st.status==='Active').map(st=>`<tr><td>${esc(st.name)}</td><td>${esc(st.dept)}</td>
-  <td><button class="btn sm ${st.billRep===false?'sec':''}" onclick="toggleBillRepFlag('${st.id}')">${st.billRep===false?'Off':'On'}</button></td></tr>`).join('')||'<tr><td colspan=3 class="mut">Add staff first</td></tr>'}</table></div></div>
+  <p class="sub">Include <b>Management</b> department staff as bill reps.</p>
+  <div class="tbl"><table><tr><th>Staff</th><th>Dept</th><th>ID</th><th>Bill Rep</th></tr>
+  ${(db.staff||[]).filter(st=>st.status==='Active').map(st=>`<tr><td>${esc(st.name)}</td><td>${esc(st.dept)}</td><td>${esc(st.id)}</td>
+  <td><button class="btn sm ${st.billRep===false?'sec':''}" onclick="toggleBillRepFlag('${st.id}')">${st.billRep===false?'Off':'On'}</button></td></tr>`).join('')||'<tr><td colspan=4 class="mut">Add staff first</td></tr>'}</table></div></div>
  <div class="card"><h3>Backup & Data</h3>
   <div class="row" style="margin-bottom:10px"><button class="btn sec" onclick="backup()">⬇ Download Backup (JSON)</button>
   <label class="btn sec" style="display:inline-block">⬆ Restore Backup<input type="file" style="display:none" onchange="restore(this)"></label></div>
   <div class="row"><button class="btn sec" onclick="seedDemo()">🧪 Load Demo Data</button>
-  <button class="btn dgr" onclick="if(confirm('Erase ALL data? This cannot be undone.')){localStorage.removeItem(DBKEY);location.reload()}">🗑 Factory Reset</button></div>
-  <p class="sub" style="margin-top:10px">Cloud Firestore is the source of truth after login.</p></div>
+  <button class="btn dgr" onclick="if(confirm('Erase ALL data? This cannot be undone.')){localStorage.removeItem(DBKEY);location.reload()}">🗑 Factory Reset</button></div></div>
  </div>`}
+function genAdminId(kind){
+ if(!db.settings.adminIds)db.settings.adminIds={superAdmin:'',admin:''};
+ const id=nextAdminId(kind);
+ if(kind==='super')db.settings.adminIds.superAdmin=id;else db.settings.adminIds.admin=id;
+ save();audit('Admin ID Generated',kind+' · '+id);toast(kind==='super'?'Super Admin ID: '+id:'Admin ID: '+id);pgSettings();
+}
+function addNewBranch(){
+ const name=val('se_newbr');if(!name){toast('Enter branch name');return}
+ if(!Array.isArray(db.settings.branches))db.settings.branches=[];
+ const code=nextBranchCode();
+ db.settings.branches.push(name+' ('+code+')');
+ db.settings.branch=name;db.settings.branchCode=code;
+ save();audit('Branch Created',name+' · '+code);toast('Branch created · ID '+code);pgSettings();
+}
 function toggleBillRepFlag(id){const s=staffById(id);if(!s)return;s.billRep=s.billRep===false;s.isBillRep=s.billRep;save();pgSettings()}
 function saveSettings(){const s=db.settings;const old=s.gstPct;
- s.gymName=val('se_name');s.branch=val('se_branch');s.gstNo=val('se_gstno');s.gstPct=num('se_gstp');s.openingCash=num('se_open');
+ s.gymName=val('se_name');s.branch=val('se_branch');s.gstNo=val('se_gstno');s.gstPct=num('se_gstp');s.openingCash=num('se_open');s.openingBank=num('se_bank');
  save();audit('Settings Changed','Business settings',String(old),String(s.gstPct));toast('Settings saved');$('sb_role').textContent=s.gymName}
 function parsePkgs(id){return val(id).split('\n').map(l=>l.split('|').map(x=>x.trim())).filter(a=>a[0]).map(a=>({name:a[0],months:parseInt(a[1])||1,price:parseFloat(a[2])||0}))}
 function savePkgs(){db.settings.packages=parsePkgs('se_pkgs');db.settings.ptPackages=parsePkgs('se_pt');db.settings.dancePackages=parsePkgs('se_dance');save();audit('Settings Changed','Packages updated');toast('Packages saved')}
@@ -1873,7 +2071,7 @@ function seedDemo(){
    $('login').style.display='none';$('app').style.display='block';
    $('tb_user').textContent=USER.name+' · '+USER.role+' · cloud';
    $('sb_role').textContent=(db.settings&&db.settings.gymName)||'FITO6';
-   buildNav();go('dashboard');refreshTopbarNotifs();
+   buildNav();go(USER.role==='trainer'?'trainer':'dashboard');refreshTopbarNotifs();
    if(source)toast('Session restored from cloud');
   }catch(e){
    clearAuth();_cloudReady=false;
