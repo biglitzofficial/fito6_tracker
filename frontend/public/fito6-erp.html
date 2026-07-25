@@ -337,7 +337,7 @@ function isGroupClassType(t){return/group\s*class|dance|boxing|zumba|yoga/i.test
 let USER=null,PAGE='dashboard';
 const MENUS={
  superadmin:['dashboard','clients','memberships','billing','cashbook','expenses','meter','staff','attendance','payroll','batches','reports','accounts','audit','settings'],
- frontoffice:['dashboard','clients','memberships','billing','cashbook','attendance','batches'],
+ frontoffice:['dashboard','clients','memberships','billing','cashbook','meter','attendance','batches'],
  accountant:['dashboard','cashbook','expenses','meter','payroll','reports','accounts'],
  trainer:['dashboard','clients','attendance','batches','todos']};
 const PAGES={dashboard:['📊','Dashboard'],clients:['🧍','Clients'],memberships:['🎫','Memberships'],billing:['🧾','Billing / Invoices'],cashbook:['💰','Cashbook'],expenses:['📤','Expenses'],meter:['⚡','Electricity Meter'],staff:['👥','Staff'],attendance:['🕒','Attendance'],payroll:['💵','Payroll'],batches:['🗓️','Batches / Classes'],todos:['✅','My Todos'],reports:['📑','Reports'],accounts:['📚','Accounts / P&L'],audit:['🛡️','Audit Log'],settings:['⚙️','Settings']};
@@ -491,31 +491,159 @@ function stat(l,v,cls){return`<div class="card stat ${cls||''}"><div class="l">$
 function line(l,v){return`<div class="row" style="justify-content:space-between;padding:4px 0"><span class="mut">${l}</span><span>${v}</span></div>`}
 function addDays(d,n){const x=new Date(d+'T00:00');x.setDate(x.getDate()+n);return x.toISOString().slice(0,10)}
 /* ================= CLIENTS ================= */
-let CL_SHOW='Active';
+let CL_F={q:'',billRep:'',gender:'',ref:'',trainer:'',status:'Active',service:'',membership:'',from:'',to:''};
+function clientPlan(c){
+ return db.subs.filter(s=>s.clientId===c.id&&s.status!=='Used').sort((a,b)=>b.end.localeCompare(a.end))[0]||null;
+}
+function clientMemPlan(c){
+ return db.subs.filter(s=>s.clientId===c.id&&s.type==='Membership'&&s.status!=='Used').sort((a,b)=>b.end.localeCompare(a.end))[0]||null;
+}
+function clientListFiltered(){
+ return(db.clients||[]).filter(c=>{
+  if(CL_F.status==='Active'&&c.status==='Inactive')return false;
+  if(CL_F.status==='Inactive'&&c.status!=='Inactive')return false;
+  if(CL_F.status==='No Plan'){
+   const ms=clientMemPlan(c);if(ms&&subStatus(ms)==='Active')return false;
+  }
+  if(CL_F.billRep&&(c.billRep||'')!==CL_F.billRep)return false;
+  if(CL_F.gender&&(c.gender||'')!==CL_F.gender)return false;
+  if(CL_F.ref&&(c.ref||'')!==CL_F.ref)return false;
+  if(CL_F.trainer&&(c.trainer||'')!==CL_F.trainer)return false;
+  if(CL_F.from&&(c.joined||'')<CL_F.from)return false;
+  if(CL_F.to&&(c.joined||'')>CL_F.to)return false;
+  if(CL_F.service){
+   const has=db.subs.some(s=>s.clientId===c.id&&s.status!=='Used'&&s.type===CL_F.service);
+   if(!has)return false;
+  }
+  if(CL_F.membership){
+   const ms=clientMemPlan(c);if(!ms||ms.pkg!==CL_F.membership)return false;
+  }
+  if(CL_F.q){
+   const q=CL_F.q.toLowerCase();
+   const blob=[c.id,c.name,c.mobile,c.wa,c.email,c.billRep,c.trainer].join(' ').toLowerCase();
+   if(!blob.includes(q))return false;
+  }
+  return true;
+ });
+}
+function applyClientFilters(){
+ CL_F.q=val('cl_q')||'';
+ CL_F.billRep=val('cl_rep')||'';
+ CL_F.gender=val('cl_gender')||'';
+ CL_F.ref=val('cl_ref')||'';
+ CL_F.trainer=val('cl_trainer')||'';
+ CL_F.status=val('cl_status')||'All';
+ CL_F.service=val('cl_service')||'';
+ CL_F.membership=val('cl_mem')||'';
+ CL_F.from=val('cl_from')||'';
+ CL_F.to=val('cl_to')||'';
+ pgClients();
+}
+function resetClientFilters(){
+ CL_F={q:'',billRep:'',gender:'',ref:'',trainer:'',status:'Active',service:'',membership:'',from:'',to:''};
+ pgClients();
+}
+function exportClientsCsv(){
+ const list=clientListFiltered();
+ csvExport([['ID','Name','Mobile','Email','Gender','Joined','Status','Package','Valid Till','Bill Rep','Trainer','Referral'],
+  ...list.map(c=>{
+   const ms=clientMemPlan(c);
+   const st=c.status==='Inactive'?'Inactive':(ms?subStatus(ms):'No Plan');
+   return[c.id,c.name,c.mobile,c.email||'',c.gender||'',c.joined||'',st,ms?ms.pkg:'',ms?ms.end:'',c.billRep||'',c.trainer||'',c.ref||''];
+  })],'clients');
+}
 function pgClients(){
- const list=db.clients.filter(c=>CL_SHOW==='All'?true:(CL_SHOW==='Inactive'?c.status==='Inactive':c.status!=='Inactive'));
- const rows=list.map(c=>{const ms=db.subs.filter(s=>s.clientId===c.id&&s.type==='Membership'&&s.status!=='Used').sort((a,b)=>b.end<a.end?-1:1)[0];
+ const all=db.clients||[];
+ const activeN=all.filter(c=>c.status!=='Inactive').length;
+ const inactiveN=all.filter(c=>c.status==='Inactive').length;
+ const noSubN=all.filter(c=>c.status!=='Inactive'&&!clientMemPlan(c)).length;
+ const list=clientListFiltered();
+ const reps=[...new Set(all.map(c=>c.billRep).filter(Boolean))].sort();
+ const trainers=[...new Set(all.map(c=>c.trainer).filter(Boolean))].sort();
+ const refs=[...new Set(all.map(c=>c.ref).filter(Boolean))].sort();
+ const pkgs=[...new Set((db.settings.packages||[]).map(p=>p.name).concat(db.subs.filter(s=>s.type==='Membership').map(s=>s.pkg)))].filter(Boolean).sort();
+ const branch=(db.settings.branch||db.settings.gymName||'FITO6');
+ const rows=list.map(c=>{
+  const ms=clientMemPlan(c);
   const st=c.status==='Inactive'?'Inactive':(ms?subStatus(ms):'No Plan');
   const badge=st==='Active'?'b-ok':st==='Expired'||st==='Inactive'?'b-bad':st==='Frozen'?'b-warn':'b-mut';
   const photo=c.photo?`<img class="photo-av" style="width:28px;height:28px;vertical-align:middle;margin-right:6px" src="${c.photo}">`:'';
-  return`<tr><td class="bold">${c.id}</td><td class="clickable" onclick="openClient('${c.id}')">${photo}${esc(c.name)}</td><td>${esc(c.mobile)}</td>
-  <td>${ms?esc(ms.pkg):'-'}</td><td>${ms?fmtD(ms.end):'-'}</td><td><span class="badge ${badge}">${st}</span></td>
-  <td>${esc(c.billRep||'-')}</td><td>${esc(c.trainer||'-')}</td>
-  <td class="r" style="white-space:nowrap">
-   <button class="btn sm sec" onclick="openClient('${c.id}')">Profile</button>
-   ${c.status!=='Inactive'?`<button class="btn sm" onclick="openSubForm('${c.id}')">＋ Plan</button>
-   <button class="btn sm dgr" onclick="deactivateClient('${c.id}')">Inactive</button>`:`<button class="btn sm" onclick="activateClient('${c.id}')">Activate</button>`}
-  </td></tr>`}).join('');
+  return`<tr>
+   <td><input type="checkbox" class="cl_sel" value="${c.id}"></td>
+   <td class="bold">${c.id}</td>
+   <td class="clickable" onclick="openClient('${c.id}')">${photo}${esc(c.name)}</td>
+   <td>${esc(c.mobile)}</td><td>${esc(c.email||'')}</td>
+   <td>${ms?esc(ms.pkg):'-'}</td><td>${ms?fmtD(ms.end):'-'}</td>
+   <td><span class="badge ${badge}">${st}</span></td>
+   <td>${esc(c.billRep||'-')}</td><td>${esc(c.trainer||'-')}</td><td>${esc(c.ref||'-')}</td>
+   <td class="r" style="white-space:nowrap">
+    <button class="btn sm sec" onclick="openClient('${c.id}')">Profile</button>
+    ${c.status!=='Inactive'?`<button class="btn sm" onclick="openSubForm('${c.id}')">＋ Plan</button>
+    <button class="btn sm dgr" onclick="deactivateClient('${c.id}')">Deactivate</button>`:`<button class="btn sm" onclick="activateClient('${c.id}')">Activate</button>`}
+   </td></tr>`;
+ }).join('');
  $('content').innerHTML=`
- <div class="row" style="justify-content:space-between"><div><h2>Clients</h2><div class="sub">${activeClients().length} active · ${(db.clients.filter(c=>c.status==='Inactive').length)} inactive</div></div>
- <button class="btn" onclick="openWizard()">➕ New Client</button></div>
- <div class="toolbar" style="margin-top:12px">
-  <div class="field" style="width:280px"><label>Filter</label><input id="cl_f" placeholder="name / phone / id / bill rep" oninput="filterClients()"></div>
-  <div class="field"><label>Show</label><select id="cl_show" onchange="CL_SHOW=this.value;pgClients()"><option ${CL_SHOW==='Active'?'selected':''}>Active</option><option ${CL_SHOW==='Inactive'?'selected':''}>Inactive</option><option ${CL_SHOW==='All'?'selected':''}>All</option></select></div>
+ <div class="row" style="justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px">
+  <div><h2>My Members</h2><div class="sub">Listing · ${esc(db.settings.gymName||'FITO6')}</div></div>
+  <div class="field" style="margin:0;min-width:240px"><label>Branch / Studio</label>
+   <input readonly class="ro" value="${esc(db.settings.gymName||'')} (${esc(branch)})"></div>
  </div>
- <div class="tbl"><table id="cl_tbl"><tr><th>ID</th><th>Name</th><th>Mobile</th><th>Package</th><th>Valid Till</th><th>Status</th><th>Bill Rep</th><th>Trainer</th><th></th></tr>${rows||'<tr><td colspan=9 class="mut">No clients</td></tr>'}</table></div>`;
+ <div class="row" style="margin-top:12px;flex-wrap:wrap;gap:8px;align-items:end">
+  <div class="field" style="margin:0;flex:1;min-width:220px"><label>Search by Mobile / Email / Name / ID</label>
+   <input id="cl_q" value="${esc(CL_F.q)}" placeholder="Search by Mobile Number or Email Address" onkeydown="if(event.key==='Enter')applyClientFilters()"></div>
+  <button class="btn sec" onclick="applyClientFilters()">Search</button>
+  <button class="btn sec" onclick="go('reports')">View Analysis</button>
+  <button class="btn sec" onclick="exportClientsCsv()">Export to CSV</button>
+  <button class="btn" onclick="openWizard()">Add Member</button>
+  <button class="btn sec" style="border-color:var(--bad);color:var(--bad)" onclick="CL_F.status='Inactive';pgClients()">Deactivated Members</button>
+  ${MENUS[USER.role].includes('meter')?`<button class="btn sec" onclick="go('meter')">⚡ Electricity Meter</button>`:''}
+  <button class="btn dgr sm" onclick="bulkDeactivateClients()">Deactivate Selected</button>
+ </div>
+ <div class="card" style="margin-top:14px">
+  <div class="grid g3">
+   <div class="field"><label>Client Rep</label><select id="cl_rep"><option value="">All Staff</option>${reps.map(r=>`<option ${CL_F.billRep===r?'selected':''}>${esc(r)}</option>`).join('')}</select></div>
+   <div class="field"><label>Gender</label><select id="cl_gender"><option value="">All</option>${['Male','Female','Other'].map(g=>`<option ${CL_F.gender===g?'selected':''}>${g}</option>`).join('')}</select></div>
+   <div class="field"><label>Source of Promotion</label><select id="cl_ref"><option value="">All</option>${refs.map(r=>`<option ${CL_F.ref===r?'selected':''}>${esc(r)}</option>`).join('')}</select></div>
+   <div class="field"><label>Assigned Trainer</label><select id="cl_trainer"><option value="">All Trainers</option>${trainers.map(t=>`<option ${CL_F.trainer===t?'selected':''}>${esc(t)}</option>`).join('')}</select></div>
+   <div class="field"><label>Members Status</label><select id="cl_status">
+    <option value="All" ${CL_F.status==='All'?'selected':''}>All Members</option>
+    <option value="Active" ${CL_F.status==='Active'?'selected':''}>Active</option>
+    <option value="Inactive" ${CL_F.status==='Inactive'?'selected':''}>Inactive / Deactivated</option>
+    <option value="No Plan" ${CL_F.status==='No Plan'?'selected':''}>No Subscription</option>
+   </select></div>
+   <div class="field"><label>Services</label><select id="cl_service"><option value="">All Service</option>
+    ${['Membership','PT','Group Class'].map(s=>`<option value="${s}" ${CL_F.service===s?'selected':''}>${s}</option>`).join('')}
+   </select></div>
+   <div class="field"><label>Memberships</label><select id="cl_mem"><option value="">All Membership</option>${pkgs.map(p=>`<option ${CL_F.membership===p?'selected':''}>${esc(p)}</option>`).join('')}</select></div>
+   <div class="field"><label>From (Joined)</label><input type="date" id="cl_from" value="${esc(CL_F.from)}"></div>
+   <div class="field"><label>To (Joined)</label><input type="date" id="cl_to" value="${esc(CL_F.to)}"></div>
+  </div>
+  <div class="row" style="justify-content:flex-end;gap:8px;margin-top:4px">
+   <button class="btn sec" onclick="resetClientFilters()">Reset</button>
+   <button class="btn" onclick="applyClientFilters()">Submit</button>
+  </div>
+ </div>
+ <div class="grid g4" style="margin:14px 0">
+  ${stat('Total Members',all.length)}
+  ${stat('Total Active',activeN,'ok')}
+  ${stat('Total Inactive',inactiveN,'bad')}
+  ${stat('No Subscription',noSubN,'warn')}
+ </div>
+ <div class="sub" style="margin-bottom:8px">Showing <b>${list.length}</b> members (filtered)</div>
+ <div class="tbl"><table id="cl_tbl">
+  <tr><th><input type="checkbox" onclick="document.querySelectorAll('.cl_sel').forEach(c=>c.checked=this.checked)"></th>
+  <th>ID</th><th>Name</th><th>Mobile</th><th>Email</th><th>Package</th><th>Valid Till</th><th>Status</th><th>Bill Rep</th><th>Trainer</th><th>Source</th><th></th></tr>
+  ${rows||'<tr><td colspan=12 class="mut">No members match filters</td></tr>'}
+ </table></div>`;
 }
-function filterClients(){const q=val('cl_f').toLowerCase();document.querySelectorAll('#cl_tbl tr').forEach((tr,i)=>{if(i===0)return;tr.style.display=tr.textContent.toLowerCase().includes(q)?'':'none'})}
+function filterClients(){CL_F.q=val('cl_q')||val('cl_f')||'';applyClientFilters()}
+function bulkDeactivateClients(){
+ const ids=[...document.querySelectorAll('.cl_sel:checked')].map(c=>c.value);
+ if(!ids.length){toast('Select members first');return}
+ if(!confirm(`Deactivate ${ids.length} selected member(s)?`))return;
+ ids.forEach(id=>{const c=client(id);if(c)c.status='Inactive'});
+ save();audit('Members Bulk Inactive',ids.length+' clients');toast(ids.length+' deactivated');pgClients();
+}
 function deactivateClient(id){
  const c=client(id);if(!c)return;
  if(!confirm(`Mark client "${c.name}" (${c.id}) as Inactive?\n\nThey will be hidden from the default client list. Data is kept.`))return;
