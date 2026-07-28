@@ -21,14 +21,21 @@ h2{font-size:20px;margin-bottom:4px} h3{font-size:15px;margin-bottom:10px}
 .logo{font-weight:800;font-size:26px;letter-spacing:1px}.logo span{color:var(--brand)}
 /* LAYOUT */
 #app{display:none;min-height:100vh}
-#sidebar{position:fixed;left:0;top:0;bottom:0;width:212px;background:var(--dark);color:#cfd6e4;overflow-y:auto;z-index:20}
-#sidebar .logo{color:#fff;padding:18px 18px 10px;font-size:20px}
-#sidebar .role{padding:0 18px 14px;font-size:11px;color:#7f8aa3}
-#sidebar a{display:flex;gap:10px;align-items:center;padding:9px 18px;color:#cfd6e4;text-decoration:none;font-size:13px;border-left:3px solid transparent}
-#sidebar a:hover{background:var(--dark2)}
-#sidebar a.on{background:var(--dark2);color:#fff;border-left-color:var(--brand)}
-#main{margin-left:212px;padding:0 22px 40px}
-#topbar{display:flex;align-items:center;gap:14px;padding:14px 0;position:sticky;top:0;background:var(--bg);z-index:10}
+#brandbar{display:flex;align-items:center;gap:14px;padding:10px 18px;background:#0f1524;color:#fff;border-bottom:1px solid #24304a}
+#brandbar .logo{font-size:20px;color:#fff}
+#brandbar .role{font-size:12px;color:#8b96ad}
+#topnav{background:#1a2238;color:#fff;padding:4px 10px 8px;position:sticky;top:0;z-index:40;box-shadow:0 2px 10px rgba(0,0,0,.25)}
+#nav{display:flex;flex-wrap:wrap;gap:2px 0;align-items:stretch}
+.nav-item{position:relative}
+.nav-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 11px;background:transparent;border:none;color:#e8edf7;font-size:12.5px;font-weight:600;white-space:nowrap;border-radius:4px}
+.nav-btn:hover,.nav-item.open>.nav-btn,.nav-btn.on{background:#2a3550;color:#fff}
+.nav-btn .caret{font-size:9px;opacity:.75;margin-left:1px}
+.nav-drop{display:none;position:absolute;left:0;top:100%;min-width:200px;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 12px 32px rgba(0,0,0,.22);padding:6px;z-index:50}
+.nav-item.open>.nav-drop{display:block}
+.nav-drop a{display:block;padding:8px 12px;color:var(--ink);text-decoration:none;font-size:13px;border-radius:6px;font-weight:500}
+.nav-drop a:hover{background:#f3f6fb;color:var(--brand)}
+#main{padding:0 22px 40px}
+#topbar{display:flex;align-items:center;gap:14px;padding:14px 0;background:var(--bg);z-index:10}
 #gsearch{max-width:340px}
 #topbar .sp{flex:1}
 .userchip{background:#fff;border:1px solid var(--line);border-radius:20px;padding:6px 14px;font-size:12px;font-weight:600}
@@ -104,7 +111,8 @@ tr:hover td{background:#fbfcff}
 /* TOAST */
 #toast{position:fixed;bottom:22px;right:22px;background:var(--dark);color:#fff;padding:12px 18px;border-radius:8px;font-size:13px;display:none;z-index:99;box-shadow:0 8px 30px rgba(0,0,0,.3)}
 @media(max-width:700px){
- #sidebar{width:64px}#sidebar span{display:none}#main{margin-left:64px}
+ #main{padding:0 12px 30px}
+ .nav-btn{padding:7px 8px;font-size:11.5px}
  .trainer-portal .btn{font-size:17px!important}
  .g6{grid-template-columns:repeat(2,1fr)}.g4{grid-template-columns:repeat(2,1fr)}.g3{grid-template-columns:1fr}
 }
@@ -117,7 +125,7 @@ hr.sep{border:none;border-top:1px solid var(--line);margin:14px 0}
 .mut{color:var(--mut)} .bold{font-weight:700} .big{font-size:16px}
 .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .clickable{cursor:pointer;color:#1554c0;font-weight:600}
-@media(max-width:900px){.g4,.g6{grid-template-columns:repeat(2,1fr)}.g3{grid-template-columns:1fr}#sidebar{width:60px}#sidebar .logo{font-size:11px;padding:12px 6px}#sidebar a span,#sidebar .role{display:none}#main{margin-left:60px}}
+@media(max-width:900px){.g4,.g6{grid-template-columns:repeat(2,1fr)}.g3{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -135,11 +143,14 @@ hr.sep{border:none;border-top:1px solid var(--line);margin:14px 0}
 </div>
 
 <div id="app">
-  <div id="sidebar">
+  <div id="brandbar">
     <div class="logo">FITO<span style="color:var(--brand)">6</span></div>
     <div class="role" id="sb_role"></div>
-    <nav id="nav"></nav>
+    <div class="sp" style="flex:1"></div>
+    <span class="userchip" id="tb_user" style="background:#1d2740;border-color:#2a3550;color:#fff"></span>
+    <button class="btn sec sm" onclick="logout()">Logout</button>
   </div>
+  <div id="topnav"><nav id="nav"></nav></div>
   <div id="main">
     <div id="topbar">
       <input id="gsearch" placeholder="🔍 Search name / phone / invoice / member ID…" onkeydown="if(event.key==='Enter')doSearch()">
@@ -158,8 +169,6 @@ hr.sep{border:none;border-top:1px solid var(--line);margin:14px 0}
           <a href="#" onclick="closeTbDrops();filterCashMode('Bank Transfer');return false">Bank entries</a>
         </div>
       </div>
-      <span class="userchip" id="tb_user"></span>
-      <button class="btn sec sm" onclick="logout()">Logout</button>
     </div>
     <div id="content"></div>
   </div>
@@ -211,7 +220,7 @@ function defaults(){return{
   adminIds:{superAdmin:'',admin:''}},
  users:[],
  seq:{client:1000,invoice:1,receipt:1,voucher:1,staff:100,trainer:0,payroll:0,clientByYear:{}},
- clients:[],subs:[],invoices:[],cashbook:[],staff:[],staffAtt:[],memberAtt:[],payroll:[],audit:[],leads:[],batches:[],classes:[],todos:[],meterReadings:[]};}
+ clients:[],subs:[],invoices:[],cashbook:[],staff:[],staffAtt:[],memberAtt:[],payroll:[],audit:[],leads:[],batches:[],classes:[],todos:[],meterReadings:[],appointments:[]};}
 
 function cacheLocal(){try{localStorage.setItem(DBKEY,JSON.stringify(db))}catch(e){}}
 function loadLocalCache(){try{return JSON.parse(localStorage.getItem(DBKEY))}catch(e){return null}}
@@ -372,12 +381,95 @@ function isGroupClassType(t){return/group\s*class|dance|boxing|zumba|yoga/i.test
 
 /* ================= AUTH & NAV ================= */
 let USER=null,PAGE='dashboard';
+const ALL_PAGES=['dashboard','leads','followups','clients','analysis','memberships','billing','batches','accounts','cashbook','expenses','notifications','trainers','trainer','fitness','staff','attendance','attreports','settings','help','appointments','payroll','todos','reports','meter','audit','more'];
 const MENUS={
- superadmin:['dashboard','clients','leads','followups','memberships','billing','cashbook','expenses','meter','staff','attendance','payroll','batches','todos','reports','accounts','audit','settings'],
- frontoffice:['dashboard','clients','leads','followups','memberships','billing','cashbook','meter','attendance','batches','todos'],
- accountant:['dashboard','cashbook','expenses','meter','payroll','reports','accounts'],
- trainer:['trainer','clients','attendance','batches','todos']};
-const PAGES={dashboard:['📊','Dashboard'],trainer:['📱','Trainer Portal'],clients:['🧍','Clients'],leads:['📋','Leads / Enquiries'],followups:['📞','Follow-ups'],memberships:['🎫','Memberships'],billing:['🧾','Billing / Invoices'],cashbook:['💰','Cashbook'],expenses:['📤','Expenses'],meter:['⚡','EB Meter'],staff:['👥','Staff'],attendance:['🕒','Attendance'],payroll:['💵','Payroll'],batches:['🗓️','Batches / Classes'],todos:['✅','To-do List'],reports:['📑','Reports'],accounts:['📚','Accounts / P&L'],audit:['🛡️','Audit Log'],settings:['⚙️','Settings']};
+ superadmin:ALL_PAGES,
+ frontoffice:['dashboard','leads','followups','clients','analysis','memberships','billing','batches','accounts','cashbook','expenses','notifications','trainers','fitness','staff','attendance','attreports','appointments','todos','meter','help','more','settings','reports'],
+ accountant:['dashboard','analysis','accounts','cashbook','expenses','attendance','attreports','settings','payroll','reports','meter','help','more','billing'],
+ trainer:['trainer','clients','attendance','batches','todos','appointments','help']};
+const PAGES={
+ dashboard:['🏠','Dashboard'],leads:['📋','Enquiry'],followups:['🔄','Follow Ups'],clients:['👥','Members'],analysis:['📈','Analysis'],
+ memberships:['🪪','Memberships'],billing:['🧾','Billing'],batches:['👥','Batches & Classes'],accounts:['💵','Accounts'],cashbook:['💰','Cashbook'],
+ expenses:['📤','Expenses'],notifications:['💬','Notification & WhatsApp'],trainers:['🧑','Trainers'],trainer:['📱','Trainer Portal'],
+ fitness:['🏢','Fitness Center'],staff:['🧑','Staff'],attendance:['🕒','Attendance'],attreports:['📑','Attendance Reports'],
+ settings:['⚙️','App Settings'],help:['❓','Tutorial & Help'],appointments:['📅','Appointments'],payroll:['💵','Payroll'],
+ todos:['✅','To-do List'],reports:['📊','Reports'],meter:['⚡','EB Meter'],audit:['🛡️','Audit Log'],more:['⋯','More Options']};
+const NAV_TREE=[
+ {id:'dashboard',icon:'🏠',label:'Dashboard',page:'dashboard'},
+ {id:'enquiry',icon:'📋',label:'Enquiry',kids:[
+  {label:'Leads / Enquiries',page:'leads'},
+  {label:'Add Enquiry',page:'leads',fn:'leadForm()'},
+  {label:'Follow Ups',page:'followups'}
+ ]},
+ {id:'followups',icon:'🔄',label:'Follow Ups',page:'followups'},
+ {id:'members',icon:'👥',label:'Members',kids:[
+  {label:'My Members',page:'clients'},
+  {label:'Add Member',page:'clients',fn:'openWizard()'},
+  {label:'Deactivated Members',page:'clients',fn:"CL_F.status='Inactive';go('clients')"}
+ ]},
+ {id:'analysis',icon:'📈',label:'Analysis',kids:[
+  {label:'Reports & Charts',page:'analysis'},
+  {label:'Classic Reports',page:'reports'},
+  {label:'EB Meter',page:'meter'}
+ ]},
+ {id:'memberships',icon:'🪪',label:'Memberships',kids:[
+  {label:'Packages',page:'memberships'},
+  {label:'Billing / Invoices',page:'billing'},
+  {label:'Subscription Types',page:'settings'}
+ ]},
+ {id:'batches',icon:'👥',label:'Batches & Classes',kids:[
+  {label:'Batches / Classes',page:'batches'},
+  {label:'Add Batch',page:'batches',fn:'batchForm()'}
+ ]},
+ {id:'accounts',icon:'💵',label:'Accounts',kids:[
+  {label:'Accounts / P&L',page:'accounts'},
+  {label:'Cashbook',page:'cashbook'},
+  {label:'Expenses',page:'expenses'},
+  {label:'Billing',page:'billing'},
+  {label:'Payroll',page:'payroll'}
+ ]},
+ {id:'notifications',icon:'💬',label:'Notification & WhatsApp',kids:[
+  {label:'Notifications Center',page:'notifications'},
+  {label:'WhatsApp Templates',page:'notifications'}
+ ]},
+ {id:'trainers',icon:'🧑',label:'Trainers',kids:[
+  {label:'Trainer List',page:'trainers'},
+  {label:'Trainer Portal',page:'trainer'},
+  {label:'Assign To-dos',page:'todos'}
+ ]},
+ {id:'fitness',icon:'🏢',label:'Fitness Center',kids:[
+  {label:'Center Overview',page:'fitness'},
+  {label:'EB Meter',page:'meter'},
+  {label:'Branches',page:'settings'}
+ ]},
+ {id:'staff',icon:'🧑',label:'Staff',kids:[
+  {label:'Staff Directory',page:'staff'},
+  {label:'Attendance',page:'attendance'},
+  {label:'Payroll',page:'payroll'},
+  {label:'To-do List',page:'todos'}
+ ]},
+ {id:'attreports',icon:'📑',label:'Attendance Reports',kids:[
+  {label:'Daily Attendance',page:'attendance'},
+  {label:'Attendance Reports',page:'attreports'},
+  {label:'Irregular Members',page:'attreports'}
+ ]},
+ {id:'settings',icon:'⚙️',label:'App Settings',kids:[
+  {label:'Gym Settings',page:'settings'},
+  {label:'Payment Modes',page:'settings'},
+  {label:'Audit Log',page:'audit'}
+ ]},
+ {id:'help',icon:'❓',label:'Tutorial & Help Videos',kids:[
+  {label:'Help Center',page:'help'},
+  {label:'Quick Start Tips',page:'help'}
+ ]},
+ {id:'appointments',icon:'📅',label:'Appointments',page:'appointments'},
+ {id:'more',icon:'⋯',label:'More Options',kids:[
+  {label:'To-do List',page:'todos'},
+  {label:'Audit Log',page:'audit'},
+  {label:'EB Meter',page:'meter'},
+  {label:'Trainer Portal',page:'trainer'}
+ ]}
+];
 function mapCloudRole(role,email,name){
  if(role==='ADMIN')return'superadmin';
  const tip=((email||'')+' '+(name||'')+' '+(USER&&USER.jobType||'')).toLowerCase();
@@ -420,12 +512,42 @@ function logout(){
  USER=null;_cloudReady=false;clearAuth();
  $('app').style.display='none';$('login').style.display='flex';
 }
-function buildNav(){$('nav').innerHTML=MENUS[USER.role].map(p=>`<a href="#" id="nav_${p}" onclick="go('${p}');return false"><i>${PAGES[p][0]}</i><span>${PAGES[p][1]}</span></a>`).join('')}
-function go(p,arg){if(!MENUS[USER.role].includes(p)){toast('No permission');return} PAGE=p;
- document.querySelectorAll('#sidebar a').forEach(a=>a.classList.remove('on'));const n=$('nav_'+p);if(n)n.classList.add('on');
- closeTbDrops();
- ({dashboard:pgDashboard,trainer:pgTrainerPortal,clients:pgClients,leads:pgLeads,followups:pgFollowups,memberships:pgMemberships,billing:pgBilling,cashbook:pgCashbook,expenses:pgExpenses,meter:pgMeter,staff:pgStaff,attendance:pgAttendance,payroll:pgPayroll,batches:pgBatches,todos:pgTodos,reports:pgReports,accounts:pgAccounts,audit:pgAudit,settings:pgSettings})[p](arg);
+function canPage(p){return USER&&MENUS[USER.role]&&MENUS[USER.role].includes(p)}
+function navVisible(item){
+ if(item.page)return canPage(item.page);
+ if(item.kids)return item.kids.some(k=>canPage(k.page));
+ return false;
+}
+function closeNavDrops(){document.querySelectorAll('.nav-item.open').forEach(el=>el.classList.remove('open'))}
+function toggleNavDrop(id,ev){if(ev)ev.stopPropagation();const el=$(id);if(!el)return;const was=el.classList.contains('open');closeNavDrops();if(!was)el.classList.add('open')}
+function buildNav(){
+ const allowed=NAV_TREE.filter(navVisible);
+ $('nav').innerHTML=allowed.map(item=>{
+  if(item.kids){
+   const kids=item.kids.filter(k=>canPage(k.page));
+   if(!kids.length)return'';
+   const nid='navg_'+item.id;
+   return `<div class="nav-item" id="${nid}"><button type="button" class="nav-btn" id="navbtn_${item.id}" onclick="toggleNavDrop('${nid}',event)"><span>${item.icon}</span><span>${item.label}</span><span class="caret">▼</span></button>
+    <div class="nav-drop">${kids.map(k=>`<a href="#" onclick="closeNavDrops();${k.fn||("go('"+k.page+"')")};return false">${k.label}</a>`).join('')}</div></div>`;
+  }
+  return `<div class="nav-item"><button type="button" class="nav-btn" id="navbtn_${item.id}" onclick="go('${item.page}')"><span>${item.icon}</span><span>${item.label}</span></button></div>`;
+ }).join('');
+}
+document.addEventListener('click',()=>closeNavDrops());
+function markNavOn(p){
+ document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('on'));
+ const parent=NAV_TREE.find(item=>{
+  if(item.page===p)return true;
+  return(item.kids||[]).some(k=>k.page===p);
+ });
+ if(parent){const b=$('navbtn_'+parent.id);if(b)b.classList.add('on')}
+}
+function go(p,arg){if(!canPage(p)){toast('No permission');return} PAGE=p;
+ closeNavDrops();closeTbDrops();markNavOn(p);
+ const pages={dashboard:pgDashboard,trainer:pgTrainerPortal,clients:pgClients,leads:pgLeads,followups:pgFollowups,memberships:pgMemberships,billing:pgBilling,cashbook:pgCashbook,expenses:pgExpenses,meter:pgMeter,staff:pgStaff,attendance:pgAttendance,payroll:pgPayroll,batches:pgBatches,todos:pgTodos,reports:pgReports,accounts:pgAccounts,audit:pgAudit,settings:pgSettings,analysis:pgAnalysis,notifications:pgNotifications,trainers:pgTrainers,fitness:pgFitness,attreports:pgAttReports,help:pgHelp,appointments:pgAppointments,more:pgMore};
+ if(pages[p])pages[p](arg);else pgStub(PAGES[p]?PAGES[p][1]:p);
  refreshTopbarNotifs()}
+function pgStub(title){$('content').innerHTML=`<div class="card"><h2>${esc(title)}</h2><p class="sub">This module is ready in the menu. Full screens coming next.</p></div>`}
 
 /* ================= COMPUTED HELPERS ================= */
 function payListFor(dateFrom,dateTo){const out=[];db.invoices.forEach(iv=>(iv.payments||[]).forEach(p=>{if(p.date>=dateFrom&&p.date<=dateTo)out.push({...p,inv:iv})}));return out}
@@ -1944,6 +2066,117 @@ function saveTodo(){
 }
 function toggleTodo(id){const t=db.todos.find(x=>x.id===id);if(!t)return;t.done=!t.done;save();go('todos')}
 function removeTodo(id){db.todos=db.todos.filter(t=>t.id!==id);save();go('todos')}
+
+/* ================= YDL MENU PAGES ================= */
+function pgAnalysis(){
+ $('content').innerHTML=`<div class="row" style="justify-content:space-between;margin-bottom:12px"><div><h2>Analysis</h2><div class="sub">Membership & collection insights</div></div>
+  <button class="btn sec" onclick="go('reports')">Classic Reports</button></div>
+  <div class="grid g3">
+   <div class="card clickable" onclick="go('reports')"><h3>📈 Reports & Charts</h3><p class="sub">Collection, expense and membership reports</p></div>
+   <div class="card clickable" onclick="go('accounts')"><h3>💵 Accounts / P&L</h3><p class="sub">Profit & loss overview</p></div>
+   <div class="card clickable" onclick="go('meter')"><h3>⚡ EB Meter</h3><p class="sub">Day & night electricity readings</p></div>
+   <div class="card clickable" onclick="go('clients')"><h3>👥 Member Stats</h3><p class="sub">Active / inactive / no subscription</p></div>
+   <div class="card clickable" onclick="go('billing')"><h3>🧾 Billing Analysis</h3><p class="sub">Invoices, dues and payments</p></div>
+   <div class="card clickable" onclick="go('attreports')"><h3>📑 Attendance Analysis</h3><p class="sub">Attendance trends & irregulars</p></div>
+  </div>`}
+function pgNotifications(){
+ const due=(db.invoices||[]).filter(i=>i.pending>0).slice(0,20);
+ $('content').innerHTML=`<h2>Notification & WhatsApp</h2><div class="sub" style="margin-bottom:12px">Reminders and chat templates</div>
+  <div class="grid g2">
+   <div class="card"><h3>🔔 Pending Balance Alerts</h3>
+    <div class="tbl"><table><tr><th>Invoice</th><th>Member</th><th class="r">Due</th><th></th></tr>
+    ${due.map(i=>{const c=client(i.clientId);return`<tr><td>${esc(i.no)}</td><td>${esc(c?c.name:'')}</td><td class="r">${inr(i.pending)}</td>
+    <td><button class="btn sm sec" onclick="waShare('${i.id}')">WhatsApp</button></td></tr>`}).join('')||'<tr><td colspan="4" class="mut">No pending dues</td></tr>'}
+    </table></div></div>
+   <div class="card"><h3>💬 WhatsApp Templates</h3>
+    <p class="sub">Use from invoice print / bill notifications.</p>
+    <ul class="sub" style="margin:10px 0 0 18px;line-height:1.8">
+     <li>Payment thank-you message</li>
+     <li>Balance due reminder</li>
+     <li>Membership expiry reminder</li>
+     <li>Follow-up enquiry message</li>
+    </ul>
+    <button class="btn" style="margin-top:12px" onclick="go('billing')">Open Billing</button>
+   </div>
+  </div>`}
+function pgTrainers(){
+ const list=(db.staff||[]).filter(s=>/train|pt/i.test((s.dept||'')+' '+(s.jobType||'')+' '+(s.role||'')+' '+(s.name||''))||/^26TR/i.test(s.id||''));
+ const rows=list.length?list:(db.staff||[]).filter(s=>s.dept==='Trainer'||s.dept==='PT');
+ const show=rows.length?rows:(db.staff||[]);
+ $('content').innerHTML=`<div class="row" style="justify-content:space-between;margin-bottom:12px"><div><h2>Trainers</h2><div class="sub">${show.length} staff shown</div></div>
+  <div class="row"><button class="btn sec" onclick="go('trainer')">Trainer Portal</button><button class="btn" onclick="go('staff')">All Staff</button></div></div>
+  <div class="tbl"><table><tr><th>ID</th><th>Name</th><th>Dept</th><th>Mobile</th><th>Status</th></tr>
+  ${show.map(s=>`<tr><td>${esc(s.id)}</td><td>${esc(s.name)}</td><td>${esc(s.dept||'')}</td><td>${esc(s.mobile||'')}</td><td>${esc(s.status||'Active')}</td></tr>`).join('')||'<tr><td colspan="5" class="mut">No trainers yet — add staff with Trainer / FOM dept</td></tr>'}
+  </table></div>`}
+function pgFitness(){
+ const s=db.settings||{};
+ $('content').innerHTML=`<h2>Fitness Center</h2><div class="sub" style="margin-bottom:12px">${esc(s.gymName||'FITO6')} · ${esc(s.branch||'')}</div>
+  <div class="grid g3">
+   <div class="card"><h3>🏢 Center</h3><p class="big bold">${esc(s.gymName||'FITO6')}</p><p class="sub">Branch: ${esc(s.branch||'Main')} (${esc(s.branchCode||'BR01')})</p></div>
+   <div class="card clickable" onclick="go('meter')"><h3>⚡ EB Meter</h3><p class="sub">Night & day readings</p></div>
+   <div class="card clickable" onclick="go('settings')"><h3>⚙️ Branches</h3><p class="sub">Create next branch ID</p></div>
+   <div class="card clickable" onclick="go('batches')"><h3>🗓️ Classes</h3><p class="sub">Batches & group classes</p></div>
+   <div class="card clickable" onclick="go('staff')"><h3>🧑 Team</h3><p class="sub">Staff & management</p></div>
+   <div class="card clickable" onclick="go('accounts')"><h3>💵 Accounts</h3><p class="sub">Cash / bank / P&L</p></div>
+  </div>`}
+function pgAttReports(){
+ const t=today();
+ const todayRows=(db.memberAtt||[]).filter(a=>a.date===t);
+ const irregular=activeClients().filter(c=>{
+  const last=(db.memberAtt||[]).filter(a=>a.clientId===c.id).map(a=>a.date).sort().pop();
+  return!last||last<addDays(t,-14);
+ }).slice(0,50);
+ $('content').innerHTML=`<h2>Attendance Reports</h2><div class="sub" style="margin-bottom:12px">Daily & irregular member report</div>
+  <div class="grid g2">
+   <div class="card"><h3>Today (${fmtD(t)})</h3><p class="big bold">${todayRows.length} marked</p>
+    <button class="btn sec sm" style="margin-top:8px" onclick="go('attendance')">Open Attendance</button></div>
+   <div class="card"><h3>Irregular (14d+)</h3><p class="big bold">${irregular.length} members</p></div>
+  </div>
+  <div class="card" style="margin-top:12px"><h3>Irregular Members</h3>
+   <div class="tbl"><table><tr><th>ID</th><th>Name</th><th>Mobile</th></tr>
+   ${irregular.map(c=>`<tr><td>${esc(c.id)}</td><td>${esc(c.name)}</td><td>${esc(c.mobile||'')}</td></tr>`).join('')||'<tr><td colspan="3" class="mut">None</td></tr>'}
+   </table></div></div>`}
+function pgHelp(){
+ $('content').innerHTML=`<h2>Tutorial & Help Videos</h2><div class="sub" style="margin-bottom:12px">Quick start for FITO6 ERP</div>
+  <div class="grid g2">
+   <div class="card"><h3>1. Members</h3><p class="sub">Add client → package → billing → cashbook</p><button class="btn sm" style="margin-top:8px" onclick="go('clients')">Open Members</button></div>
+   <div class="card"><h3>2. Enquiry & Follow Ups</h3><p class="sub">Capture leads and call back on follow-up date</p><button class="btn sm" style="margin-top:8px" onclick="go('leads')">Open Enquiry</button></div>
+   <div class="card"><h3>3. Accounts</h3><p class="sub">Cashbook, expenses, P&L and payment modes</p><button class="btn sm" style="margin-top:8px" onclick="go('accounts')">Open Accounts</button></div>
+   <div class="card"><h3>4. Staff / Trainers</h3><p class="sub">Create 26TR / 26FOM IDs and assign to-dos</p><button class="btn sm" style="margin-top:8px" onclick="go('staff')">Open Staff</button></div>
+  </div>`}
+function pgAppointments(){
+ if(!Array.isArray(db.appointments))db.appointments=[];
+ const rows=db.appointments.slice().sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+ $('content').innerHTML=`<div class="row" style="justify-content:space-between;margin-bottom:12px"><div><h2>Appointments</h2><div class="sub">PT / trial / consultation slots</div></div>
+  <button class="btn" onclick="apptForm()">➕ Add Appointment</button></div>
+  <div class="tbl"><table><tr><th>Date</th><th>Time</th><th>Member / Lead</th><th>With</th><th>Type</th><th>Notes</th><th></th></tr>
+  ${rows.map(a=>`<tr><td>${esc(a.date||'')}</td><td>${esc(a.time||'')}</td><td>${esc(a.person||'')}</td><td>${esc(a.with||'')}</td><td>${esc(a.type||'')}</td><td>${esc(a.notes||'')}</td>
+  <td><button class="btn sm dgr" onclick="db.appointments=db.appointments.filter(x=>x.id!=='${a.id}');save();go('appointments')">Del</button></td></tr>`).join('')||'<tr><td colspan="7" class="mut">No appointments yet</td></tr>'}
+  </table></div>`}
+function apptForm(){
+ const staff=(db.staff||[]).map(s=>s.name);
+ openModal(`<h3>Add Appointment</h3><div class="grid g2">
+  ${fld('ap_date','Date',today(),'date')}${fld('ap_time','Time','10:00')}
+  ${fld('ap_person','Member / Lead','')}
+  <div class="field"><label>With</label><select id="ap_with"><option></option>${staff.map(n=>`<option>${esc(n)}</option>`).join('')}</select></div>
+  <div class="field"><label>Type</label><select id="ap_type"><option>PT Session</option><option>Trial</option><option>Consultation</option><option>Follow-up</option></select></div>
+  ${fld('ap_notes','Notes','')}
+ </div><div class="row" style="justify-content:flex-end;gap:8px;margin-top:10px"><button class="btn sec" onclick="closeModal()">Cancel</button>
+ <button class="btn" onclick="saveAppt()">Save</button></div>`)}
+function saveAppt(){
+ if(!Array.isArray(db.appointments))db.appointments=[];
+ db.appointments.push({id:'AP'+Date.now(),date:val('ap_date'),time:val('ap_time'),person:val('ap_person'),with:val('ap_with'),type:val('ap_type'),notes:val('ap_notes')});
+ save();toast('Appointment saved');closeModal();go('appointments');
+}
+function pgMore(){
+ $('content').innerHTML=`<h2>More Options</h2><div class="grid g3" style="margin-top:12px">
+  <div class="card clickable" onclick="go('todos')"><h3>✅ To-do List</h3><p class="sub">Assign work to staff & trainers</p></div>
+  <div class="card clickable" onclick="go('audit')"><h3>🛡️ Audit Log</h3><p class="sub">Activity history</p></div>
+  <div class="card clickable" onclick="go('meter')"><h3>⚡ EB Meter</h3><p class="sub">Electricity readings</p></div>
+  <div class="card clickable" onclick="go('trainer')"><h3>📱 Trainer Portal</h3><p class="sub">Mobile trainer home</p></div>
+  <div class="card clickable" onclick="go('payroll')"><h3>💵 Payroll</h3><p class="sub">Salary generation</p></div>
+  <div class="card clickable" onclick="go('settings')"><h3>⚙️ Settings</h3><p class="sub">IDs, branches, packages</p></div>
+ </div>`}
 
 /* ================= SETTINGS ================= */
 function pgSettings(){
