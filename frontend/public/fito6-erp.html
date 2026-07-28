@@ -1302,6 +1302,8 @@ function openEditSub(subId){
  const statusVal=s.status==='Frozen'?'Frozen':(subStatus(s)==='Expired'?'Expired':'Active');
  ensurePkgSettings();
  const pkgs=pkgListFor(s.type==='PT'?'PT':s.type==='Group Class'||s.type==='Dance'?'Group Class':'Membership');
+ const matched=pkgs.find(p=>p.name===s.pkg);
+ window._editSubMonths=matched?Number(matched.months)||1:1;
  const pkgOpts=pkgs.map(p=>`<option value="${esc(p.name)}" data-p="${p.price}" data-m="${p.months}" ${p.name===s.pkg?'selected':''}>${esc(p.name)} — ${inr(p.price)}</option>`).join('')
   +`<option value="__custom__" ${pkgs.every(p=>p.name!==s.pkg)?'selected':''}>Custom / Other</option>`;
  openModal(`<h2>Edit Subscription — ${esc(c.name||'')}</h2>
@@ -1329,26 +1331,40 @@ function openEditSub(subId){
    </select></div>`:''}
  </div>
  <div class="card" style="background:#fafbfd;margin-top:10px" id="es_calc"></div>
- <p class="sub" style="margin-top:8px">Choose package from dropdown — price &amp; end date update. Linked unpaid invoice totals update on save.</p>
+ <p class="sub" style="margin-top:8px">Choose package from dropdown — name, price &amp; end date update. Linked unpaid invoice totals update on save.</p>
  <div class="row" style="justify-content:flex-end;margin-top:12px;gap:8px">
   <button class="btn sec" onclick="openClient('${s.clientId}')">Cancel</button>
   <button class="btn" onclick="saveEditSub('${subId}')">Save Changes</button>
- </div>
- <script>
-  window._editSubMonths=1;
-  function onEditPkgPick(){
-   const o=$('es_pkg_sel').selectedOptions[0];if(!o)return;
-   if(o.value==='__custom__')return;
-   $('es_pkg').value=o.value;$('es_price').value=o.dataset.p||0;
-   if($('es_sell'))$('es_sell').value=o.dataset.p||0;
-   window._editSubMonths=parseInt(o.dataset.m,10)||1;
-   const start=val('es_start')||today();
-   $('es_end').value=addDays(addMonths(start,window._editSubMonths),-1);
+ </div>`);
+ bindEditSubFields();
+ calcEditSub();
+}
+function onEditPkgPick(){
+ const sel=$('es_pkg_sel');if(!sel)return;
+ const o=sel.selectedOptions[0];if(!o)return;
+ if(o.value==='__custom__')return;
+ const name=o.value;
+ const price=o.getAttribute('data-p')||o.dataset.p||0;
+ const months=parseInt(o.getAttribute('data-m')||o.dataset.m,10)||1;
+ if($('es_pkg'))$('es_pkg').value=name;
+ if($('es_price'))$('es_price').value=price;
+ if($('es_sell'))$('es_sell').value=price;
+ window._editSubMonths=months;
+ const start=val('es_start')||today();
+ if($('es_end'))$('es_end').value=addDays(addMonths(start,months),-1);
+ calcEditSub();
+}
+function bindEditSubFields(){
+ ['es_price','es_sell','es_gst','es_start'].forEach(id=>{
+  const el=$(id);if(!el)return;
+  el.oninput=el.onchange=()=>{
+   if(id==='es_start'&&window._editSubMonths){
+    $('es_end').value=addDays(addMonths(val('es_start')||today(),window._editSubMonths),-1);
+   }
    calcEditSub();
-  }
-  ['es_price','es_sell','es_gst','es_start'].forEach(id=>{const el=$(id);if(el)el.oninput=el.onchange=()=>{if(id==='es_start'&&window._editSubMonths){$('es_end').value=addDays(addMonths(val('es_start')||today(),window._editSubMonths),-1)}calcEditSub()}});
-  calcEditSub();
- <\/script>`)}
+  };
+ });
+}
 function calcEditSub(){
  const price=num('es_price');let sell=num('es_sell');if(!sell||sell<=0)sell=price;
  const gstp=num('es_gst');
