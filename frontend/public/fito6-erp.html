@@ -303,6 +303,237 @@ function openModal(html){$('modal').innerHTML=html;$('modalwrap').style.display=
 function closeModal(){$('modalwrap').style.display='none'}
 function audit(action,detail,oldV,newV){db.audit.unshift({ts:new Date().toISOString(),user:USER?USER.name:'-',role:USER?USER.role:'-',action,detail:detail||'',oldV:oldV||'',newV:newV||''});if(db.audit.length>3000)db.audit.length=3000;save()}
 function csvExport(rows,name){const csv=rows.map(r=>r.map(c=>'"'+String(c??'').replace(/"/g,'""')+'"').join(',')).join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download=name+'.csv';a.click();toast('Exported '+name+'.csv')}
+/* ---- YDL CSV Import (Members / Enquiries) ---- */
+const YDL_IMPORT_HEADERS=['Code','Name','ISD Code','Number','Email','Gender','Date of Enquiry','Conversion','Handled By','Notes','Lead Type','Source of Enquiry','Employment','App Install','Assigned To','Membership','DOB','Address','Emergency','WhatsApp','Reference No'];
+const YDL_IMPORT_MAP=[
+ {key:'code',a:['code','membercode','memberid','clientid','customercode','id']},
+ {key:'name',a:['name','customername','membername','clientname']},
+ {key:'isd',a:['isdcode','isd','countrycode']},
+ {key:'number',a:['number','mobile','phone','mobilenumber','contact','phonenumber']},
+ {key:'email',a:['email','mail','emailid']},
+ {key:'gender',a:['gender','sex']},
+ {key:'dateEn',a:['dateofenquiry','dateofentry','dateofen','enquirydate','joined','joindate','registrationdate']},
+ {key:'conversion',a:['conversion','conversior','converted','status']},
+ {key:'handledBy',a:['handledby','handler','clientrep','billrep','handled']},
+ {key:'notes',a:['notes','note','remark','remarks']},
+ {key:'leadType',a:['leadtype','enquirytype','type']},
+ {key:'source',a:['sourceofenquiry','sourceofpromotion','sourceoff','sourceofe','source','referral','ref']},
+ {key:'employment',a:['employment','employme','occupation','job']},
+ {key:'appInstall',a:['appinstall','appinstalled','app']},
+ {key:'assignedTo',a:['assignedto','assignedt','trainer','assigned']},
+ {key:'membership',a:['membership','membersh','package','plan']},
+ {key:'dob',a:['dob','dateofbirth','birthdate']},
+ {key:'address',a:['address','addr']},
+ {key:'emergency',a:['emergency','emergencycontact','emergencyno']},
+ {key:'whatsapp',a:['whatsapp','wa','whatsappnumber']},
+ {key:'refNo',a:['referenceno','referencenumber','reference','refno']}
+];
+function normHeader(h){return String(h||'').toLowerCase().replace(/[^a-z0-9]/g,'')}
+function parseCsvText(text){
+ text=String(text||'').replace(/^\uFEFF/,'').replace(/\r\n/g,'\n').replace(/\r/g,'\n');
+ const rows=[];let row=[],cell='',q=false;
+ for(let i=0;i<text.length;i++){
+  const ch=text[i],nx=text[i+1];
+  if(q){
+   if(ch==='"'&&nx==='"'){cell+='"';i++;continue}
+   if(ch==='"'){q=false;continue}
+   cell+=ch;continue;
+  }
+  if(ch==='"'){q=true;continue}
+  if(ch===','){row.push(cell);cell='';continue}
+  if(ch==='\n'){row.push(cell);rows.push(row);row=[];cell='';continue}
+  cell+=ch;
+ }
+ if(cell.length||row.length){row.push(cell);rows.push(row)}
+ return rows.filter(r=>r.some(c=>String(c||'').trim()!==''));
+}
+function parseImportDate(v){
+ v=String(v||'').trim();if(!v)return'';
+ if(/^\d{4}-\d{2}-\d{2}/.test(v))return v.slice(0,10);
+ if(/^\d+(\.\d+)?$/.test(v)){ // Excel serial
+  const n=parseFloat(v);if(n>20000&&n<80000){const d=new Date(Date.UTC(1899,11,30)+Math.round(n)*86400000);return d.toISOString().slice(0,10)}
+ }
+ const m=v.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
+ if(m){let d=+m[1],mo=+m[2],y=+m[3];if(y<100)y+=2000;return y+'-'+String(mo).padStart(2,'0')+'-'+String(d).padStart(2,'0')}
+ const dt=new Date(v);if(!isNaN(dt.getTime()))return dt.toISOString().slice(0,10);
+ return'';
+}
+function mapImportHeaders(headerRow){
+ const idx={};const norms=headerRow.map(normHeader);
+ YDL_IMPORT_MAP.forEach(col=>{
+  let found=-1;
+  for(const a of col.a){found=norms.findIndex(h=>h===a||h.startsWith(a)||a.startsWith(h));if(found>=0)break}
+  if(found>=0)idx[col.key]=found;
+ });
+ return idx;
+}
+function rowToImportObj(row,idx){
+ const g=k=>{const i=idx[k];return i==null?'':String(row[i]??'').trim()};
+ return{
+  code:g('code'),name:g('name'),isd:g('isd'),number:g('number').replace(/\s+/g,''),
+  email:g('email'),gender:g('gender'),dateEn:parseImportDate(g('dateEn')),conversion:g('conversion'),
+  handledBy:g('handledBy'),notes:g('notes'),leadType:g('leadType'),source:g('source'),
+  employment:g('employment'),appInstall:g('appInstall'),assignedTo:g('assignedTo'),
+  membership:g('membership'),dob:parseImportDate(g('dob')),address:g('address'),
+  emergency:g('emergency'),whatsapp:g('whatsapp').replace(/\s+/g,''),refNo:g('refNo')
+ };
+}
+function normGender(g){
+ const x=String(g||'').toLowerCase();
+ if(/^m|male|boy/.test(x))return'Male';
+ if(/^f|female|girl/.test(x))return'Female';
+ if(x)return'Other';
+ return'';
+}
+function isConvertedFlag(v){
+ const x=String(v||'').toLowerCase();
+ return/^(y|yes|converted|member|done|1|true|joined)$/.test(x);
+}
+function downloadYdlTemplate(){
+ csvExport([YDL_IMPORT_HEADERS,['26FIT001','SAMPLE MEMBER','91','9876543210','sample@email.com','Male',today(),'Converted','Front Desk','Walk-in trial','Hot','Instagram','Salaried','Yes','Trainer Name','3 Month','1995-01-15','Chennai','Father 9876500000','9876543210','REF001']],'fito6_ydl_import_template');
+}
+function openYdlImport(defaultTarget){
+ openModal(`<h2>Import YDL Data (CSV / Excel)</h2>
+ <p class="sub" style="margin-bottom:12px">Use these columns (same as your sheet). Save Excel as <b>CSV (Comma delimited)</b> before upload.</p>
+ <div class="tbl" style="margin-bottom:12px;max-height:120px;overflow:auto"><table><tr>${YDL_IMPORT_HEADERS.map(h=>`<th style="white-space:nowrap">${esc(h)}</th>`).join('')}</tr></table></div>
+ <div class="grid g2">
+  <div class="field"><label>Import as</label>
+   <select id="imp_target">
+    <option value="auto" ${!defaultTarget||defaultTarget==='auto'?'selected':''}>Auto (Converted → Members, else Enquiries)</option>
+    <option value="members" ${defaultTarget==='members'?'selected':''}>Members only</option>
+    <option value="leads" ${defaultTarget==='leads'?'selected':''}>Enquiries / Leads only</option>
+   </select></div>
+  <div class="field"><label>CSV File</label><input id="imp_file" type="file" accept=".csv,text/csv,.txt,application/vnd.ms-excel"></div>
+ </div>
+ <p class="sub">Matched by <b>Code</b> or <b>Number</b> — existing records are updated. New Codes are kept as Member ID.</p>
+ <div class="row" style="justify-content:flex-end;gap:8px;margin-top:14px">
+  <button class="btn sec" onclick="downloadYdlTemplate()">⬇ Download Template</button>
+  <button class="btn sec" onclick="closeModal()">Cancel</button>
+  <button class="btn" onclick="runYdlImport()">Import Now</button>
+ </div>`);
+}
+function runYdlImport(){
+ const f=$('imp_file')&&$('imp_file').files&&$('imp_file').files[0];
+ if(!f){toast('Choose a CSV file');return}
+ const target=val('imp_target')||'auto';
+ const reader=new FileReader();
+ reader.onload=()=>{
+  try{
+   const rows=parseCsvText(reader.result);
+   if(rows.length<2){toast('CSV has no data rows');return}
+   const idx=mapImportHeaders(rows[0]);
+   if(idx.name==null&&idx.number==null){toast('Could not find Name / Number columns');return}
+   let addedM=0,updM=0,addedL=0,updL=0,skip=0;
+   if(!db.leads)db.leads=[];
+   if(!db.subs)db.subs=[];
+   for(let i=1;i<rows.length;i++){
+    const o=rowToImportObj(rows[i],idx);
+    if(!o.name&&!o.number){skip++;continue}
+    const asMember=target==='members'||(target==='auto'&&(isConvertedFlag(o.conversion)||!!o.membership));
+    if(asMember){
+     const r=upsertImportedMember(o);if(r==='add')addedM++;else if(r==='upd')updM++;else skip++;
+    }else{
+     const r=upsertImportedLead(o);if(r==='add')addedL++;else if(r==='upd')updL++;else skip++;
+    }
+   }
+   save();audit('YDL Import',`Members +${addedM}/~${updM} · Leads +${addedL}/~${updL} · skip ${skip}`);
+   toast(`Imported · Members ${addedM} new / ${updM} updated · Enquiries ${addedL} new / ${updL} updated`);
+   closeModal();
+   go(addedM||updM?'clients':(addedL||updL?'leads':PAGE));
+  }catch(e){console.error(e);toast('Import failed: '+(e.message||e))}
+ };
+ reader.readAsText(f);
+}
+function upsertImportedMember(o){
+ const name=caps(o.name||'UNKNOWN');
+ const mobile=(o.number||'').replace(/\D/g,'').slice(-10)||o.number||'';
+ let c=null;
+ if(o.code)c=(db.clients||[]).find(x=>String(x.id).toLowerCase()===String(o.code).toLowerCase());
+ if(!c&&mobile)c=(db.clients||[]).find(x=>String(x.mobile||'').replace(/\D/g,'').slice(-10)===mobile);
+ const isNew=!c;
+ if(isNew){
+  let id=(o.code||'').trim();
+  if(!id||(db.clients||[]).some(x=>x.id===id))id=nextClientId();
+  c={id,joined:o.dateEn||today(),status:'Active',notes:[]};
+  db.clients.push(c);
+ }
+ const emg=o.emergency||'';
+ const emgPhone=(emg.match(/\d{10,}/)||[''])[0];
+ const emgName=caps(emg.replace(emgPhone,'').replace(/[^a-zA-Z\s]/g,' ').trim());
+ Object.assign(c,{
+  name:isNew?name:c.name||name,
+  mobile:isNew?(mobile||c.mobile):(c.mobile||mobile),
+  isdCode:o.isd||c.isdCode||'91',
+  email:o.email||c.email||'',
+  gender:normGender(o.gender)||c.gender||'',
+  joined:o.dateEn||c.joined||today(),
+  conversion:o.conversion||c.conversion||'',
+  billRep:o.handledBy?caps(o.handledBy):(c.billRep||''),
+  leadType:o.leadType||c.leadType||'',
+  ref:o.source||c.ref||'',
+  occ:o.employment?caps(o.employment):(c.occ||''),
+  appInstall:o.appInstall||c.appInstall||'',
+  trainer:o.assignedTo?caps(o.assignedTo):(c.trainer||''),
+  dob:o.dob||c.dob||'',
+  addr:o.address?caps(o.address):(c.addr||''),
+  emg:emgName||c.emg||'',
+  emgp:emgPhone||c.emgp||'',
+  wa:o.whatsapp||c.wa||mobile||'',
+  refNo:o.refNo||c.refNo||'',
+  membershipLabel:o.membership||c.membershipLabel||'',
+  branch:c.branch||(db.settings&&db.settings.branch)||'Main Branch'
+ });
+ if(o.notes){
+  c.notes=c.notes||[];
+  const line=fmtD(today())+': [Import] '+o.notes;
+  if(!c.notes.includes(line))c.notes.unshift(line);
+ }
+ if(o.membership)ensureImportMembership(c,o.membership,o.dateEn||c.joined||today());
+ return isNew?'add':'upd';
+}
+function ensureImportMembership(c,pkgName,start){
+ if(!pkgName||!c)return;
+ const exists=(db.subs||[]).some(s=>s.clientId===c.id&&s.pkg===pkgName&&s.status!=='Used');
+ if(exists)return;
+ ensurePkgSettings();
+ const pkgs=pkgListFor('Membership');
+ const hit=pkgs.find(p=>p.name.toLowerCase()===pkgName.toLowerCase())||{name:pkgName,months:1,price:0};
+ const end=addDays(addMonths(start,Number(hit.months)||1),-1);
+ db.subs.push({id:'S'+Date.now()+Math.random().toString(36).slice(2,6),clientId:c.id,type:'Membership',kind:'New',pkg:hit.name,price:hit.price||0,sell:hit.price||0,disc:0,gstPct:db.settings.gstPct||0,gstAmt:0,woGst:hit.price||0,final:hit.price||0,start,end,trainer:c.trainer||'',branch:c.branch||db.settings.branch,status:'',created:today(),imported:true});
+}
+function upsertImportedLead(o){
+ if(!db.leads)db.leads=[];
+ const name=caps(o.name||'UNKNOWN');
+ const mobile=(o.number||'').replace(/\D/g,'').slice(-10)||o.number||'';
+ let l=null;
+ if(o.code)l=db.leads.find(x=>String(x.code||x.id).toLowerCase()===String(o.code).toLowerCase());
+ if(!l&&mobile)l=db.leads.find(x=>String(x.mobile||'').replace(/\D/g,'').slice(-10)===mobile);
+ const isNew=!l;
+ if(isNew){l={id:'LD'+Date.now()+Math.random().toString(36).slice(2,5)};db.leads.push(l)}
+ Object.assign(l,{
+  code:o.code||l.code||'',
+  name,mobile,isdCode:o.isd||l.isdCode||'91',email:o.email||l.email||'',
+  gender:normGender(o.gender)||l.gender||'',
+  date:o.dateEn||l.date||today(),
+  conversion:o.conversion||l.conversion||'',
+  handledBy:o.handledBy?caps(o.handledBy):(l.handledBy||''),
+  notes:o.notes||l.notes||'',
+  leadType:o.leadType||l.leadType||'',
+  source:o.source||l.source||'Walk-in',
+  employment:o.employment||l.employment||'',
+  appInstall:o.appInstall||l.appInstall||'',
+  assignedTo:o.assignedTo?caps(o.assignedTo):(l.assignedTo||''),
+  membership:o.membership||l.membership||'',
+  dob:o.dob||l.dob||'',
+  address:o.address?caps(o.address):(l.address||''),
+  emergency:o.emergency||l.emergency||'',
+  wa:o.whatsapp||l.wa||mobile||'',
+  refNo:o.refNo||l.refNo||'',
+  status:isConvertedFlag(o.conversion)?'Converted':(l.status||o.leadType||'New'),
+  follow:l.follow||addDays(o.dateEn||today(),1)
+ });
+ return isNew?'add':'upd';
+}
 function printHTML(html){$('printarea').innerHTML=html;window.print()}
 function client(id){return db.clients.find(c=>c.id===id)}
 function staffById(id){return db.staff.find(s=>s.id===id)}
@@ -399,12 +630,14 @@ const NAV_TREE=[
  {id:'enquiry',icon:'📋',label:'Enquiry',kids:[
   {label:'Leads / Enquiries',page:'leads'},
   {label:'Add Enquiry',page:'leads',fn:'leadForm()'},
+  {label:'Import Enquiries CSV',page:'leads',fn:"openYdlImport('leads')"},
   {label:'Follow Ups',page:'followups'}
  ]},
  {id:'followups',icon:'🔄',label:'Follow Ups',page:'followups'},
  {id:'members',icon:'👥',label:'Members',kids:[
   {label:'My Members',page:'clients'},
   {label:'Add Member',page:'clients',fn:'openWizard()'},
+  {label:'Import Members CSV',page:'clients',fn:"openYdlImport('members')"},
   {label:'Deactivated Members',page:'clients',fn:"CL_F.status='Inactive';go('clients')"}
  ]},
  {id:'analysis',icon:'📈',label:'Analysis',kids:[
@@ -759,6 +992,7 @@ function pgClients(){
   <button class="btn sec" onclick="applyClientFilters()">Search</button>
   <button class="btn sec" onclick="go('reports')">View Analysis</button>
   <button class="btn sec" onclick="exportClientsCsv()">Export to CSV</button>
+  <button class="btn" onclick="openYdlImport('members')">⬆ Import CSV</button>
   <button class="btn" onclick="openWizard()">Add Member</button>
   <button class="btn sec" style="border-color:var(--bad);color:var(--bad)" onclick="CL_F.status='Inactive';pgClients()">Deactivated Members</button>
   ${MENUS[USER.role].includes('meter')?`<button class="btn sec" onclick="go('meter')">⚡ Electricity Meter</button>`:''}
@@ -2001,15 +2235,20 @@ function pgTrainerPortal(){
 function pgLeads(){
  if(!db.leads)db.leads=[];
  const rows=db.leads.slice().reverse().map(l=>`<tr>
-  <td>${fmtD(l.date)}</td><td class="bold">${esc(l.name)}</td><td>${esc(l.mobile||'')}</td>
-  <td>${esc(l.source||'')}</td><td>${esc(l.status||'New')}</td><td>${fmtD(l.follow)}</td>
+  <td>${esc(l.code||l.id||'')}</td><td>${fmtD(l.date)}</td><td class="bold">${esc(l.name)}</td><td>${esc(l.mobile||'')}</td>
+  <td>${esc(l.source||'')}</td><td>${esc(l.leadType||'')}</td><td>${esc(l.status||'New')}</td>
+  <td>${esc(l.handledBy||'')}</td><td>${fmtD(l.follow)}</td>
   <td class="r"><button class="btn sm sec" onclick="leadForm('${l.id}')">Edit</button>
   <button class="btn sm" onclick="convertLead('${l.id}')">→ Client</button></td></tr>`).join('');
  $('content').innerHTML=`
- <div class="row" style="justify-content:space-between"><div><h2>Leads / Enquiries</h2><div class="sub">YDL-style walk-ins &amp; enquiries</div></div>
- <button class="btn" onclick="leadForm()">＋ Add Lead</button></div>
- <div class="tbl" style="margin-top:12px"><table><tr><th>Date</th><th>Name</th><th>Mobile</th><th>Source</th><th>Status</th><th>Follow-up</th><th></th></tr>
- ${rows||'<tr><td colspan=7 class="mut">No leads yet</td></tr>'}</table></div>`;
+ <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><div><h2>Leads / Enquiries</h2><div class="sub">YDL-style walk-ins &amp; enquiries</div></div>
+ <div class="row" style="gap:8px">
+  <button class="btn sec" onclick="downloadYdlTemplate()">⬇ Template</button>
+  <button class="btn sec" onclick="openYdlImport('leads')">⬆ Import CSV</button>
+  <button class="btn" onclick="leadForm()">＋ Add Lead</button>
+ </div></div>
+ <div class="tbl" style="margin-top:12px"><table><tr><th>Code</th><th>Date</th><th>Name</th><th>Number</th><th>Source</th><th>Lead Type</th><th>Status</th><th>Handled By</th><th>Follow-up</th><th></th></tr>
+ ${rows||'<tr><td colspan=10 class="mut">No leads yet — use Import CSV for your YDL sheet</td></tr>'}</table></div>`;
 }
 function pgFollowups(){
  if(!db.leads)db.leads=[];
@@ -2025,10 +2264,24 @@ function pgFollowups(){
 }
 function leadForm(id){
  const l=id?(db.leads||[]).find(x=>x.id===id):{};
- openModal(`<h2>${id?'Edit':'Add'} Lead</h2><div class="grid g3">
-  ${fld('ld_name','Name *',l.name)}${fld('ld_mobile','Mobile',l.mobile)}${sel('ld_src','Source',['Walk-in','Facebook','Instagram','Google','Reference','Call','Other'],l.source||'Walk-in')}
-  ${fld('ld_date','Enquiry Date',l.date||today(),'date')}${fld('ld_follow','Follow-up Date',l.follow||addDays(today(),1),'date')}
+ openModal(`<h2>${id?'Edit':'Add'} Lead / Enquiry</h2><div class="grid g3">
+  ${fld('ld_code','Code',l.code||'')}${fld('ld_name','Name *',l.name)}${fld('ld_isd','ISD Code',l.isdCode||'91')}
+  ${fld('ld_mobile','Number',l.mobile)}${fld('ld_wa','WhatsApp',l.wa||'')}${fld('ld_email','Email',l.email||'')}
+  ${sel('ld_gender','Gender',['','Male','Female','Other'],l.gender||'')}
+  ${fld('ld_date','Date of Enquiry',l.date||today(),'date')}${fld('ld_dob','DOB',l.dob||'','date')}
+  ${fld('ld_follow','Follow-up Date',l.follow||addDays(today(),1),'date')}
   ${sel('ld_status','Status',['New','Hot','Warm','Cold','Converted','Lost'],l.status||'New')}
+  ${fld('ld_conv','Conversion',l.conversion||'')}
+  ${fld('ld_type','Lead Type',l.leadType||'')}
+  ${sel('ld_src','Source of Enquiry',['Walk-in','Facebook','Instagram','Google','Reference','Call','WhatsApp','Banner','Website','Other'],l.source||'Walk-in')}
+  ${fld('ld_handled','Handled By',l.handledBy||'')}
+  ${fld('ld_assign','Assigned To',l.assignedTo||'')}
+  ${fld('ld_emp','Employment',l.employment||'')}
+  ${fld('ld_app','App Install',l.appInstall||'')}
+  ${fld('ld_mem','Membership',l.membership||'')}
+  ${fld('ld_addr','Address',l.address||'')}
+  ${fld('ld_emg','Emergency',l.emergency||'')}
+  ${fld('ld_refno','Reference No',l.refNo||'')}
   ${fld('ld_notes','Notes',l.notes||'')}
  </div><div class="row" style="justify-content:flex-end;gap:8px;margin-top:10px">
   <button class="btn sec" onclick="closeModal()">Cancel</button>
@@ -2037,13 +2290,20 @@ function saveLead(id){
  if(!val('ld_name')){toast('Name required');return}
  let l=id?(db.leads||[]).find(x=>x.id===id):null;
  if(!l){l={id:'LD'+Date.now()};db.leads.push(l)}
- Object.assign(l,{name:caps(val('ld_name')),mobile:val('ld_mobile'),source:val('ld_src'),date:val('ld_date'),follow:val('ld_follow'),status:val('ld_status'),notes:val('ld_notes')});
+ Object.assign(l,{
+  code:val('ld_code'),name:caps(val('ld_name')),isdCode:val('ld_isd'),mobile:val('ld_mobile'),wa:val('ld_wa'),
+  email:val('ld_email'),gender:val('ld_gender'),date:val('ld_date'),dob:val('ld_dob'),follow:val('ld_follow'),
+  status:val('ld_status'),conversion:val('ld_conv'),leadType:val('ld_type'),source:val('ld_src'),
+  handledBy:caps(val('ld_handled')),assignedTo:caps(val('ld_assign')),employment:val('ld_emp'),
+  appInstall:val('ld_app'),membership:val('ld_mem'),address:caps(val('ld_addr')),emergency:val('ld_emg'),
+  refNo:val('ld_refno'),notes:val('ld_notes')
+ });
  save();toast('Lead saved');closeModal();go(PAGE==='followups'?'followups':'leads');
 }
 function convertLead(id){
  const l=(db.leads||[]).find(x=>x.id===id);if(!l)return;
  l.status='Converted';save();
- WIZ={step:1,c:{name:l.name,mobile:l.mobile,ref:l.source||'Walk-in'},clientId:null,invId:null};
+ WIZ={step:1,c:{name:l.name,mobile:l.mobile,wa:l.wa||l.mobile,email:l.email,gender:l.gender,dob:l.dob,addr:l.address,ref:l.source||'Walk-in',occ:l.employment,emg:l.emergency,billRep:l.handledBy,trainer:l.assignedTo},clientId:null,invId:null};
  renderWizard();toast('Lead → New client wizard');
 }
 
