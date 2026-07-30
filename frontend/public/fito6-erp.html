@@ -697,6 +697,8 @@ const NAV_TREE=[
  ]},
  {id:'appointments',icon:'📅',label:'Appointments',page:'appointments'},
  {id:'more',icon:'⋯',label:'More Options',kids:[
+  {label:'Import YDL CSV',page:'more',fn:"openYdlImport('auto')"},
+  {label:'Delete Current Data',page:'more',fn:'openDeleteData()'},
   {label:'To-do List',page:'todos'},
   {label:'Audit Log',page:'audit'},
   {label:'EB Meter',page:'meter'},
@@ -2445,7 +2447,18 @@ function saveAppt(){
  save();toast('Appointment saved');closeModal();go('appointments');
 }
 function pgMore(){
- $('content').innerHTML=`<h2>More Options</h2><div class="grid g3" style="margin-top:12px">
+ const counts={
+  clients:(db.clients||[]).length,leads:(db.leads||[]).length,subs:(db.subs||[]).length,
+  invoices:(db.invoices||[]).length,cashbook:(db.cashbook||[]).length,att:(db.memberAtt||[]).length
+ };
+ $('content').innerHTML=`<h2>More Options</h2><div class="sub" style="margin-bottom:12px">Import, cleanup and extras</div>
+ <div class="grid g3">
+  <div class="card clickable" onclick="openYdlImport('auto')"><h3>⬆ Import YDL CSV</h3><p class="sub">Upload Members / Enquiries with YDL columns</p>
+   <button class="btn sm" style="margin-top:10px" onclick="event.stopPropagation();openYdlImport('auto')">Open Import</button></div>
+  <div class="card clickable" onclick="downloadYdlTemplate()"><h3>⬇ Import Template</h3><p class="sub">Download blank CSV with all YDL fields</p></div>
+  <div class="card" style="border-color:#f5c2c2;background:#fff8f8"><h3 style="color:var(--bad)">🗑 Delete Current Data</h3>
+   <p class="sub">Members ${counts.clients} · Leads ${counts.leads} · Bills ${counts.invoices} · Cash ${counts.cashbook}</p>
+   <button class="btn dgr sm" style="margin-top:10px" onclick="openDeleteData()">Delete Data…</button></div>
   <div class="card clickable" onclick="go('todos')"><h3>✅ To-do List</h3><p class="sub">Assign work to staff & trainers</p></div>
   <div class="card clickable" onclick="go('audit')"><h3>🛡️ Audit Log</h3><p class="sub">Activity history</p></div>
   <div class="card clickable" onclick="go('meter')"><h3>⚡ EB Meter</h3><p class="sub">Electricity readings</p></div>
@@ -2453,6 +2466,72 @@ function pgMore(){
   <div class="card clickable" onclick="go('payroll')"><h3>💵 Payroll</h3><p class="sub">Salary generation</p></div>
   <div class="card clickable" onclick="go('settings')"><h3>⚙️ Settings</h3><p class="sub">IDs, branches, packages</p></div>
  </div>`}
+function openDeleteData(){
+ if(USER&&USER.role!=='superadmin'&&USER.role!=='frontoffice'){toast('Only Admin can delete data');return}
+ const n={
+  clients:(db.clients||[]).length,leads:(db.leads||[]).length,subs:(db.subs||[]).length,
+  invoices:(db.invoices||[]).length,cash:(db.cashbook||[]).length,staff:(db.staff||[]).length,
+  att:(db.memberAtt||[]).length+(db.staffAtt||[]).length,todos:(db.todos||[]).length,
+  meter:(db.meterReadings||[]).length,appt:(db.appointments||[]).length,payroll:(db.payroll||[]).length
+ };
+ openModal(`<h2 style="color:var(--bad)">Delete Current Data</h2>
+ <p class="sub" style="margin-bottom:12px">Choose what to remove. <b>Settings / packages are kept</b> unless you tick Wipe settings. This cannot be undone.</p>
+ <div class="grid g2">
+  <label class="card" style="display:flex;gap:10px;align-items:center;cursor:pointer"><input type="checkbox" id="del_clients" checked> Members / Clients (${n.clients})</label>
+  <label class="card" style="display:flex;gap:10px;align-items:center;cursor:pointer"><input type="checkbox" id="del_leads" checked> Enquiries / Leads (${n.leads})</label>
+  <label class="card" style="display:flex;gap:10px;align-items:center;cursor:pointer"><input type="checkbox" id="del_subs" checked> Subscriptions (${n.subs})</label>
+  <label class="card" style="display:flex;gap:10px;align-items:center;cursor:pointer"><input type="checkbox" id="del_inv" checked> Invoices (${n.invoices})</label>
+  <label class="card" style="display:flex;gap:10px;align-items:center;cursor:pointer"><input type="checkbox" id="del_cash" checked> Cashbook / Expenses (${n.cash})</label>
+  <label class="card" style="display:flex;gap:10px;align-items:center;cursor:pointer"><input type="checkbox" id="del_att" checked> Attendance (${n.att})</label>
+  <label class="card" style="display:flex;gap:10px;align-items:center;cursor:pointer"><input type="checkbox" id="del_todos"> To-dos (${n.todos})</label>
+  <label class="card" style="display:flex;gap:10px;align-items:center;cursor:pointer"><input type="checkbox" id="del_meter"> EB Meter (${n.meter})</label>
+  <label class="card" style="display:flex;gap:10px;align-items:center;cursor:pointer"><input type="checkbox" id="del_appt"> Appointments (${n.appt})</label>
+  <label class="card" style="display:flex;gap:10px;align-items:center;cursor:pointer"><input type="checkbox" id="del_payroll"> Payroll (${n.payroll})</label>
+  <label class="card" style="display:flex;gap:10px;align-items:center;cursor:pointer"><input type="checkbox" id="del_staff"> Staff (${n.staff})</label>
+  <label class="card" style="display:flex;gap:10px;align-items:center;cursor:pointer"><input type="checkbox" id="del_audit"> Audit Log</label>
+  <label class="card" style="display:flex;gap:10px;align-items:center;cursor:pointer"><input type="checkbox" id="del_seq"> Reset ID counters</label>
+  <label class="card" style="display:flex;gap:10px;align-items:center;cursor:pointer;border-color:#f5c2c2"><input type="checkbox" id="del_settings"> Wipe settings (keep gym name only)</label>
+ </div>
+ <div class="field" style="margin-top:14px"><label>Type DELETE to confirm</label><input id="del_confirm" placeholder="DELETE" autocomplete="off"></div>
+ <div class="row" style="justify-content:flex-end;gap:8px;margin-top:12px">
+  <button class="btn sec" onclick="closeModal()">Cancel</button>
+  <button class="btn dgr" onclick="runDeleteData()">Delete Selected</button>
+ </div>`)}
+function runDeleteData(){
+ if(val('del_confirm')!=='DELETE'){toast('Type DELETE to confirm');return}
+ if(!confirm('Permanently delete selected data?'))return;
+ const keptSettings=db.settings?JSON.parse(JSON.stringify(db.settings)):defaults().settings;
+ const parts=[];
+ if($('del_clients')&&$('del_clients').checked){db.clients=[];parts.push('clients')}
+ if($('del_leads')&&$('del_leads').checked){db.leads=[];parts.push('leads')}
+ if($('del_subs')&&$('del_subs').checked){db.subs=[];parts.push('subs')}
+ if($('del_inv')&&$('del_inv').checked){db.invoices=[];parts.push('invoices')}
+ if($('del_cash')&&$('del_cash').checked){db.cashbook=[];parts.push('cashbook')}
+ if($('del_att')&&$('del_att').checked){db.memberAtt=[];db.staffAtt=[];parts.push('attendance')}
+ if($('del_todos')&&$('del_todos').checked){db.todos=[];parts.push('todos')}
+ if($('del_meter')&&$('del_meter').checked){db.meterReadings=[];parts.push('meter')}
+ if($('del_appt')&&$('del_appt').checked){db.appointments=[];parts.push('appointments')}
+ if($('del_payroll')&&$('del_payroll').checked){db.payroll=[];parts.push('payroll')}
+ if($('del_staff')&&$('del_staff').checked){db.staff=[];parts.push('staff')}
+ if($('del_audit')&&$('del_audit').checked){db.audit=[];parts.push('audit')}
+ if($('del_seq')&&$('del_seq').checked){
+  db.seq=defaults().seq;parts.push('seq');
+ }
+ if($('del_settings')&&$('del_settings').checked){
+  const name=keptSettings.gymName||'FITO6 FITNESS STUDIO';
+  db.settings=defaults().settings;db.settings.gymName=name;parts.push('settings');
+ }else{
+  db.settings=keptSettings;
+ }
+ if(!parts.length){toast('Nothing selected');return}
+ // Ensure arrays exist
+ ['clients','leads','subs','invoices','cashbook','staff','staffAtt','memberAtt','payroll','audit','batches','classes','todos','meterReadings','appointments'].forEach(k=>{if(!Array.isArray(db[k]))db[k]=[]});
+ if(!db.seq)db.seq=defaults().seq;
+ save();
+ try{audit('Data Deleted',parts.join(', '))}catch(e){}
+ toast('Deleted: '+parts.join(', '));
+ closeModal();go('more');
+}
 
 /* ================= SETTINGS ================= */
 function pgSettings(){
