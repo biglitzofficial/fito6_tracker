@@ -48,6 +48,7 @@ service cloud.firestore {
 | `ALLOWED_ORIGINS` | *(optional)* `https://${{Frontend.RAILWAY_PUBLIC_DOMAIN}}` if you still need the Railway URL |
 | `FIREBASE_SERVICE_ACCOUNT_JSON` | Full service account JSON (single line) |
 | `FIREBASE_STORAGE_BUCKET` | `your-project-id.appspot.com` |
+| `SUPERADMIN_EMAILS` | `biglitz.official@gmail.com` *(product owner — auto Super Admin on login)* |
 
 > Alternatively use `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, and `FIREBASE_PRIVATE_KEY` instead of `FIREBASE_SERVICE_ACCOUNT_JSON`.
 

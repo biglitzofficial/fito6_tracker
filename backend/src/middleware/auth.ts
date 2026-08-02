@@ -3,6 +3,7 @@ import { Role } from '../types/enums';
 import { User } from '../types/models';
 import { COL, getById } from '../lib/firestore';
 import { verifyToken, JwtPayload } from '../utils/jwt';
+import { resolveUserRole } from '../lib/user-role';
 import { AppError } from '../utils/response';
 
 export interface AuthRequest extends Request {
@@ -24,7 +25,12 @@ export async function authenticate(req: AuthRequest, _res: Response, next: NextF
       throw new AppError(401, 'Invalid or inactive account');
     }
 
-    req.user = { userId: user.id, email: user.email, role: user.role, name: user.name };
+    req.user = {
+      userId: user.id,
+      email: user.email,
+      role: await resolveUserRole(user),
+      name: user.name,
+    };
     next();
   } catch (error) {
     if (error instanceof AppError) return next(error);

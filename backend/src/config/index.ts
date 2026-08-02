@@ -119,6 +119,11 @@ if (isProduction) {
   requireEnv('FIREBASE_STORAGE_BUCKET', firebaseStorageBucket);
 }
 
+function parseEmailList(source?: string): string[] {
+  if (!source) return [];
+  return source.split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
+}
+
 export const config = {
   port: parseInt(process.env.PORT || '4000', 10),
   nodeEnv,
@@ -128,6 +133,7 @@ export const config = {
     expiresIn: process.env.JWT_EXPIRES_IN || '7d',
   },
   allowedOrigins: parseAllowedOrigins(process.env.FRONTEND_URL, process.env.ALLOWED_ORIGINS),
+  superAdminEmails: parseEmailList(process.env.SUPERADMIN_EMAILS),
   frontendUrl:
     normalizeOrigin(process.env.FRONTEND_URL?.split(',')[0]?.trim() || '') ||
     'http://localhost:3000',

@@ -1,19 +1,11 @@
-import { User, Staff } from '../types/models';
+import { User } from '../types/models';
 import { COL, create, findMany, findOne, getById, update } from '../lib/firestore';
 import { hashPassword, comparePassword, validatePassword } from '../utils/password';
 import { signToken, generateResetToken } from '../utils/jwt';
 import { sendPasswordResetEmail } from '../lib/email';
 import { AppError } from '../utils/response';
 import { config } from '../config';
-
-async function attachStaff(user: User & { id: string }) {
-  const staff = await findOne<Staff>(COL.staff, 'userId', user.id);
-  const { password: _, ...userWithoutPassword } = user;
-  return {
-    ...userWithoutPassword,
-    staff: staff ? { ...staff, salary: Number(staff.salary) } : null,
-  };
-}
+import { attachStaff, resolveUserRole } from '../lib/user-role';
 
 export const authService = {
   async login(email: string, password: string) {
@@ -23,7 +15,8 @@ export const authService = {
     const valid = await comparePassword(password, user.password);
     if (!valid) throw new AppError(401, 'Invalid credentials');
 
-    const token = signToken({ userId: user.id, email: user.email, role: user.role });
+    const role = await resolveUserRole(user);
+    const token = signToken({ userId: user.id, email: user.email, role });
 
     create(COL.auditLogs, {
       userId: user.id,
@@ -100,16 +93,6 @@ export const authService = {
   async getProfile(userId: string) {
     const user = await getById<User>(COL.users, userId);
     if (!user) throw new AppError(404, 'User not found');
-
-    const staff = await findOne<Staff>(COL.staff, 'userId', userId);
-    return {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      role: user.role,
-      isActive: user.isActive,
-      createdAt: user.createdAt,
-      staff: staff ? { ...staff, salary: Number(staff.salary) } : null,
-    };
+    return attachStaff(user);
   },
 };
