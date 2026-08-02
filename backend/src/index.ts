@@ -1,11 +1,13 @@
 import app from './app';
 import { config } from './config';
 import { pingFirebase } from './lib/firebase';
+import { ensurePlatformSuperAdmin } from './lib/platform-bootstrap';
 
 async function start() {
   try {
     await pingFirebase();
     console.log('Firebase connected');
+    await ensurePlatformSuperAdmin();
   } catch (err) {
     console.error('Firebase warmup failed:', (err as Error).message);
   }
