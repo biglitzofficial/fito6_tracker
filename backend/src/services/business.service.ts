@@ -1,6 +1,6 @@
 import { Role } from '../types/enums';
 import { Business, BusinessMember } from '../types/models';
-import { COL, create, findMany, getById, update } from '../lib/firestore';
+import { COL, create, findMany, getById, sortBy, update } from '../lib/firestore';
 import { seedBusinessDefaults } from '../lib/business-seed';
 import { settingsService } from './audit.service';
 import { AppError } from '../utils/response';
@@ -38,6 +38,10 @@ export const businessService = {
   },
 
   async listForUser(userId: string, userRole: Role) {
+    if (userRole === Role.SUPERADMIN) {
+      return sortBy(await findMany<Business>(COL.businesses, () => true), 'name');
+    }
+
     let memberships = await findMany<BusinessMember>(
       COL.businessMembers,
       (m) => m.userId === userId && m.isActive

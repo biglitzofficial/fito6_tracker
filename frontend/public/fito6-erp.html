@@ -146,6 +146,7 @@ hr.sep{border:none;border-top:1px solid var(--line);margin:14px 0}
   <div id="brandbar">
     <div class="logo">FITO<span style="color:var(--brand)">6</span></div>
     <div class="role" id="sb_role"></div>
+    <select id="biz_switch" onchange="switchBusiness(this.value)" style="display:none;max-width:220px;padding:6px 10px;border-radius:6px;border:1px solid #2a3550;background:#1d2740;color:#fff;font-size:12px"></select>
     <div class="sp" style="flex:1"></div>
     <span class="userchip" id="tb_user" style="background:#1d2740;border-color:#2a3550;color:#fff"></span>
     <button class="btn sec sm" onclick="logout()">Logout</button>
@@ -183,7 +184,7 @@ hr.sep{border:none;border-top:1px solid var(--line);margin:14px 0}
 const DBKEY='fito6_erp_v1';
 const AUTHKEY='fito6_erp_auth';
 let API_URL='http://localhost:4000/api';
-let AUTH={token:null,businessId:null,user:null};
+let AUTH={token:null,businessId:null,user:null,businesses:[]};
 let db=null;
 let _saveTimer=null;
 let _cloudReady=false;
@@ -193,6 +194,14 @@ async function initApiConfig(){
  const override=localStorage.getItem('fito6_api_url');if(override)API_URL=override;
 }
 
+async function platformApi(path,opts={}){
+ const headers={'Content-Type':'application/json',...(opts.headers||{})};
+ if(AUTH.token)headers.Authorization='Bearer '+AUTH.token;
+ const res=await fetch(API_URL+path,{...opts,headers,body:opts.body!==undefined?JSON.stringify(opts.body):undefined});
+ let json=null;try{json=await res.json()}catch(e){}
+ if(!res.ok)throw new Error((json&&json.error)||('Request failed '+res.status));
+ return json&&json.data!==undefined?json.data:json;
+}
 async function api(path,opts={}){
  const headers={'Content-Type':'application/json',...(opts.headers||{})};
  if(AUTH.token)headers.Authorization='Bearer '+AUTH.token;
@@ -203,8 +212,8 @@ async function api(path,opts={}){
  return json&&json.data!==undefined?json.data:json;
 }
 
-function persistAuth(){localStorage.setItem(AUTHKEY,JSON.stringify({token:AUTH.token,businessId:AUTH.businessId,user:AUTH.user}))}
-function clearAuth(){AUTH={token:null,businessId:null,user:null};localStorage.removeItem(AUTHKEY)}
+function persistAuth(){localStorage.setItem(AUTHKEY,JSON.stringify({token:AUTH.token,businessId:AUTH.businessId,user:AUTH.user,businesses:AUTH.businesses||[]}))}
+function clearAuth(){AUTH={token:null,businessId:null,user:null,businesses:[]};localStorage.removeItem(AUTHKEY)}
 function restoreAuth(){try{const a=JSON.parse(localStorage.getItem(AUTHKEY)||'null');if(a&&a.token)AUTH=a}catch(e){}}
 
 function defaults(){return{
@@ -738,13 +747,16 @@ function isGroupClassType(t){return/group\s*class|dance|boxing|zumba|yoga/i.test
 
 /* ================= AUTH & NAV ================= */
 let USER=null,PAGE='dashboard';
-const ALL_PAGES=['dashboard','leads','followups','clients','analysis','memberships','billing','batches','accounts','cashbook','expenses','notifications','trainers','trainer','fitness','staff','attendance','attreports','settings','help','appointments','payroll','todos','reports','meter','audit','more'];
+const ALL_PAGES=['platform','gymadmins','gymperformance','dashboard','leads','followups','clients','analysis','memberships','billing','batches','accounts','cashbook','expenses','notifications','trainers','trainer','fitness','staff','attendance','attreports','settings','help','appointments','payroll','todos','reports','meter','audit','more'];
+const GYM_ADMIN_PAGES=ALL_PAGES.filter(p=>!['platform','gymadmins'].includes(p));
 const MENUS={
- superadmin:ALL_PAGES,
- frontoffice:['dashboard','leads','followups','clients','analysis','memberships','billing','batches','accounts','cashbook','expenses','notifications','trainers','fitness','staff','attendance','attreports','appointments','todos','meter','help','more','settings','reports'],
- accountant:['dashboard','analysis','accounts','cashbook','expenses','attendance','attreports','settings','payroll','reports','meter','help','more','billing'],
+ superadmin:['platform','gymadmins',...GYM_ADMIN_PAGES],
+ gymadmin:GYM_ADMIN_PAGES,
+ frontoffice:['dashboard','leads','followups','clients','analysis','gymperformance','memberships','billing','batches','accounts','cashbook','expenses','notifications','trainers','fitness','staff','attendance','attreports','appointments','todos','meter','help','more','settings','reports'],
+ accountant:['dashboard','analysis','gymperformance','accounts','cashbook','expenses','attendance','attreports','settings','payroll','reports','meter','help','more','billing'],
  trainer:['trainer','clients','attendance','batches','todos','appointments','help']};
 const PAGES={
+ platform:['🌐','Platform'],gymadmins:['🏋️','Gym Admins'],gymperformance:['📊','Gym Performance'],
  dashboard:['🏠','Dashboard'],leads:['📋','Enquiry'],followups:['🔄','Follow Ups'],clients:['👥','Members'],analysis:['📈','Analysis'],
  memberships:['🪪','Memberships'],billing:['🧾','Billing'],batches:['👥','Batches & Classes'],accounts:['💵','Accounts'],cashbook:['💰','Cashbook'],
  expenses:['📤','Expenses'],notifications:['💬','Notification & WhatsApp'],trainers:['🧑','Trainers'],trainer:['📱','Trainer Portal'],
@@ -752,6 +764,8 @@ const PAGES={
  settings:['⚙️','App Settings'],help:['❓','Tutorial & Help'],appointments:['📅','Appointments'],payroll:['💵','Payroll'],
  todos:['✅','To-do List'],reports:['📊','Reports'],meter:['⚡','EB Meter'],audit:['🛡️','Audit Log'],more:['⋯','More Options']};
 const NAV_TREE=[
+ {id:'platform',icon:'🌐',label:'Platform',page:'platform'},
+ {id:'gymadmins',icon:'🏋️',label:'Gym Admins',page:'gymadmins'},
  {id:'dashboard',icon:'🏠',label:'Dashboard',page:'dashboard'},
  {id:'enquiry',icon:'📋',label:'Enquiry',kids:[
   {label:'Leads / Enquiries',page:'leads'},
@@ -767,6 +781,7 @@ const NAV_TREE=[
   {label:'Deactivated Members',page:'clients',fn:"CL_F.status='Inactive';go('clients')"}
  ]},
  {id:'analysis',icon:'📈',label:'Analysis',kids:[
+  {label:'Gym Performance',page:'gymperformance'},
   {label:'Reports & Charts',page:'analysis'},
   {label:'Classic Reports',page:'reports'},
   {label:'EB Meter',page:'meter'}
@@ -833,11 +848,30 @@ const NAV_TREE=[
  ]}
 ];
 function mapCloudRole(role,email,name){
- if(role==='ADMIN')return'superadmin';
+ if(role==='SUPERADMIN')return'superadmin';
+ if(role==='ADMIN')return'gymadmin';
  const tip=((email||'')+' '+(name||'')+' '+(USER&&USER.jobType||'')).toLowerCase();
  if(/train/.test(tip)||(AUTH.user&&/train/i.test(AUTH.user.jobType||'')))return'trainer';
  if(/account/.test(tip))return'accountant';
  return'frontoffice';
+}
+function homePage(){if(!USER)return'dashboard';if(USER.role==='superadmin')return'platform';if(USER.role==='trainer')return'trainer';return'dashboard'}
+function populateBizSwitcher(businesses){
+ const sel=$('biz_switch');if(!sel)return;
+ const list=businesses||[];
+ if(list.length<=1&&USER&&USER.role!=='superadmin'){sel.style.display='none';return}
+ sel.style.display='block';
+ sel.innerHTML=list.map(b=>`<option value="${b.id}" ${b.id===AUTH.businessId?'selected':''}>${esc(b.name||b.gymName||b.id)}</option>`).join('');
+}
+async function switchBusiness(id){
+ if(!id||id===AUTH.businessId)return;
+ AUTH.businessId=id;persistAuth();_cloudReady=false;
+ try{
+  const source=await loadFromCloud();
+  $('sb_role').textContent=(db.settings&&db.settings.gymName)||'FITO6';
+  buildNav();go(USER.role==='superadmin'?'platform':homePage());
+  toast('Switched to '+($('sb_role').textContent||'gym')+(source==='firestore'?' · cloud':''));
+ }catch(e){toast(e.message||'Failed to switch gym')}
 }
 function showLoginError(msg){const el=$('lg_err');if(!el)return;el.style.display=msg?'block':'none';el.textContent=msg||''}
 async function doLogin(){
@@ -852,6 +886,7 @@ async function doLogin(){
   AUTH.user=result.user;
   const businesses=await api('/businesses');
   if(!businesses||!businesses.length)throw new Error('No business found for this account');
+  AUTH.businesses=businesses;
   AUTH.businessId=businesses[0].id;
   persistAuth();
   const source=await loadFromCloud();
@@ -859,8 +894,9 @@ async function doLogin(){
   $('login').style.display='none';$('app').style.display='block';
   $('tb_user').textContent=USER.name+' · '+USER.role+(source==='firestore'?' · cloud':' · synced');
   $('sb_role').textContent=(db.settings&&db.settings.gymName)||businesses[0].name||'FITO6';
+  populateBizSwitcher(businesses);
   audit('Login','Cloud login · '+email);
-  buildNav();go(USER.role==='trainer'?'trainer':'dashboard');refreshTopbarNotifs();
+  buildNav();go(homePage());refreshTopbarNotifs();
   toast(source==='migrated'?'Local data uploaded to cloud database':source==='new'?'Cloud database ready':'Loaded from cloud database');
  }catch(e){
   showLoginError(e.message||'Login failed');
@@ -906,7 +942,7 @@ function markNavOn(p){
 }
 function go(p,arg){if(!canPage(p)){toast('No permission');return} PAGE=p;
  closeNavDrops();closeTbDrops();markNavOn(p);
- const pages={dashboard:pgDashboard,trainer:pgTrainerPortal,clients:pgClients,leads:pgLeads,followups:pgFollowups,memberships:pgMemberships,billing:pgBilling,cashbook:pgCashbook,expenses:pgExpenses,meter:pgMeter,staff:pgStaff,attendance:pgAttendance,payroll:pgPayroll,batches:pgBatches,todos:pgTodos,reports:pgReports,accounts:pgAccounts,audit:pgAudit,settings:pgSettings,analysis:pgAnalysis,notifications:pgNotifications,trainers:pgTrainers,fitness:pgFitness,attreports:pgAttReports,help:pgHelp,appointments:pgAppointments,more:pgMore};
+ const pages={platform:pgPlatform,gymadmins:pgGymAdmins,gymperformance:pgGymPerformance,dashboard:pgDashboard,trainer:pgTrainerPortal,clients:pgClients,leads:pgLeads,followups:pgFollowups,memberships:pgMemberships,billing:pgBilling,cashbook:pgCashbook,expenses:pgExpenses,meter:pgMeter,staff:pgStaff,attendance:pgAttendance,payroll:pgPayroll,batches:pgBatches,todos:pgTodos,reports:pgReports,accounts:pgAccounts,audit:pgAudit,settings:pgSettings,analysis:pgAnalysis,notifications:pgNotifications,trainers:pgTrainers,fitness:pgFitness,attreports:pgAttReports,help:pgHelp,appointments:pgAppointments,more:pgMore};
  if(pages[p])pages[p](arg);else pgStub(PAGES[p]?PAGES[p][1]:p);
  refreshTopbarNotifs()}
 function pgStub(title){$('content').innerHTML=`<div class="card"><h2>${esc(title)}</h2><p class="sub">This module is ready in the menu. Full screens coming next.</p></div>`}
@@ -2472,11 +2508,132 @@ function saveTodo(){
 function toggleTodo(id){const t=db.todos.find(x=>x.id===id);if(!t)return;t.done=!t.done;save();go('todos')}
 function removeTodo(id){db.todos=db.todos.filter(t=>t.id!==id);save();go('todos')}
 
+/* ================= PLATFORM / GYM ADMIN ================= */
+async function pgPlatform(){
+ $('content').innerHTML=`<div class="row" style="justify-content:space-between;margin-bottom:12px"><div><h2>Platform Dashboard</h2><div class="sub">Product super admin · all gyms performance</div></div>
+  <button class="btn" onclick="go('gymadmins')">＋ Create Gym Admin</button></div><div id="plat_body"><p class="sub">Loading platform analytics…</p></div>`;
+ try{
+  const data=await platformApi('/platform/analytics');
+  const gyms=(data.gyms||[]).slice().sort((a,b)=>(b.stats.collectionMonth||0)-(a.stats.collectionMonth||0));
+  $('plat_body').innerHTML=`
+   <div class="grid g4" style="margin-bottom:14px">
+    ${stat('Total Gyms',data.totals.gyms,'br')}${stat('Total Members',data.totals.members,'ok')}
+    ${stat('Collection ('+data.month+')',inr(data.totals.collectionMonth),'ok')}${stat('Net ('+data.month+')',inr(data.profitMonth),data.profitMonth>=0?'ok':'bad')}
+   </div>
+   <div class="card"><h3>Gym-wise Performance</h3>
+    <div class="tbl"><table><tr><th>Gym</th><th>Admin</th><th>Members</th><th>Leads</th><th class="r">Collection</th><th class="r">Expense</th><th class="r">Net</th><th></th></tr>
+    ${gyms.map(g=>`<tr>
+     <td class="bold">${esc(g.gymName||g.name)}</td>
+     <td>${esc(g.admin?g.admin.name:'—')}<div class="sub">${esc(g.admin?g.admin.email:'')}</div></td>
+     <td>${g.stats.members}</td><td>${g.stats.leads}</td>
+     <td class="r">${inr(g.stats.collectionMonth)}</td>
+     <td class="r">${inr(g.stats.expenseMonth)}</td>
+     <td class="r bold">${inr((g.stats.collectionMonth||0)-(g.stats.expenseMonth||0))}</td>
+     <td><button class="btn sm sec" onclick="switchBusiness('${g.id}')">Open Gym</button></td>
+    </tr>`).join('')||'<tr><td colspan=8 class="mut">No gyms yet — create a gym admin</td></tr>'}
+    </table></div></div>`;
+ }catch(e){
+  $('plat_body').innerHTML=`<div class="card"><p class="sub" style="color:var(--bad)">${esc(e.message||'Failed to load platform analytics')}</p>
+   <button class="btn" style="margin-top:10px" onclick="go('gymadmins')">Create Gym Admin</button></div>`;
+ }
+}
+async function pgGymAdmins(){
+ $('content').innerHTML=`<div class="row" style="justify-content:space-between;margin-bottom:12px"><div><h2>Gym Admins</h2><div class="sub">Each admin owns one gym · create login for partner gyms</div></div>
+  <button class="btn" onclick="openCreateGymAdmin()">＋ Create Gym Admin</button></div><div id="ga_body"><p class="sub">Loading…</p></div>`;
+ try{
+  const admins=await platformApi('/platform/gym-admins');
+  $('ga_body').innerHTML=`<div class="tbl"><table><tr><th>Admin</th><th>Email</th><th>Gym</th><th>Status</th><th></th></tr>
+   ${admins.map(a=>`<tr><td class="bold">${esc(a.name)}</td><td>${esc(a.email)}</td><td>${esc(a.business?a.business.name:'—')}</td>
+   <td><span class="badge ${a.isActive?'b-ok':'b-bad'}">${a.isActive?'Active':'Inactive'}</span></td>
+   <td>${a.business?`<button class="btn sm sec" onclick="switchBusiness('${a.business.id}')">Open Gym</button>`:''}</td></tr>`).join('')||'<tr><td colspan=5 class="mut">No gym admins yet</td></tr>'}
+   </table></div>`;
+ }catch(e){$('ga_body').innerHTML=`<div class="card"><p class="sub" style="color:var(--bad)">${esc(e.message||'Failed to load gym admins')}</p></div>`}
+}
+function openCreateGymAdmin(){
+ openModal(`<h2>Create Gym Admin</h2><p class="sub" style="margin-bottom:12px">Creates a new gym, ERP database, and admin login.</p>
+ <div class="grid g2">
+  ${fld('ga_gym','Gym Name *','')}
+  ${fld('ga_name','Admin Name *','')}
+  ${fld('ga_email','Admin Email *','','email')}
+  ${fld('ga_pass','Temporary Password *','','password')}
+ </div>
+ <div class="row" style="justify-content:flex-end;gap:8px;margin-top:14px">
+  <button class="btn sec" onclick="closeModal()">Cancel</button>
+  <button class="btn" onclick="saveGymAdmin()">Create</button>
+ </div>`);
+}
+async function saveGymAdmin(){
+ const gymName=val('ga_gym'),adminName=val('ga_name'),adminEmail=val('ga_email'),adminPassword=val('ga_pass');
+ if(!gymName||!adminName||!adminEmail||!adminPassword){toast('Fill all fields');return}
+ try{
+  const result=await platformApi('/platform/gym-admins',{method:'POST',body:{gymName,adminName,adminEmail,adminPassword}});
+  toast('Gym admin created · '+result.admin.email);
+  closeModal();
+  AUTH.businesses=await api('/businesses');
+  populateBizSwitcher(AUTH.businesses);
+  go('gymadmins');
+ }catch(e){toast(e.message||'Create failed')}
+}
+function pgGymPerformance(){
+ const m=thisMonth(),t=today();
+ const staffList=(db.staff||[]).filter(s=>s.status!=='Inactive');
+ const repStats={};
+ (db.invoices||[]).forEach(iv=>{
+  if((iv.date||'').slice(0,7)!==m)return;
+  const k=iv.billRep||iv.by||'—';
+  repStats[k]=repStats[k]||{billed:0,collected:0,count:0};
+  repStats[k].billed+=iv.grand||0;
+  repStats[k].collected+=(iv.paid||0);
+  repStats[k].count++;
+ });
+ const trainerStats={};
+ staffList.filter(s=>/train|pt/i.test((s.dept||'')+(s.jobType||''))).forEach(s=>{trainerStats[s.name]={clients:0,ptSubs:0,att:0}});
+ (db.clients||[]).forEach(c=>{
+  if(c.status==='Inactive'||!c.trainer)return;
+  if(!trainerStats[c.trainer])trainerStats[c.trainer]={clients:0,ptSubs:0,att:0};
+  trainerStats[c.trainer].clients++;
+ });
+ (db.subs||[]).filter(s=>s.type==='PT'&&subStatus(s)==='Active').forEach(s=>{
+  const c=client(s.clientId);const tr=(c&&c.trainer)||s.trainer||'';
+  if(!tr)return;
+  if(!trainerStats[tr])trainerStats[tr]={clients:0,ptSubs:0,att:0};
+  trainerStats[tr].ptSubs++;
+ });
+ (db.memberAtt||[]).filter(a=>a.date&&a.date.startsWith(m)).forEach(a=>{
+  const c=client(a.clientId);if(!c||!c.trainer)return;
+  if(!trainerStats[c.trainer])trainerStats[c.trainer]={clients:0,ptSubs:0,att:0};
+  trainerStats[c.trainer].att++;
+ });
+ const attStats={};
+ (db.staffAtt||[]).filter(a=>a.date&&a.date.startsWith(m)).forEach(a=>{
+  attStats[a.name]=attStats[a.name]||{Present:0,Absent:0,Late:0,'Half Day':0};
+  if(attStats[a.name][a.status]!=null)attStats[a.name][a.status]++;
+ });
+ $('content').innerHTML=`<div class="row" style="justify-content:space-between;margin-bottom:12px"><div><h2>Gym Performance</h2><div class="sub">${esc(db.settings.gymName||'FITO6')} · ${m} · trainer & staff analytics</div></div>
+  <button class="btn sec" onclick="go('staff')">Manage Staff</button></div>
+ <div class="grid g2" style="margin-bottom:14px">
+  <div class="card"><h3>Staff / Bill Rep Sales (${m})</h3>
+   <div class="tbl"><table><tr><th>Staff</th><th>Invoices</th><th class="r">Billed</th><th class="r">Collected</th></tr>
+   ${Object.entries(repStats).sort((a,b)=>b[1].collected-a[1].collected).map(([n,s])=>`<tr><td>${esc(n)}</td><td>${s.count}</td><td class="r">${inr(s.billed)}</td><td class="r bold">${inr(s.collected)}</td></tr>`).join('')||'<tr><td colspan=4 class="mut">No billing this month</td></tr>'}
+   </table></div></div>
+  <div class="card"><h3>Trainer Performance (${m})</h3>
+   <div class="tbl"><table><tr><th>Trainer</th><th>Members</th><th>Active PT</th><th>Member Visits</th></tr>
+   ${Object.entries(trainerStats).sort((a,b)=>b[1].clients-a[1].clients).map(([n,s])=>`<tr><td>${esc(n)}</td><td>${s.clients}</td><td>${s.ptSubs}</td><td>${s.att}</td></tr>`).join('')||'<tr><td colspan=4 class="mut">No trainer data</td></tr>'}
+   </table></div></div>
+ </div>
+ <div class="card"><h3>Staff Attendance (${m})</h3>
+  <div class="tbl"><table><tr><th>Staff</th><th>Present</th><th>Absent</th><th>Late</th><th>Half Day</th></tr>
+  ${Object.entries(attStats).map(([n,s])=>`<tr><td>${esc(n)}</td><td>${s.Present||0}</td><td>${s.Absent||0}</td><td>${s.Late||0}</td><td>${s['Half Day']||0}</td></tr>`).join('')||'<tr><td colspan=5 class="mut">No staff attendance logged</td></tr>'}
+  </table></div></div>`;
+}
+
 /* ================= YDL MENU PAGES ================= */
 function pgAnalysis(){
  $('content').innerHTML=`<div class="row" style="justify-content:space-between;margin-bottom:12px"><div><h2>Analysis</h2><div class="sub">Membership & collection insights</div></div>
+  <button class="btn sec" onclick="go('gymperformance')">Gym Performance</button>
   <button class="btn sec" onclick="go('reports')">Classic Reports</button></div>
   <div class="grid g3">
+   <div class="card clickable" onclick="go('gymperformance')"><h3>📊 Gym Performance</h3><p class="sub">Trainer & staff sales / attendance</p></div>
    <div class="card clickable" onclick="go('reports')"><h3>📈 Reports & Charts</h3><p class="sub">Collection, expense and membership reports</p></div>
    <div class="card clickable" onclick="go('accounts')"><h3>💵 Accounts / P&L</h3><p class="sub">Profit & loss overview</p></div>
    <div class="card clickable" onclick="go('meter')"><h3>⚡ EB Meter</h3><p class="sub">Day & night electricity readings</p></div>
@@ -2597,7 +2754,7 @@ function pgMore(){
   <div class="card clickable" onclick="go('settings')"><h3>⚙️ Settings</h3><p class="sub">IDs, branches, packages</p></div>
  </div>`}
 function openDeleteData(){
- if(USER&&USER.role!=='superadmin'&&USER.role!=='frontoffice'){toast('Only Admin can delete data');return}
+ if(USER&&USER.role!=='superadmin'&&USER.role!=='gymadmin'&&USER.role!=='frontoffice'){toast('Only Admin can delete data');return}
  const n={
   clients:(db.clients||[]).length,leads:(db.leads||[]).length,subs:(db.subs||[]).length,
   invoices:(db.invoices||[]).length,cash:(db.cashbook||[]).length,staff:(db.staff||[]).length,
@@ -2786,10 +2943,12 @@ function seedDemo(){
   try{
    const source=await loadFromCloud();
    USER={u:AUTH.user.email,p:'',role:mapCloudRole(AUTH.user.role,AUTH.user.email,AUTH.user.name),name:AUTH.user.name,cloudRole:AUTH.user.role,jobType:AUTH.user.jobType};
+   if(!AUTH.businesses||!AUTH.businesses.length){try{AUTH.businesses=await api('/businesses')}catch(e){AUTH.businesses=[]}}
    $('login').style.display='none';$('app').style.display='block';
    $('tb_user').textContent=USER.name+' · '+USER.role+' · cloud';
    $('sb_role').textContent=(db.settings&&db.settings.gymName)||'FITO6';
-   buildNav();go(USER.role==='trainer'?'trainer':'dashboard');refreshTopbarNotifs();
+   populateBizSwitcher(AUTH.businesses);
+   buildNav();go(homePage());refreshTopbarNotifs();
    if(source)toast('Session restored from cloud');
   }catch(e){
    clearAuth();_cloudReady=false;

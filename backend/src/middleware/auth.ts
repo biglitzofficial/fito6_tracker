@@ -43,5 +43,9 @@ export function authorize(...roles: Role[]) {
 }
 
 export function adminOnly(req: AuthRequest, res: Response, next: NextFunction) {
-  return authorize(Role.ADMIN)(req, res, next);
+  return authorize(Role.SUPERADMIN, Role.ADMIN)(req, res, next);
+}
+
+export function superAdminOnly(req: AuthRequest, res: Response, next: NextFunction) {
+  return authorize(Role.SUPERADMIN)(req, res, next);
 }

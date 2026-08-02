@@ -1,4 +1,4 @@
-export type Role = 'ADMIN' | 'STAFF';
+export type Role = 'SUPERADMIN' | 'ADMIN' | 'STAFF';
 export type StaffJobType = 'SALES' | 'TRAINER' | 'BOTH' | 'GENERAL';
 
 export interface User {

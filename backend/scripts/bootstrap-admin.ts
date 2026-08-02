@@ -15,9 +15,9 @@ async function main() {
 
   validatePassword(password);
 
-  const existingAdmin = (await findMany<User>(COL.users, (u) => u.role === Role.ADMIN))[0];
-  if (existingAdmin) {
-    console.error('An admin account already exists. Bootstrap skipped.');
+  const existingSuper = (await findMany<User>(COL.users, (u) => u.role === Role.SUPERADMIN))[0];
+  if (existingSuper) {
+    console.error('A super admin account already exists. Bootstrap skipped.');
     process.exit(1);
   }
 
@@ -26,11 +26,11 @@ async function main() {
     email,
     password: hashed,
     name,
-    role: Role.ADMIN,
+    role: Role.SUPERADMIN,
     isActive: true,
   });
 
-  console.log(`Admin account created: ${admin.email}`);
+  console.log(`Super admin account created: ${admin.email}`);
 }
 
 main().catch((e) => {
