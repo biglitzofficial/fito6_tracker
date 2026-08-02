@@ -358,9 +358,10 @@ function parseImportDate(v){
  const dt=new Date(v);if(!isNaN(dt.getTime()))return dt.toISOString().slice(0,10);
  return'';
 }
-function mapImportHeaders(headerRow){
+function mapImportHeaders(headerRow,map){
+ const m=map||YDL_IMPORT_MAP;
  const idx={};const norms=headerRow.map(normHeader);
- YDL_IMPORT_MAP.forEach(col=>{
+ m.forEach(col=>{
   let found=-1;
   for(const a of col.a){found=norms.findIndex(h=>h===a||h.startsWith(a)||a.startsWith(h));if(found>=0)break}
   if(found>=0)idx[col.key]=found;
@@ -534,6 +535,131 @@ function upsertImportedLead(o){
  });
  return isNew?'add':'upd';
 }
+/* ---- Cashbook CSV Import ---- */
+const CB_IMPORT_HEADERS=['Date','Time','Remark','Party','Category','Mode','Entry By','Cash In','Cash Out','Balance','Client Name','Sales Type'];
+const CB_IMPORT_MAP=[
+ {key:'date',a:['date','transactiondate','voucherdate']},
+ {key:'time',a:['time','entrytime','transactiontime']},
+ {key:'remark',a:['remark','remarks','particular','particulars','description','narration']},
+ {key:'party',a:['party','partyname','receivedfrom','paidto']},
+ {key:'category',a:['category','cat','head']},
+ {key:'mode',a:['mode','paymentmode','paymode','payment']},
+ {key:'entryBy',a:['entryby','by','collectedby','paidby','enteredby']},
+ {key:'cashIn',a:['cashin','cashinamount','in','credit','receipt']},
+ {key:'cashOut',a:['cashout','cashoutamount','out','debit','paymentamount']},
+ {key:'balance',a:['balance','closingbalance','runningbalance']},
+ {key:'clientName',a:['clientname','clientnam','client','membername','member','customername']},
+ {key:'salesType',a:['salestype','sales','servicetype','type']}
+];
+function parseImportAmount(v){
+ v=String(v||'').replace(/[₹,\s]/g,'').trim();if(!v)return 0;
+ const n=parseFloat(v.replace(/[^\d.-]/g,''));
+ return isNaN(n)?0:Math.abs(n);
+}
+function parseImportTime(v){
+ v=String(v||'').trim();if(!v)return'';
+ if(/^\d{1,2}:\d{2}(:\d{2})?$/.test(v))return v.length===5?v+':00':v.slice(0,8);
+ if(/^\d+(\.\d+)?$/.test(v)){
+  const n=parseFloat(v);if(n>=0&&n<1){const s=Math.round(n*86400);const h=Math.floor(s/3600),m=Math.floor((s%3600)/60);return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')}
+ }
+ const m=v.match(/^(\d{1,2})[:\.](\d{2})/);if(m)return String(m[1]).padStart(2,'0')+':'+m[2];
+ return v.slice(0,8);
+}
+function rowToCbImportObj(row,idx){
+ const g=k=>{const i=idx[k];return i==null?'':String(row[i]??'').trim()};
+ return{
+  date:parseImportDate(g('date')),time:parseImportTime(g('time')),remark:g('remark'),
+  party:g('party'),category:g('category'),mode:g('mode'),entryBy:g('entryBy'),
+  cashIn:parseImportAmount(g('cashIn')),cashOut:parseImportAmount(g('cashOut')),
+  balance:parseImportAmount(g('balance')),clientName:g('clientName'),salesType:g('salesType')
+ };
+}
+function cbImportKey(o,type,amount){
+ return[o.date,o.time,type,amount,o.party,o.remark,o.mode].join('|').toLowerCase();
+}
+function normCbSalesType(v,type){
+ const x=String(v||'').trim();
+ if(x)return x;
+ return type==='out'?'Expense':'Other Income';
+}
+function normCbMode(v){
+ const x=String(v||'').trim();
+ if(!x)return'Cash';
+ const modes=(db.settings&&db.settings.payModes)||['Cash','UPI','Card','Cheque','Bank Transfer'];
+ const hit=modes.find(m=>m.toLowerCase()===x.toLowerCase());
+ return hit||x;
+}
+function ensureCbCategory(cat,type){
+ if(!cat)return type==='out'?'Misc':'Misc Income';
+ ensurePkgSettings();
+ const list=type==='out'?db.settings.expCats:db.settings.incCats;
+ if(!list.includes(cat))list.push(cat);
+ return cat;
+}
+function downloadCbTemplate(){
+ csvExport([CB_IMPORT_HEADERS,['2026-07-01','10:30','Membership payment','RAJ KUMAR','Membership Payment','UPI','Front Desk','5000','','125000','RAJ KUMAR','Membership'],['2026-07-02','18:00','Electricity bill','TNEB','Electricity','Cash','Admin','','2500','122500','','Expense']],'fito6_cashbook_import_template');
+}
+function openCbImport(){
+ openModal(`<h2>Import Cashbook (CSV / Excel)</h2>
+ <p class="sub" style="margin-bottom:12px">Use YDL cashbook columns. Save Excel as <b>CSV (Comma delimited)</b> before upload.</p>
+ <div class="tbl" style="margin-bottom:12px;max-height:120px;overflow:auto"><table><tr>${CB_IMPORT_HEADERS.map(h=>`<th style="white-space:nowrap">${esc(h)}</th>`).join('')}</tr></table></div>
+ <div class="field"><label>CSV File</label><input id="cb_imp_file" type="file" accept=".csv,text/csv,.txt,application/vnd.ms-excel"></div>
+ <p class="sub">Each row = one entry. Use <b>Cash In</b> or <b>Cash Out</b> (not both). <b>Balance</b> is stored for reference only.</p>
+ <div class="row" style="justify-content:flex-end;gap:8px;margin-top:14px">
+  <button class="btn sec" onclick="downloadCbTemplate()">⬇ Download Template</button>
+  <button class="btn sec" onclick="closeModal()">Cancel</button>
+  <button class="btn" onclick="runCbImport()">Import Now</button>
+ </div>`);
+}
+function runCbImport(){
+ const f=$('cb_imp_file')&&$('cb_imp_file').files&&$('cb_imp_file').files[0];
+ if(!f){toast('Choose a CSV file');return}
+ const reader=new FileReader();
+ reader.onload=()=>{
+  try{
+   const rows=parseCsvText(reader.result);
+   if(rows.length<2){toast('CSV has no data rows');return}
+   const idx=mapImportHeaders(rows[0],CB_IMPORT_MAP);
+   if(idx.date==null&&idx.cashIn==null&&idx.cashOut==null){toast('Could not find Date / Cash In / Cash Out columns');return}
+   if(!Array.isArray(db.cashbook))db.cashbook=[];
+   let added=0,upd=0,skip=0;
+   for(let i=1;i<rows.length;i++){
+    const o=rowToCbImportObj(rows[i],idx);
+    if(!o.date&&!o.cashIn&&!o.cashOut){skip++;continue}
+    if(!o.date)o.date=today();
+    const party=o.party||o.clientName||'';
+    const types=[];
+    if(o.cashIn>0)types.push(['in',o.cashIn]);
+    if(o.cashOut>0)types.push(['out',o.cashOut]);
+    if(!types.length){skip++;continue}
+    types.forEach(([type,amount])=>{
+     const key=cbImportKey({...o,party},type,amount);
+     let e=(db.cashbook||[]).find(x=>x.importKey===key);
+     const isNew=!e;
+     if(isNew){
+      e={id:'CB'+Date.now()+Math.random().toString(36).slice(2,6),importKey:key,imported:true,status:'Active'};
+      db.cashbook.push(e);
+     }
+     const cat=ensureCbCategory(o.category||o.remark||'',type);
+     const salesType=normCbSalesType(o.salesType,type);
+     Object.assign(e,{
+      date:o.date,time:o.time||'',type,
+      no:e.no||(type==='in'?nextNo('receipt','RCP-'):nextNo('voucher','VCH-')),
+      particulars:o.remark||cat,party,category:cat,mode:normCbMode(o.mode),
+      amount,by:o.entryBy||USER.name||'Import',notes:o.balance?('Balance: '+o.balance):'',
+      clientName:o.clientName||party,salesType,balanceRef:o.balance||0,
+      roleCat:e.roleCat||'Staff',imported:true,importKey:key,status:'Active'
+     });
+     if(isNew)added++;else upd++;
+    });
+   }
+   save();audit('Cashbook Import',`+${added} new / ~${upd} updated · skip ${skip}`);
+   toast(`Cashbook imported · ${added} new · ${upd} updated · ${skip} skipped`);
+   closeModal();go('cashbook');
+  }catch(e){console.error(e);toast('Import failed: '+(e.message||e))}
+ };
+ reader.readAsText(f);
+}
 function printHTML(html){$('printarea').innerHTML=html;window.print()}
 function client(id){return db.clients.find(c=>c.id===id)}
 function staffById(id){return db.staff.find(s=>s.id===id)}
@@ -657,6 +783,7 @@ const NAV_TREE=[
  {id:'accounts',icon:'💵',label:'Accounts',kids:[
   {label:'Accounts / P&L',page:'accounts'},
   {label:'Cashbook',page:'cashbook'},
+  {label:'Import Cashbook CSV',page:'cashbook',fn:'openCbImport()'},
   {label:'Expenses',page:'expenses'},
   {label:'Billing',page:'billing'},
   {label:'Payroll',page:'payroll'}
@@ -1716,7 +1843,7 @@ function pgCashbook(){
  const roles=['Master Admin','Admin','Staff','Trainer'];
  $('content').innerHTML=`
  <div class="row" style="justify-content:space-between"><div><h2>Cashbook</h2><div class="sub">Filters + role category · bulk inactive</div></div>
- <div class="row"><button class="btn sec" onclick="cashForm('in')">＋ Cash In</button><button class="btn" onclick="cashForm('out')">－ Cash Out</button><button class="btn sec" onclick="manageCbCats()">Categories</button></div></div>
+ <div class="row"><button class="btn sec" onclick="cashForm('in')">＋ Cash In</button><button class="btn" onclick="cashForm('out')">－ Cash Out</button><button class="btn sec" onclick="openCbImport()">⬆ Import CSV</button><button class="btn sec" onclick="manageCbCats()">Categories</button></div></div>
  <div class="grid g4" style="margin:12px 0">${stat('Opening Cash',inr(openCash))}${stat("Today's Cash In",inr(cashIn(t,t,'Cash')),'ok')}${stat("Today's Cash Out",inr(cashOut(t,t,'Cash')),'bad')}${stat('Closing Cash','<b>'+inr(openCash+cashIn(t,t,'Cash')-cashOut(t,t,'Cash'))+'</b>','br')}</div>
  <div class="toolbar">
   <div class="field"><label>Month</label><input type="month" id="cb_month" value="${m}"></div>
@@ -2456,6 +2583,9 @@ function pgMore(){
   <div class="card clickable" onclick="openYdlImport('auto')"><h3>⬆ Import YDL CSV</h3><p class="sub">Upload Members / Enquiries with YDL columns</p>
    <button class="btn sm" style="margin-top:10px" onclick="event.stopPropagation();openYdlImport('auto')">Open Import</button></div>
   <div class="card clickable" onclick="downloadYdlTemplate()"><h3>⬇ Import Template</h3><p class="sub">Download blank CSV with all YDL fields</p></div>
+  <div class="card clickable" onclick="openCbImport()"><h3>⬆ Import Cashbook CSV</h3><p class="sub">Date, Time, Remark, Party, Cash In/Out, Client Name, Sales Type</p></div>
+  <div class="card clickable" onclick="downloadCbTemplate()"><h3>⬇ Cashbook Template</h3><p class="sub">Blank CSV with Date, Time, Remark, Party, Cash In/Out fields</p></div>
+  <div class="card clickable" onclick="openCbImport()"><h3>⬆ Import Cashbook CSV</h3><p class="sub">Upload YDL cashbook export into ledger</p></div>
   <div class="card" style="border-color:#f5c2c2;background:#fff8f8"><h3 style="color:var(--bad)">🗑 Delete Current Data</h3>
    <p class="sub">Members ${counts.clients} · Leads ${counts.leads} · Bills ${counts.invoices} · Cash ${counts.cashbook}</p>
    <button class="btn dgr sm" style="margin-top:10px" onclick="openDeleteData()">Delete Data…</button></div>
