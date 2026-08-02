@@ -13,6 +13,7 @@
     "docker:up": "docker compose up --build",
     "docker:down": "docker compose down",
     "db:seed": "cd backend && npm run db:seed",
-    "db:bootstrap-admin": "cd backend && npm run db:bootstrap-admin"
+    "db:bootstrap-admin": "cd backend && npm run db:bootstrap-admin",
+    "db:set-super-admin": "cd backend && npm run db:set-super-admin"
   }
 }
