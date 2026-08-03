@@ -1,4 +1,5 @@
 import { Response, NextFunction } from 'express';
+import { Role } from '../types/enums';
 import { AuthRequest } from './auth';
 import { businessService } from '../services/business.service';
 import { AppError } from '../utils/response';
@@ -16,7 +17,12 @@ export async function requireBusiness(req: BusinessRequest, _res: Response, next
       return next(new AppError(400, 'Business context required'));
     }
 
-    const membership = await businessService.getMembership(req.user.userId, businessId);
+    if (req.user.role === Role.SUPERADMIN) {
+      req.businessId = businessId.trim();
+      return next();
+    }
+
+    const membership = await businessService.getMembership(req.user.userId, businessId.trim());
     if (!membership) {
       return next(new AppError(403, 'You do not have access to this business'));
     }

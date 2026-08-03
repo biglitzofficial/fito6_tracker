@@ -861,10 +861,19 @@ function populateBizSwitcher(businesses){
  const list=businesses||[];
  if(list.length<=1&&USER&&USER.role!=='superadmin'){sel.style.display='none';return}
  sel.style.display='block';
- sel.innerHTML=list.map(b=>`<option value="${b.id}" ${b.id===AUTH.businessId?'selected':''}>${esc(b.name||b.gymName||b.id)}</option>`).join('');
+ const platformOpt=USER&&USER.role==='superadmin'?'<option value="">— Platform —</option>':'';
+ sel.innerHTML=platformOpt+list.map(b=>`<option value="${b.id}" ${b.id===AUTH.businessId?'selected':''}>${esc(b.name||b.gymName||b.id)}</option>`).join('');
 }
 async function switchBusiness(id){
- if(!id||id===AUTH.businessId)return;
+ if(id===AUTH.businessId||(id===''&&!AUTH.businessId))return;
+ if(!id){
+  AUTH.businessId=null;persistAuth();_cloudReady=false;
+  db=defaults();ensurePkgSettings();cacheLocal();
+  $('sb_role').textContent='FITO6 Platform';
+  buildNav();go('platform');
+  toast('Platform view — pick a gym to load its data');
+  return;
+ }
  AUTH.businessId=id;persistAuth();_cloudReady=false;
  try{
   const source=await loadFromCloud();
@@ -884,21 +893,32 @@ async function doLogin(){
   const result=await api('/auth/login',{method:'POST',body:{email,password}});
   AUTH.token=result.token;
   AUTH.user=result.user;
+  const isSuper=result.user.role==='SUPERADMIN';
   const businesses=await api('/businesses');
-  if(!businesses||!businesses.length)throw new Error('No business found for this account');
-  AUTH.businesses=businesses;
-  AUTH.businessId=businesses[0].id;
+  if(isSuper){
+   AUTH.businesses=businesses||[];
+   AUTH.businessId=null;
+   db=defaults();ensurePkgSettings();cacheLocal();_cloudReady=false;
+  }else if(!businesses||!businesses.length){
+   throw new Error('No business found for this account');
+  }else{
+   AUTH.businesses=businesses;
+   AUTH.businessId=businesses[0].id;
+   persistAuth();
+   const source=await loadFromCloud();
+   toast(source==='migrated'?'Local data uploaded to cloud database':source==='new'?'Cloud database ready':'Loaded from cloud database');
+  }
   persistAuth();
-  const source=await loadFromCloud();
   USER={u:AUTH.user.email,p:'',role:mapCloudRole(AUTH.user.role,AUTH.user.email,AUTH.user.name),name:AUTH.user.name,cloudRole:AUTH.user.role,jobType:AUTH.user.jobType};
   $('login').style.display='none';$('app').style.display='block';
-  $('tb_user').textContent=USER.name+' · '+USER.role+(source==='firestore'?' · cloud':' · synced');
-  $('sb_role').textContent=(db.settings&&db.settings.gymName)||businesses[0].name||'FITO6';
-  populateBizSwitcher(businesses);
+  $('tb_user').textContent=USER.name+' · '+USER.role+(isSuper&&!AUTH.businessId?' · platform':' · cloud');
+  $('sb_role').textContent=isSuper&&!AUTH.businessId?'FITO6 Platform':((db.settings&&db.settings.gymName)||(businesses&&businesses[0]&&businesses[0].name)||'FITO6');
+  populateBizSwitcher(AUTH.businesses||[]);
   audit('Login','Cloud login · '+email);
   buildNav();go(homePage());refreshTopbarNotifs();
-  toast(source==='migrated'?'Local data uploaded to cloud database':source==='new'?'Cloud database ready':'Loaded from cloud database');
+  if(isSuper&&!AUTH.businessId)toast('Platform Super Admin — create gym admins to add gyms');
  }catch(e){
+  clearAuth();_cloudReady=false;
   showLoginError(e.message||'Login failed');
   toast(e.message||'Login failed');
  }finally{
@@ -2939,17 +2959,24 @@ function seedDemo(){
 (async function boot(){
  await initApiConfig();
  restoreAuth();
- if(AUTH.token&&AUTH.businessId){
+ if(AUTH.token&&AUTH.user){
   try{
-   const source=await loadFromCloud();
-   USER={u:AUTH.user.email,p:'',role:mapCloudRole(AUTH.user.role,AUTH.user.email,AUTH.user.name),name:AUTH.user.name,cloudRole:AUTH.user.role,jobType:AUTH.user.jobType};
    if(!AUTH.businesses||!AUTH.businesses.length){try{AUTH.businesses=await api('/businesses')}catch(e){AUTH.businesses=[]}}
+   const isSuper=AUTH.user.role==='SUPERADMIN';
+   if(AUTH.businessId){
+    const source=await loadFromCloud();
+    if(source)toast('Session restored from cloud');
+   }else if(isSuper){
+    db=defaults();ensurePkgSettings();_cloudReady=false;
+   }else{
+    throw new Error('No business context');
+   }
+   USER={u:AUTH.user.email,p:'',role:mapCloudRole(AUTH.user.role,AUTH.user.email,AUTH.user.name),name:AUTH.user.name,cloudRole:AUTH.user.role,jobType:AUTH.user.jobType};
    $('login').style.display='none';$('app').style.display='block';
-   $('tb_user').textContent=USER.name+' · '+USER.role+' · cloud';
-   $('sb_role').textContent=(db.settings&&db.settings.gymName)||'FITO6';
-   populateBizSwitcher(AUTH.businesses);
+   $('tb_user').textContent=USER.name+' · '+USER.role+(isSuper&&!AUTH.businessId?' · platform':' · cloud');
+   $('sb_role').textContent=isSuper&&!AUTH.businessId?'FITO6 Platform':((db.settings&&db.settings.gymName)||'FITO6');
+   populateBizSwitcher(AUTH.businesses||[]);
    buildNav();go(homePage());refreshTopbarNotifs();
-   if(source)toast('Session restored from cloud');
   }catch(e){
    clearAuth();_cloudReady=false;
    console.warn('Session restore failed',e);
