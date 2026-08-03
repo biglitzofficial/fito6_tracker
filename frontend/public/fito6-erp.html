@@ -167,7 +167,7 @@ hr.sep{border:none;border-top:1px solid var(--line);margin:14px 0}
           <a href="#" onclick="closeTbDrops();go('accounts');return false">Account / P&amp;L</a>
           <a href="#" onclick="closeTbDrops();go('expenses');return false">Expenses</a>
           <a href="#" onclick="closeTbDrops();filterCashMode('Cash');return false">Cash entries</a>
-          <a href="#" onclick="closeTbDrops();filterCashMode('Bank Transfer');return false">Bank entries</a>
+          <a href="#" onclick="closeTbDrops();filterCashMode('Bank');return false">Bank entries</a>
         </div>
       </div>
     </div>
@@ -225,10 +225,10 @@ function defaults(){return{
   subTypes:['New Membership','Renew Membership','Upgrade Membership','New PT','Renew PT','Group Class','Freeze Membership','Transfer Membership'],
   expCats:['Rent','Electricity','Salary','Petrol','Marketing','Maintenance','Repairs','Office Expense','Cleaning','Stationery','Equipment Purchase','Water','Internet','Tea','Misc'],
   incCats:['Product Sales','Owner Investment','Misc Income','Interest','Other Income'],
-  payModes:['Cash','UPI','Card','Cheque','Bank Transfer'],openingCash:0,openingBank:0,
+  payModes:['Cash','UPI','Card'],bankPayModes:['UPI','Card'],openingCash:0,openingBank:0,
   adminIds:{superAdmin:'',admin:''}},
  users:[],
- seq:{client:1000,invoice:1,receipt:1,voucher:1,staff:100,trainer:0,payroll:0,clientByYear:{}},
+ seq:{client:1000,invoice:1,receipt:1,voucher:1,staff:100,trainer:0,payroll:0,clientByYear:{},clientByBranch:{}},
  clients:[],subs:[],invoices:[],cashbook:[],staff:[],staffAtt:[],memberAtt:[],payroll:[],audit:[],leads:[],batches:[],classes:[],todos:[],meterReadings:[],appointments:[]};}
 
 function cacheLocal(){try{localStorage.setItem(DBKEY,JSON.stringify(db))}catch(e){}}
@@ -278,6 +278,7 @@ function ensurePkgSettings(){
  db.settings.dancePackages=db.settings.groupClassPackages;
  if(!Array.isArray(db.settings.subTypes)||!db.settings.subTypes.length)db.settings.subTypes=d.subTypes;
  if(!Array.isArray(db.settings.payModes))db.settings.payModes=d.payModes;
+ if(!Array.isArray(db.settings.bankPayModes))db.settings.bankPayModes=d.bankPayModes||['UPI','Card','Cheque','Bank Transfer'];
  if(!Array.isArray(db.settings.incCats))db.settings.incCats=d.incCats;
  if(!Array.isArray(db.settings.expCats))db.settings.expCats=d.expCats;
  ['packages','ptPackages','dancePackages','groupClassPackages'].forEach(k=>{
@@ -286,13 +287,15 @@ function ensurePkgSettings(){
  });
  if(!db.seq)db.seq=defaults().seq;
  if(!db.seq.clientByYear)db.seq.clientByYear={};
+ if(!db.seq.clientByBranch)db.seq.clientByBranch={};
  if(db.seq.trainer==null)db.seq.trainer=0;
  if(db.seq.payroll==null)db.seq.payroll=0;
  if(!Array.isArray(db.batches))db.batches=[];
  if(!Array.isArray(db.classes))db.classes=[];
  if(!Array.isArray(db.todos))db.todos=[];
  if(!Array.isArray(db.meterReadings))db.meterReadings=[];
- (db.clients||[]).forEach(c=>{if(!c.status)c.status='Active'});
+ if(!Array.isArray(db.trainerRequests))db.trainerRequests=[];
+ (db.clients||[]).forEach(c=>{if(!c.status)c.status='Active';if(c.billRep&&!c.billRepFrozen)c.billRepFrozen=true});
  (db.cashbook||[]).forEach(e=>{if(!e.status)e.status='Active'});
 }
 
@@ -400,7 +403,7 @@ function isConvertedFlag(v){
  return/^(y|yes|converted|member|done|1|true|joined)$/.test(x);
 }
 function downloadYdlTemplate(){
- csvExport([YDL_IMPORT_HEADERS,['26FIT001','SAMPLE MEMBER','91','9876543210','sample@email.com','Male',today(),'Converted','Front Desk','Walk-in trial','Hot','Instagram','Salaried','Yes','Trainer Name','3 Month','1995-01-15','Chennai','Father 9876500000','9876543210','REF001']],'fito6_ydl_import_template');
+ csvExport([YDL_IMPORT_HEADERS,['F12600000','SAMPLE MEMBER','91','9876543210','sample@email.com','Male',today(),'Converted','Front Desk','Walk-in trial','Hot','Instagram','Salaried','Yes','Trainer Name','3 Month','1995-01-15','Chennai','Father 9876500000','9876543210','REF001']],'fito6_ydl_import_template');
 }
 function openYdlImport(defaultTarget){
  openModal(`<h2>Import YDL Data (CSV / Excel)</h2>
@@ -463,7 +466,7 @@ function upsertImportedMember(o){
  const isNew=!c;
  if(isNew){
   let id=(o.code||'').trim();
-  if(!id||(db.clients||[]).some(x=>x.id===id))id=nextClientId();
+  if(!id||(db.clients||[]).some(x=>x.id===id))id=nextClientId(db.settings.branch);
   c={id,joined:o.dateEn||today(),status:'Active',notes:[]};
   db.clients.push(c);
  }
@@ -593,10 +596,139 @@ function normCbSalesType(v,type){
 }
 function normCbMode(v){
  const x=String(v||'').trim();
- if(!x)return'Cash';
- const modes=(db.settings&&db.settings.payModes)||['Cash','UPI','Card','Cheque','Bank Transfer'];
- const hit=modes.find(m=>m.toLowerCase()===x.toLowerCase());
- return hit||x;
+ if(!x||/^cash$/i.test(x))return'Cash';
+ const bank=(db.settings&&db.settings.bankPayModes)||['UPI','Card'];
+ const hit=bank.find(m=>m.toLowerCase()===x.toLowerCase());
+ if(hit)return hit;
+ if(/upi|card|cheque|bank|transfer|gpay|paytm|neft|imps/i.test(x)){
+  if(/card|credit|debit/i.test(x))return'Card';
+  if(/cheque|check/i.test(x))return'Cheque';
+  if(/transfer|neft|imps|bank/i.test(x))return'Bank Transfer';
+  return'UPI';
+ }
+ return'UPI';
+}
+function payModeTop(mode){return normCbMode(mode)==='Cash'?'Cash':'Bank'}
+function payModeSub(mode){
+ const m=normCbMode(mode);
+ return m==='Cash'?'':m;
+}
+function formatPayMode(mode){
+ const m=normCbMode(mode);
+ return m==='Cash'?'Cash':'Bank · '+m;
+}
+function bankPayModes(){ensurePkgSettings();return db.settings.bankPayModes||['UPI','Card','Cheque','Bank Transfer']}
+function isBankEntryMode(mode){return payModeTop(mode)==='Bank'}
+function payModeFieldHtml(prefix,mode){
+ const top=payModeTop(mode),sub=payModeSub(mode)||bankPayModes()[0];
+ const subs=bankPayModes();
+ return`<div class="field"><label>Payment Mode</label><select id="${prefix}_mode_top" onchange="syncPaySub('${prefix}')"><option value="Cash" ${top==='Cash'?'selected':''}>Cash</option><option value="Bank" ${top==='Bank'?'selected':''}>Bank</option></select></div>
+ <div class="field" id="${prefix}_mode_sub_wrap" style="${top==='Bank'?'':'display:none'}"><label>Bank Type (UPI / Card / …)</label><select id="${prefix}_mode_sub">${subs.map(m=>`<option ${sub===m?'selected':''}>${esc(m)}</option>`).join('')}</select></div>`;
+}
+function syncPaySub(prefix){
+ const wrap=$(prefix+'_mode_sub_wrap');if(!wrap)return;
+ wrap.style.display=val(prefix+'_mode_top')==='Bank'?'block':'none';
+}
+function readPayMode(prefix){
+ if(val(prefix+'_mode_top')==='Bank')return normCbMode(val(prefix+'_mode_sub')||'UPI');
+ return'Cash';
+}
+function posAmount(v,label){
+ const n=Number(v);
+ if(!Number.isFinite(n)||n<=0){toast(label||'Enter a positive amount');return null}
+ return+n;
+}
+function catField(type,selected){
+ const cats=(type==='in'?db.settings.incCats:db.settings.expCats)||[];
+ const opts=cats.map(c=>`<option ${c===selected?'selected':''}>${esc(c)}</option>`).join('');
+ return`<div class="field"><label>Category</label>
+  <div class="row" style="gap:6px;align-items:end;margin:0">
+   <select id="cf_cat" style="flex:1">${opts}</select>
+   <button type="button" class="btn sm sec" onclick="quickAddCat('${type}')">＋ Add</button>
+   <button type="button" class="btn sm sec" onclick="manageCbCats('${type}')">Manage</button>
+  </div></div>`;
+}
+function quickAddCat(type){
+ const name=prompt(type==='in'?'New income category:':'New expense category:','');
+ if(!name||!name.trim())return;
+ ensurePkgSettings();
+ const key=type==='in'?'incCats':'expCats';
+ const list=getSettingsList(key);
+ const n=name.trim();
+ if(list.some(x=>x.toLowerCase()===n.toLowerCase())){toast('Already exists');return}
+ list.push(n);save();toast('Category added');
+ if($('cf_cat')){$('cf_cat').innerHTML=list.map(c=>`<option ${c===n?'selected':''}>${esc(c)}</option>`).join('');$('cf_cat').value=n}
+}
+function getSettingsList(key){
+ ensurePkgSettings();
+ if(key==='incCats')return db.settings.incCats;
+ if(key==='expCats')return db.settings.expCats;
+ if(key==='subTypes')return db.settings.subTypes;
+ if(key==='bankPayModes')return db.settings.bankPayModes;
+ return[];
+}
+function settingsListRows(listKey,items){
+ const safeKey=listKey.replace(/[^a-zA-Z0-9]/g,'_');
+ return`<div class="settings-list" style="max-height:240px;overflow:auto;margin-bottom:10px">
+ ${(items||[]).map((c,i)=>`<div class="row" style="gap:8px;margin-bottom:6px;align-items:center;padding:8px 10px;background:#f8f9fb;border:1px solid var(--border);border-radius:6px">
+  <span style="flex:1;font-weight:600">${esc(c)}</span>
+  <button type="button" class="btn sm sec" onclick="renameSettingsItem('${listKey}',${i})">Rename</button>
+  <button type="button" class="btn sm dgr" onclick="removeSettingsItem('${listKey}',${i})">Delete</button>
+ </div>`).join('')||'<p class="sub mut" style="padding:8px">No items yet — add below</p>'}
+ </div>
+ <div class="row" style="gap:8px"><input id="add_${safeKey}" placeholder="Type new name and click Add" style="flex:1" onkeydown="if(event.key==='Enter')addSettingsItem('${listKey}','add_${safeKey}')">
+ <button type="button" class="btn sm" onclick="addSettingsItem('${listKey}','add_${safeKey}')">＋ Add</button></div>`;
+}
+function addSettingsItem(listKey,inputId){
+ const n=val(inputId).trim();if(!n){toast('Enter a name');return}
+ const list=getSettingsList(listKey);
+ if(list.some(x=>x.toLowerCase()===n.toLowerCase())){toast('Already exists');return}
+ list.push(n);save();audit('Settings Item Added',listKey+' · '+n);toast('Added · saved');refreshSettingsView(listKey);
+}
+function renameSettingsItem(listKey,idx){
+ const list=getSettingsList(listKey);const old=list[idx];if(!old)return;
+ const neu=prompt('Rename "'+old+'" to:',old);if(!neu)return;
+ const n=neu.trim();if(!n||n===old)return;
+ if(list.some((x,i)=>i!==idx&&x.toLowerCase()===n.toLowerCase())){toast('Name already exists');return}
+ if(!confirm('Rename "'+old+'" → "'+n+'"?\n\nSaved immediately.'))return;
+ list[idx]=n;save();audit('Settings Item Renamed',old+' → '+n);toast('Renamed · saved');refreshSettingsView(listKey);
+}
+function removeSettingsItem(listKey,idx){
+ const list=getSettingsList(listKey);const name=list[idx];if(!name)return;
+ if(listKey==='bankPayModes'&&list.length<=1){toast('Keep at least one bank type (UPI or Card)');return}
+ if(listKey==='subTypes'&&list.length<=1){toast('Keep at least one subscription type');return}
+ if(!confirm('Step 1 of 2 — Remove "'+name+'" from this list?\n\nExisting cashbook/billing records are not changed.'))return;
+ if(!confirm('Step 2 of 2 — Confirm delete "'+name+'"?\n\nThis cannot be undone.'))return;
+ list.splice(idx,1);save();audit('Settings Item Deleted',listKey+' · '+name);toast('Deleted · saved');refreshSettingsView(listKey);
+}
+function refreshSettingsView(listKey){
+ const modalOpen=$('modalwrap')&&$('modalwrap').style.display==='flex';
+ if(modalOpen&&['incCats','expCats'].includes(listKey)){manageCbCats(listKey==='incCats'?'in':'out');return}
+ if(PAGE==='settings')pgSettings();
+ else if(PAGE==='cashbook')applyCbFilters();
+ else if(PAGE==='expenses')pgExpenses();
+}
+function catManageList(kind,items){
+ const key=kind==='inc'?'incCats':'expCats';
+ return settingsListRows(key,items);
+}
+function removeCatItem(kind,idx){removeSettingsItem(kind==='inc'?'incCats':'expCats',idx)}
+function addCatItem(kind){addSettingsItem(kind==='inc'?'incCats':'expCats',kind==='inc'?'add_incCats':'add_expCats')}
+function clientHadMembership(c){return!!c&&db.subs.some(s=>s.clientId===c.id&&s.type==='Membership')}
+function clientHadPt(c){return!!c&&db.subs.some(s=>s.clientId===c.id&&s.type==='PT')}
+function subTypesForClient(clientId){
+ const all=db.settings.subTypes||['New Membership','Renew Membership','Upgrade Membership','New PT','Renew PT','Group Class','Freeze Membership','Transfer Membership'];
+ const c=client(clientId);
+ if(!c)return all;
+ let types=all.slice();
+ if(clientHadMembership(c))types=types.filter(t=>t!=='New Membership');
+ if(clientHadPt(c))types=types.filter(t=>t!=='New PT');
+ return types.length?types:all.filter(t=>t!=='New Membership'&&t!=='New PT');
+}
+function defaultSubType(clientId){
+ const c=client(clientId);
+ if(!c||!clientHadMembership(c))return'New Membership';
+ return'Renew Membership';
 }
 function ensureCbCategory(cat,type){
  if(!cat)return type==='out'?'Misc':'Misc Income';
@@ -642,6 +774,7 @@ function runCbImport(){
     if(o.cashOut>0)types.push(['out',o.cashOut]);
     if(!types.length){skip++;continue}
     types.forEach(([type,amount])=>{
+     if(amount<=0){skip++;return}
      const key=cbImportKey({...o,party},type,amount);
      let e=(db.cashbook||[]).find(x=>x.importKey===key);
      const isNew=!e;
@@ -673,13 +806,51 @@ function printHTML(html){$('printarea').innerHTML=html;window.print()}
 function client(id){return db.clients.find(c=>c.id===id)}
 function staffById(id){return db.staff.find(s=>s.id===id)}
 function nextNo(key,prefix){if(!db.seq[key])db.seq[key]=0;const n=++db.seq[key];save();return prefix+String(n).padStart(4,'0')}
-function nextClientId(){
+function clientBranchIndex(branchName){
+ const branches=db.settings.branches||[db.settings.branch||'Main Branch'];
+ const b=branchName||db.settings.branch||branches[0];
+ let idx=branches.indexOf(b);
+ if(idx<0){
+  const code=String(db.settings.branchCode||'').replace(/\D/g,'');
+  if(code)idx=Math.max(0,parseInt(code,10)-1);
+  else idx=0;
+ }
+ return idx+1;
+}
+function nextClientId(branchName){
  const yy=String(new Date().getFullYear()).slice(2);
- if(!db.seq.clientByYear)db.seq.clientByYear={};
- if(!db.seq.clientByYear[yy])db.seq.clientByYear[yy]=0;
- db.seq.clientByYear[yy]++;
+ const bi=clientBranchIndex(branchName);
+ if(!db.seq.clientByBranch)db.seq.clientByBranch={};
+ const key=bi+yy;
+ if(db.seq.clientByBranch[key]==null)db.seq.clientByBranch[key]=-1;
+ db.seq.clientByBranch[key]++;
  save();
- return yy+'FIT'+String(db.seq.clientByYear[yy]).padStart(3,'0');
+ return'F'+bi+yy+String(db.seq.clientByBranch[key]).padStart(5,'0');
+}
+function normalizeMobile(v){return String(v||'').replace(/\D/g,'').slice(-10)}
+function formatMobile(v){const m=normalizeMobile(v);return m?'+91 '+m:m}
+function phoneField(id,label,mobile,locked){
+ const m=normalizeMobile(mobile);
+ const ro=locked?'readonly class="ro"':'';
+ return`<div class="field"><label>${label}</label>
+  <div class="row" style="gap:0;align-items:stretch;margin:0">
+   <span style="padding:8px 10px;background:#f0f2f5;border:1px solid var(--border);border-right:0;border-radius:6px 0 0 6px;font-size:13px;color:var(--mut);white-space:nowrap">+91</span>
+   <input id="${id}" type="tel" maxlength="10" inputmode="numeric" placeholder="10-digit number" value="${esc(m)}" ${ro} style="border-radius:0 6px 6px 0;flex:1" oninput="this.value=this.value.replace(/\\D/g,'').slice(0,10)">
+  </div></div>`;
+}
+function trainerPtCounts(){
+ const map={};
+ (db.clients||[]).forEach(c=>{
+  if(c.status==='Inactive'||!c.trainer)return;
+  const hasPt=db.subs.some(s=>s.clientId===c.id&&s.type==='PT'&&subStatus(s)==='Active');
+  if(hasPt)map[c.trainer]=(map[c.trainer]||0)+1;
+ });
+ return map;
+}
+function trainerCell(c,ptCounts){
+ if(!c.trainer)return'-';
+ const n=ptCounts[c.trainer]||0;
+ return esc(c.trainer)+(n?` <span class="mut">(${n} PT)</span>`:'');
 }
 function nextStaffId(dept){
  const yy=String(new Date().getFullYear()).slice(2);
@@ -736,7 +907,7 @@ function refreshTopbarNotifs(){
  if(dot){dot.style.display=due.length?'flex':'none';dot.textContent=String(due.length)}
  if(drop)drop.innerHTML=due.length?due.map(i=>{const c=client(i.clientId);return`<a href="#" onclick="closeTbDrops();showInvoice('${i.id}');return false">${esc(i.no)} · ${esc(c?c.name:'?')} · ${inr(i.pending)}</a>`}).join('')+'<a href="#" onclick="closeTbDrops();go(\'billing\');return false"><b>View all billing →</b></a>':'<div style="padding:10px" class="mut">No pending bills</div>';
 }
-function filterCashMode(mode){go('cashbook');setTimeout(()=>{if($('cb_mode')){$('cb_mode').value=mode;applyCbFilters()}},50)}
+function filterCashMode(mode){go('cashbook');setTimeout(()=>{if($('cb_mode')){$('cb_mode').value=(mode==='Cash'?'Cash':'Bank');applyCbFilters()}},50)}
 function lineChart(data,color){
  const max=Math.max(...data.map(d=>d.y),1),w=320,h=140,pad=18;
  const pts=data.map((d,i)=>{const x=pad+(i*(w-2*pad)/Math.max(data.length-1,1));const y=h-pad-((d.y/max)*(h-2*pad));return x+','+y}).join(' ');
@@ -747,16 +918,16 @@ function isGroupClassType(t){return/group\s*class|dance|boxing|zumba|yoga/i.test
 
 /* ================= AUTH & NAV ================= */
 let USER=null,PAGE='dashboard';
-const ALL_PAGES=['platform','gymadmins','gymperformance','dashboard','leads','followups','clients','analysis','memberships','billing','batches','accounts','cashbook','expenses','notifications','trainers','trainer','fitness','staff','attendance','attreports','settings','help','appointments','payroll','todos','reports','meter','audit','more'];
+const ALL_PAGES=['platform','gymadmins','gymperformance','traineranalysis','clientanalysis','dashboard','leads','followups','clients','analysis','memberships','billing','batches','accounts','cashbook','expenses','notifications','trainers','trainer','fitness','staff','attendance','attreports','settings','help','appointments','payroll','todos','reports','meter','audit','more'];
 const GYM_ADMIN_PAGES=ALL_PAGES.filter(p=>!['platform','gymadmins'].includes(p));
 const MENUS={
  superadmin:['platform','gymadmins',...GYM_ADMIN_PAGES],
- gymadmin:GYM_ADMIN_PAGES,
+ gymadmin:['dashboard','traineranalysis','clientanalysis',...GYM_ADMIN_PAGES.filter(p=>!['dashboard','traineranalysis','clientanalysis'].includes(p))],
  frontoffice:['dashboard','leads','followups','clients','analysis','gymperformance','memberships','billing','batches','accounts','cashbook','expenses','notifications','trainers','fitness','staff','attendance','attreports','appointments','todos','meter','help','more','settings','reports'],
  accountant:['dashboard','analysis','gymperformance','accounts','cashbook','expenses','attendance','attreports','settings','payroll','reports','meter','help','more','billing'],
  trainer:['trainer','clients','attendance','batches','todos','appointments','help']};
 const PAGES={
- platform:['🌐','Platform'],gymadmins:['🏋️','Gym Admins'],gymperformance:['📊','Gym Performance'],
+ platform:['🌐','Platform'],gymadmins:['🏋️','Gym Admins'],gymperformance:['📊','Gym Performance'],traineranalysis:['🧑','Trainer Analysis'],clientanalysis:['👥','Client Analysis'],
  dashboard:['🏠','Dashboard'],leads:['📋','Enquiry'],followups:['🔄','Follow Ups'],clients:['👥','Members'],analysis:['📈','Analysis'],
  memberships:['🪪','Memberships'],billing:['🧾','Billing'],batches:['👥','Batches & Classes'],accounts:['💵','Accounts'],cashbook:['💰','Cashbook'],
  expenses:['📤','Expenses'],notifications:['💬','Notification & WhatsApp'],trainers:['🧑','Trainers'],trainer:['📱','Trainer Portal'],
@@ -778,9 +949,12 @@ const NAV_TREE=[
   {label:'My Members',page:'clients'},
   {label:'Add Member',page:'clients',fn:'openWizard()'},
   {label:'Import Members CSV',page:'clients',fn:"openYdlImport('members')"},
+  {label:'Manage Subscriptions',page:'memberships'},
   {label:'Deactivated Members',page:'clients',fn:"CL_F.status='Inactive';go('clients')"}
  ]},
- {id:'analysis',icon:'📈',label:'Analysis',kids:[
+ {id:'analysis',icon:'📈',label:'Admin Panel',kids:[
+  {label:'Trainer Analysis',page:'traineranalysis'},
+  {label:'Client Analysis',page:'clientanalysis'},
   {label:'Gym Performance',page:'gymperformance'},
   {label:'Reports & Charts',page:'analysis'},
   {label:'Classic Reports',page:'reports'},
@@ -962,15 +1136,15 @@ function markNavOn(p){
 }
 function go(p,arg){if(!canPage(p)){toast('No permission');return} PAGE=p;
  closeNavDrops();closeTbDrops();markNavOn(p);
- const pages={platform:pgPlatform,gymadmins:pgGymAdmins,gymperformance:pgGymPerformance,dashboard:pgDashboard,trainer:pgTrainerPortal,clients:pgClients,leads:pgLeads,followups:pgFollowups,memberships:pgMemberships,billing:pgBilling,cashbook:pgCashbook,expenses:pgExpenses,meter:pgMeter,staff:pgStaff,attendance:pgAttendance,payroll:pgPayroll,batches:pgBatches,todos:pgTodos,reports:pgReports,accounts:pgAccounts,audit:pgAudit,settings:pgSettings,analysis:pgAnalysis,notifications:pgNotifications,trainers:pgTrainers,fitness:pgFitness,attreports:pgAttReports,help:pgHelp,appointments:pgAppointments,more:pgMore};
+ const pages={platform:pgPlatform,gymadmins:pgGymAdmins,gymperformance:pgGymPerformance,traineranalysis:pgTrainerAnalysis,clientanalysis:pgClientAnalysis,dashboard:pgDashboard,trainer:pgTrainerPortal,clients:pgClients,leads:pgLeads,followups:pgFollowups,memberships:pgMemberships,billing:pgBilling,cashbook:pgCashbook,expenses:pgExpenses,meter:pgMeter,staff:pgStaff,attendance:pgAttendance,payroll:pgPayroll,batches:pgBatches,todos:pgTodos,reports:pgReports,accounts:pgAccounts,audit:pgAudit,settings:pgSettings,analysis:pgAnalysis,notifications:pgNotifications,trainers:pgTrainers,fitness:pgFitness,attreports:pgAttReports,help:pgHelp,appointments:pgAppointments,more:pgMore};
  if(pages[p])pages[p](arg);else pgStub(PAGES[p]?PAGES[p][1]:p);
  refreshTopbarNotifs()}
 function pgStub(title){$('content').innerHTML=`<div class="card"><h2>${esc(title)}</h2><p class="sub">This module is ready in the menu. Full screens coming next.</p></div>`}
 
 /* ================= COMPUTED HELPERS ================= */
 function payListFor(dateFrom,dateTo){const out=[];db.invoices.forEach(iv=>(iv.payments||[]).forEach(p=>{if(p.date>=dateFrom&&p.date<=dateTo)out.push({...p,inv:iv})}));return out}
-function cashIn(d1,d2,mode){return db.cashbook.filter(e=>e.status!=='Inactive'&&e.type==='in'&&e.date>=d1&&e.date<=d2&&(!mode||e.mode===mode)).reduce((s,e)=>s+e.amount,0)}
-function cashOut(d1,d2,mode){return db.cashbook.filter(e=>e.status!=='Inactive'&&e.type==='out'&&e.date>=d1&&e.date<=d2&&(!mode||e.mode===mode)).reduce((s,e)=>s+e.amount,0)}
+function cashIn(d1,d2,mode){return db.cashbook.filter(e=>e.status!=='Inactive'&&e.type==='in'&&e.date>=d1&&e.date<=d2&&(!mode||(mode==='Bank'?isBankEntryMode(e.mode):mode==='Cash'?normCbMode(e.mode)==='Cash':normCbMode(e.mode)===mode))).reduce((s,e)=>s+e.amount,0)}
+function cashOut(d1,d2,mode){return db.cashbook.filter(e=>e.status!=='Inactive'&&e.type==='out'&&e.date>=d1&&e.date<=d2&&(!mode||(mode==='Bank'?isBankEntryMode(e.mode):mode==='Cash'?normCbMode(e.mode)==='Cash':normCbMode(e.mode)===mode))).reduce((s,e)=>s+e.amount,0)}
 function subStatus(s){if(s.status==='Used')return'Used';if(s.status==='Frozen')return'Frozen';if(s.status==='Expired')return'Expired';return s.end>=today()?'Active':'Expired'}
 function activeSubs(type){return db.subs.filter(s=>s.type===type&&subStatus(s)==='Active')}
 function expiredSubs(type){return db.subs.filter(s=>s.type===type&&subStatus(s)==='Expired')}
@@ -1038,8 +1212,7 @@ function pgDashboard(){
  <div class="grid g2">
   ${clickStat('Cash in hand',inr(openCash+cin-cout),'ok',"go('cashbook')")}
   ${clickStat('Bank (UPI + Card + Transfer + Cheque)',inr(
-   (db.settings.openingBank||0)+cashIn('0000',t,'UPI')+cashIn('0000',t,'Card')+cashIn('0000',t,'Bank Transfer')+cashIn('0000',t,'Cheque')
-   -cashOut('0000',t,'UPI')-cashOut('0000',t,'Card')-cashOut('0000',t,'Bank Transfer')-cashOut('0000',t,'Cheque')
+   (db.settings.openingBank||0)+cashIn('0000',t,'Bank')-cashOut('0000',t,'Bank')
   ),'br',"go('cashbook')")}
  </div>
  <div class="grid g3" style="margin-top:18px">
@@ -1074,7 +1247,7 @@ function stat(l,v,cls){return`<div class="card stat ${cls||''}"><div class="l">$
 function line(l,v){return`<div class="row" style="justify-content:space-between;padding:4px 0"><span class="mut">${l}</span><span>${v}</span></div>`}
 function addDays(d,n){const x=new Date(d+'T00:00');x.setDate(x.getDate()+n);return x.toISOString().slice(0,10)}
 /* ================= CLIENTS ================= */
-let CL_F={q:'',billRep:'',gender:'',ref:'',trainer:'',status:'Active',service:'',membership:'',from:'',to:''};
+let CL_F={q:'',gender:'',ref:'',trainer:'',status:'Active',service:'',membership:'',from:'',to:''};
 function clientPlan(c){
  return db.subs.filter(s=>s.clientId===c.id&&s.status!=='Used').sort((a,b)=>b.end.localeCompare(a.end))[0]||null;
 }
@@ -1088,7 +1261,6 @@ function clientListFiltered(){
   if(CL_F.status==='No Plan'){
    const ms=clientMemPlan(c);if(ms&&subStatus(ms)==='Active')return false;
   }
-  if(CL_F.billRep&&(c.billRep||'')!==CL_F.billRep)return false;
   if(CL_F.gender&&(c.gender||'')!==CL_F.gender)return false;
   if(CL_F.ref&&(c.ref||'')!==CL_F.ref)return false;
   if(CL_F.trainer&&(c.trainer||'')!==CL_F.trainer)return false;
@@ -1103,7 +1275,7 @@ function clientListFiltered(){
   }
   if(CL_F.q){
    const q=CL_F.q.toLowerCase();
-   const blob=[c.id,c.name,c.mobile,c.wa,c.email,c.billRep,c.trainer].join(' ').toLowerCase();
+   const blob=[c.id,c.name,c.mobile,c.wa,c.email,c.trainer].join(' ').toLowerCase();
    if(!blob.includes(q))return false;
   }
   return true;
@@ -1111,7 +1283,6 @@ function clientListFiltered(){
 }
 function applyClientFilters(){
  CL_F.q=val('cl_q')||'';
- CL_F.billRep=val('cl_rep')||'';
  CL_F.gender=val('cl_gender')||'';
  CL_F.ref=val('cl_ref')||'';
  CL_F.trainer=val('cl_trainer')||'';
@@ -1123,16 +1294,17 @@ function applyClientFilters(){
  pgClients();
 }
 function resetClientFilters(){
- CL_F={q:'',billRep:'',gender:'',ref:'',trainer:'',status:'Active',service:'',membership:'',from:'',to:''};
+ CL_F={q:'',gender:'',ref:'',trainer:'',status:'Active',service:'',membership:'',from:'',to:''};
  pgClients();
 }
 function exportClientsCsv(){
  const list=clientListFiltered();
- csvExport([['ID','Name','Mobile','Email','Gender','Joined','Status','Package','Valid Till','Bill Rep','Trainer','Referral'],
+ const ptMap=trainerPtCounts();
+ csvExport([['ID','Name','Mobile','Email','Gender','Joined','Status','Sub Start','Sub End','Trainer','PT Clients','Referral'],
   ...list.map(c=>{
-   const ms=clientMemPlan(c);
-   const st=c.status==='Inactive'?'Inactive':(ms?subStatus(ms):'No Plan');
-   return[c.id,c.name,c.mobile,c.email||'',c.gender||'',c.joined||'',st,ms?ms.pkg:'',ms?ms.end:'',c.billRep||'',c.trainer||'',c.ref||''];
+   const pl=clientPlan(c);
+   const st=c.status==='Inactive'?'Inactive':(pl?subStatus(pl):'No Plan');
+   return[c.id,c.name,formatMobile(c.mobile),c.email||'',c.gender||'',c.joined||'',st,pl?pl.start:'',pl?pl.end:'',c.trainer||'',c.trainer?(ptMap[c.trainer]||0):'',c.ref||''];
   })],'clients');
 }
 function pgClients(){
@@ -1141,28 +1313,26 @@ function pgClients(){
  const inactiveN=all.filter(c=>c.status==='Inactive').length;
  const noSubN=all.filter(c=>c.status!=='Inactive'&&!clientMemPlan(c)).length;
  const list=clientListFiltered();
- const reps=[...new Set(all.map(c=>c.billRep).filter(Boolean))].sort();
  const trainers=[...new Set(all.map(c=>c.trainer).filter(Boolean))].sort();
  const refs=[...new Set(all.map(c=>c.ref).filter(Boolean))].sort();
  const pkgs=[...new Set((db.settings.packages||[]).map(p=>p.name).concat(db.subs.filter(s=>s.type==='Membership').map(s=>s.pkg)))].filter(Boolean).sort();
+ const ptCounts=trainerPtCounts();
  const branch=(db.settings.branch||db.settings.gymName||'FITO6');
  const rows=list.map(c=>{
-  const ms=clientMemPlan(c);
-  const st=c.status==='Inactive'?'Inactive':(ms?subStatus(ms):'No Plan');
+  const pl=clientPlan(c);
+  const st=c.status==='Inactive'?'Inactive':(pl?subStatus(pl):'No Plan');
   const badge=st==='Active'?'b-ok':st==='Expired'||st==='Inactive'?'b-bad':st==='Frozen'?'b-warn':'b-mut';
   const photo=c.photo?`<img class="photo-av" style="width:28px;height:28px;vertical-align:middle;margin-right:6px" src="${c.photo}">`:'';
   return`<tr>
    <td><input type="checkbox" class="cl_sel" value="${c.id}"></td>
    <td class="bold">${c.id}</td>
    <td class="clickable" onclick="openClient('${c.id}')">${photo}${esc(c.name)}</td>
-   <td>${esc(c.mobile)}</td><td>${esc(c.email||'')}</td>
-   <td>${ms?esc(ms.pkg):'-'}</td><td>${ms?fmtD(ms.end):'-'}</td>
+   <td>${formatMobile(c.mobile)}</td><td>${esc(c.email||'')}</td>
+   <td>${pl?fmtD(pl.start):'-'}</td><td>${pl?fmtD(pl.end):'-'}</td>
    <td><span class="badge ${badge}">${st}</span></td>
-   <td>${esc(c.billRep||'-')}</td><td>${esc(c.trainer||'-')}</td><td>${esc(c.ref||'-')}</td>
+   <td>${trainerCell(c,ptCounts)}</td><td>${esc(c.ref||'-')}</td>
    <td class="r" style="white-space:nowrap">
     <button class="btn sm sec" onclick="openClient('${c.id}')">Profile</button>
-    ${c.status!=='Inactive'?`<button class="btn sm" onclick="openSubForm('${c.id}')">＋ Plan</button>
-    <button class="btn sm dgr" onclick="deactivateClient('${c.id}')">Deactivate</button>`:`<button class="btn sm" onclick="activateClient('${c.id}')">Activate</button>`}
    </td></tr>`;
  }).join('');
  $('content').innerHTML=`
@@ -1179,15 +1349,14 @@ function pgClients(){
   <button class="btn sec" onclick="exportClientsCsv()">Export to CSV</button>
   <button class="btn" onclick="openYdlImport('members')">⬆ Import CSV</button>
   <button class="btn" onclick="openWizard()">Add Member</button>
+  <button class="btn sec" onclick="go('memberships')">Manage Subscriptions</button>
   <button class="btn sec" style="border-color:var(--bad);color:var(--bad)" onclick="CL_F.status='Inactive';pgClients()">Deactivated Members</button>
   ${MENUS[USER.role].includes('meter')?`<button class="btn sec" onclick="go('meter')">⚡ Electricity Meter</button>`:''}
   <button class="btn sec" onclick="document.querySelectorAll('.cl_sel').forEach(c=>c.checked=true)">Select All</button>
   <button class="btn sec" onclick="document.querySelectorAll('.cl_sel').forEach(c=>c.checked=false)">Deselect All</button>
-  <button class="btn dgr sm" onclick="bulkDeactivateClients()">Deactivate Selected</button>
  </div>
  <div class="card" style="margin-top:14px">
   <div class="grid g3">
-   <div class="field"><label>Client Rep</label><select id="cl_rep"><option value="">All Staff</option>${reps.map(r=>`<option ${CL_F.billRep===r?'selected':''}>${esc(r)}</option>`).join('')}</select></div>
    <div class="field"><label>Gender</label><select id="cl_gender"><option value="">All</option>${['Male','Female','Other'].map(g=>`<option ${CL_F.gender===g?'selected':''}>${g}</option>`).join('')}</select></div>
    <div class="field"><label>Source of Promotion</label><select id="cl_ref"><option value="">All</option>${refs.map(r=>`<option ${CL_F.ref===r?'selected':''}>${esc(r)}</option>`).join('')}</select></div>
    <div class="field"><label>Assigned Trainer</label><select id="cl_trainer"><option value="">All Trainers</option>${trainers.map(t=>`<option ${CL_F.trainer===t?'selected':''}>${esc(t)}</option>`).join('')}</select></div>
@@ -1218,8 +1387,8 @@ function pgClients(){
  <div class="sub" style="margin-bottom:8px">Showing <b>${list.length}</b> members (filtered)</div>
  <div class="tbl"><table id="cl_tbl">
   <tr><th><input type="checkbox" onclick="document.querySelectorAll('.cl_sel').forEach(c=>c.checked=this.checked)"></th>
-  <th>ID</th><th>Name</th><th>Mobile</th><th>Email</th><th>Package</th><th>Valid Till</th><th>Status</th><th>Bill Rep</th><th>Trainer</th><th>Source</th><th></th></tr>
-  ${rows||'<tr><td colspan=12 class="mut">No members match filters</td></tr>'}
+  <th>ID</th><th>Name</th><th>Mobile</th><th>Email</th><th>Sub Start</th><th>Sub End</th><th>Status</th><th>Trainer (PT count)</th><th>Source</th><th></th></tr>
+  ${rows||'<tr><td colspan=11 class="mut">No members match filters</td></tr>'}
  </table></div>`;
 }
 function filterClients(){CL_F.q=val('cl_q')||val('cl_f')||'';applyClientFilters()}
@@ -1257,7 +1426,10 @@ function staffBillRepList(){
  if(use.length)return use;
  return (db.users||[]).map(u=>({id:u.u,name:u.name,dept:u.role}));
 }
-function billRepSelect(id,selectedName,selectedId){
+function billRepSelect(id,selectedName,selectedId,frozen){
+ if(frozen&&selectedName){
+  return`<div class="field"><label>Bill Rep (locked)</label><input readonly class="ro" value="${esc(selectedName)}"></div>`;
+ }
  const staff=staffBillRepList();
  const opts=['<option value="">— Select staff —</option>']
   .concat(staff.map(s=>{
@@ -1283,11 +1455,11 @@ function wizStep1(){
    <img id="w_photo_prev" class="photo-av" style="${c.photo?'':'display:none'}" src="${c.photo||''}">
    <div class="field" style="margin-top:8px;width:160px"><label>Client Photo</label><input id="w_photo" type="file" accept="image/*" onchange="previewWizPhoto()"></div>
   </div>
-  <div class="sub" style="flex:1">Personal details are saved in <b>CAPITAL LETTERS</b>. Gender &amp; DOB are mandatory. Name &amp; mobile lock after first save.</div>
+  <div class="sub" style="flex:1">Personal details are saved in <b>CAPITAL LETTERS</b>. Gender &amp; DOB are mandatory. Name &amp; mobile lock after first save. Mobile is <b>+91</b> with 10 digits.</div>
  </div>
  <div class="grid g3">
   ${fld('w_name','Name *',c.name,'text',nameExtra)}${sel('w_gender','Gender *',['','Male','Female','Other'],c.gender)}${fld('w_dob','DOB *',c.dob,'date')}
-  ${fld('w_mobile','Mobile *',c.mobile,'text',mobExtra)}${fld('w_wa','WhatsApp',c.wa)}${fld('w_email','Email',c.email)}
+  ${phoneField('w_mobile','Mobile *',c.mobile,locked)}${phoneField('w_wa','WhatsApp',c.wa||c.mobile,false)}${fld('w_email','Email',c.email)}
   ${fld('w_anniv','Anniversary',c.anniversary,'date')}
   ${fld('w_addr','Address',c.addr,'text','class="caps"')}${fld('w_city','City',c.city,'text','class="caps"')}${fld('w_state','State',c.state,'text','class="caps"')}
   ${fld('w_pin','Pincode',c.pin)}${fld('w_occ','Occupation',c.occ,'text','class="caps"')}${sel('w_blood','Blood Group',['','A+','A-','B+','B-','O+','O-','AB+','AB-'],c.blood)}
@@ -1296,9 +1468,9 @@ function wizStep1(){
   ${sel('w_ref','Referral Source',['Walk-in','Facebook','Instagram','Google','Existing Member','Reference','Advertisement','Others'],c.ref)}
   ${sel('w_idt','ID Proof',['','Aadhaar','PAN','Driving License','Passport'],c.idt)}
   ${fld('w_idn','ID Number',c.idn,'text','class="caps"')}${fld('w_emg','Emergency Contact Name',c.emg,'text','class="caps"')}${fld('w_emgp','Emergency Contact No.',c.emgp)}
-  ${billRepSelect('w_billrep',c.billRep,c.billRepId)}
+  ${billRepSelect('w_billrep',c.billRep,c.billRepId,c.billRepFrozen)}
  </div>
- <p class="sub" style="margin-top:4px">Bill Rep = staff who handles this client / collects payment.</p>
+ <p class="sub" style="margin-top:4px">Bill Rep is locked after first save.</p>
  <div class="row" style="justify-content:space-between;margin-top:12px">
   <button class="btn sec" onclick="wizPrev()" ${WIZ.step<=1&&!WIZ.clientId?'disabled':''}>← Previous</button>
   <div class="row" style="gap:8px">
@@ -1314,8 +1486,10 @@ function wizPrev(){
  if(WIZ.step===3){WIZ.step=2;renderWizard()}
 }
 function collectWizPersonal(){
+ const mobile=normalizeMobile(val('w_mobile'));
+ const wa=normalizeMobile(val('w_wa'))||mobile;
  return{
-  name:caps(val('w_name')),gender:val('w_gender'),dob:val('w_dob'),mobile:val('w_mobile'),wa:val('w_wa')||val('w_mobile'),
+  name:caps(val('w_name')),gender:val('w_gender'),dob:val('w_dob'),mobile,isdCode:'91',wa,
   email:val('w_email'),anniversary:val('w_anniv'),addr:caps(val('w_addr')),city:caps(val('w_city')),state:caps(val('w_state')),
   pin:val('w_pin'),occ:caps(val('w_occ')),blood:val('w_blood'),ht:val('w_ht'),wt:val('w_wt'),med:caps(val('w_med')),
   goal:val('w_goal'),ref:val('w_ref'),idt:val('w_idt'),idn:caps(val('w_idn')),emg:caps(val('w_emg')),emgp:val('w_emgp')
@@ -1324,6 +1498,7 @@ function collectWizPersonal(){
 function wizSave1(goNext){
  const data=collectWizPersonal();
  if(!data.name||!data.mobile){toast('Name and Mobile are required');return}
+ if(!/^\d{10}$/.test(data.mobile)){toast('Enter a valid 10-digit mobile number');return}
  if(!data.gender){toast('Gender is mandatory');return}
  if(!data.dob){toast('Date of birth is mandatory');return}
  const br=readBillRep('w_billrep');
@@ -1332,7 +1507,8 @@ function wizSave1(goNext){
   if(WIZ.clientId){
    const c=client(WIZ.clientId);if(!c){toast('Client missing');return}
    // name/mobile locked — do not overwrite
-   Object.assign(c,{...data,name:c.name,mobile:c.mobile,billRepId:br.billRepId,billRep:br.billRep});
+   Object.assign(c,{...data,name:c.name,mobile:c.mobile,billRepId:c.billRepFrozen?c.billRepId:br.billRepId,billRep:c.billRepFrozen?c.billRep:br.billRep});
+   if(!c.billRepFrozen&&br.billRep)c.billRepFrozen=true;
    if(photo)c.photo=photo;
    const h=parseFloat(c.ht),w=parseFloat(c.wt);if(h&&w)c.bmi=(w/((h/100)**2)).toFixed(1);
    WIZ.c=c;save();audit('Member Updated',c.id+' '+c.name);
@@ -1340,8 +1516,8 @@ function wizSave1(goNext){
    if(goNext){WIZ.step=2;renderWizard()}
    return;
   }
-  const id=nextClientId();
-  const c={id,...data,photo:photo||'',billRepId:br.billRepId,billRep:br.billRep,joined:today(),branch:db.settings.branch,notes:[],status:'Active'};
+  const id=nextClientId(db.settings.branch);
+  const c={id,...data,photo:photo||'',billRepId:br.billRepId,billRep:br.billRep,billRepFrozen:true,joined:today(),branch:db.settings.branch,notes:[],status:'Active'};
   const h=parseFloat(c.ht),w=parseFloat(c.wt);if(h&&w)c.bmi=(w/((h/100)**2)).toFixed(1);
   db.clients.push(c);save();audit('Member Added',c.id+' '+c.name+' · Bill Rep: '+c.billRep);
   WIZ.clientId=id;WIZ.c=c;
@@ -1440,7 +1616,7 @@ function deletePkg(kind,idx){
 }
 
 /* ---- Subscription ---- */
-function openSubForm(clientId,type){openModal(`<h2>Subscription — ${esc(client(clientId).name)}</h2>`+subFormHTML(clientId,type||'New Membership',false))}
+function openSubForm(clientId,type){const t=type||defaultSubType(clientId);openModal(`<h2>Subscription — ${esc(client(clientId).name)}</h2>`+subFormHTML(clientId,t,false))}
 function trainerStaffList(){
  let list=(db.staff||[]).filter(s=>s.status!=='Inactive'&&(s.dept==='Trainer'||/train/i.test(s.dept||'')));
  if(!list.length)list=(db.staff||[]).filter(s=>s.status!=='Inactive');
@@ -1474,17 +1650,20 @@ function readTrainer(){
 function subFormHTML(clientId,type,wizard){
  const c=client(clientId)||{};
  ensurePkgSettings();
- const types=db.settings.subTypes||['New Membership','Renew Membership','Upgrade Membership','New PT','Renew PT','Group Class','Freeze Membership','Transfer Membership'];
+ const types=subTypesForClient(clientId);
+ const pick=types.includes(type)?type:(types[0]||type);
  const used=db.subs.filter(s=>s.clientId===clientId).map(s=>`<span class="badge ${subStatus(s)==='Used'?'b-mut':subStatus(s)==='Active'?'b-ok':'b-bad'}">${esc(s.type)} · ${esc(s.pkg)} · ${subStatus(s)}</span>`).join(' ');
  return`
  ${used?`<div class="sub" style="margin-bottom:10px"><b>Previous subscriptions:</b> ${used}</div>`:''}
+ ${clientHadMembership(c)?'<p class="sub" style="margin-bottom:8px">Existing member — use <b>Renew</b> or <b>Upgrade</b> (New Membership hidden).</p>':''}
+ ${clientHadPt(c)?'<p class="sub" style="margin-bottom:8px">Existing PT client — use <b>Renew PT</b> (New PT hidden).</p>':''}
  <div class="grid g3">
-  ${sel('s_type','Subscription Type',types,type||types[0])}
+  ${sel('s_type','Subscription Type',types,pick)}
   <div class="field"><label>Package</label><select id="s_pkg" onchange="calcSub()"></select></div>
   ${fld('s_price','Package Price','','number')}
   ${fld('s_sell','Selling Price ₹','','number')}${fld('s_gst','GST %',db.settings.gstPct,'number')}${fld('s_start','Start Date',today(),'date')}
   <div class="field"><label>Branch</label><input id="s_branch" value="${esc(db.settings.branch)}"></div>
-  ${billRepSelect('s_billrep',c.billRep,c.billRepId)}
+  ${billRepSelect('s_billrep',c.billRep,c.billRepId,c.billRepFrozen)}
   ${trainerSelectHTML(c)}
  </div>
  <div class="card" style="background:#fafbfd" id="s_calc"></div>
@@ -1512,7 +1691,7 @@ function saveSub(clientId,wizard){
  if(type==='Freeze Membership'){const ms=db.subs.filter(s=>s.clientId===clientId&&s.type==='Membership').pop();if(ms){ms.status=ms.status==='Frozen'?'':'Frozen';save();audit('Package Changed','Freeze toggled for '+clientId);toast('Membership freeze updated');closeModal();go('clients')}return}
  const kind=type.startsWith('Renew')?'Renew':type.startsWith('Upgrade')?'Upgrade':'New';
  const t=type.includes('PT')?'PT':isGroupClassType(type)?'Group Class':'Membership';
- const br=readBillRep('s_billrep');
+ const br=c.billRepFrozen?{billRepId:c.billRepId||'',billRep:c.billRep||''}:readBillRep('s_billrep');
  if(!br.billRep){toast('Select Bill Rep (staff handling this client)');return}
  const tr=readTrainer();
  if(isPtType(type)&&!tr.trainer){toast('Select trainer staff for PT / Renew PT');return}
@@ -1522,7 +1701,7 @@ function saveSub(clientId,wizard){
  db.subs.push(sub);
  const c=client(clientId);
  if(tr.trainer){c.trainer=tr.trainer;c.trainerId=tr.trainerId}
- c.billRepId=br.billRepId;c.billRep=br.billRep;
+ c.billRepId=br.billRepId;c.billRep=br.billRep;if(!c.billRepFrozen)c.billRepFrozen=true;
  // auto-generate invoice
  const inv={id:'I'+Date.now(),no:nextNo('invoice','INV-'),date:today(),clientId,subId:sub.id,desc:t+' · '+sub.pkg+' ('+fmtD(sub.start)+' → '+fmtD(sub.end)+')',woGst:x.woGst,gstPct:x.gstp,gst:x.gstAmt,grand:x.final,paid:0,pending:x.final,dueDate:today(),payments:[],by:br.billRep,billRep:br.billRep,billRepId:br.billRepId,trainer:tr.trainer,trainerId:tr.trainerId,branch:val('s_branch')||db.settings.branch};
  db.invoices.push(inv);save();
@@ -1545,14 +1724,22 @@ function payFormHTML(invId,wizard){
   <button class="btn" onclick="savePayment('${invId}')">💾 Save Payment</button></div>
  <script>addPayRow(${iv.pending})<\/script>`}
 let PAYROWN=0;
-function addPayRow(amt){PAYROWN++;const d=document.createElement('div');d.className='row';d.style.marginBottom='8px';d.innerHTML=`
- <select id="pm_${PAYROWN}" style="width:160px">${db.settings.payModes.map(m=>`<option>${m}</option>`).join('')}</select>
- <input id="pa_${PAYROWN}" type="number" placeholder="Amount" style="width:160px" value="${amt||''}">
+function addPayRow(amt){PAYROWN++;const d=document.createElement('div');d.className='row';d.style.marginBottom='8px';d.style.flexWrap='wrap';d.style.gap='8px';
+ d.innerHTML=`<select id="pm_top_${PAYROWN}" style="width:110px" onchange="syncPayRowSub(${PAYROWN})"><option value="Cash">Cash</option><option value="Bank">Bank</option></select>
+ <select id="pm_sub_${PAYROWN}" style="width:130px;display:none">${bankPayModes().map(m=>`<option>${esc(m)}</option>`).join('')}</select>
+ <input id="pa_${PAYROWN}" type="number" min="0" step="0.01" placeholder="Amount" style="width:160px" value="${amt||''}" oninput="if(this.value&&Number(this.value)<0)this.value=''">
  <button class="btn sm dgr" onclick="this.parentNode.remove()">✕</button>`;$('payrows').appendChild(d)}
+function syncPayRowSub(n){const sub=$('pm_sub_'+n);if(!sub)return;sub.style.display=val('pm_top_'+n)==='Bank'?'inline-block':'none'}
+function readPayRowMode(row){
+ const topSel=row.querySelector('[id^="pm_top_"]');const subSel=row.querySelector('[id^="pm_sub_"]');
+ if(!topSel)return'Cash';
+ if(topSel.value==='Bank')return normCbMode(subSel?subSel.value:'UPI');
+ return'Cash';
+}
 function savePayment(invId){
  const iv=db.invoices.find(i=>i.id===invId);const c=client(iv.clientId);
  const rows=[...document.querySelectorAll('#payrows .row')];const pays=[];
- rows.forEach(r=>{const mode=r.querySelector('select').value,amt=parseFloat(r.querySelector('input').value)||0;if(amt>0)pays.push({mode,amt})});
+ rows.forEach(r=>{const mode=readPayRowMode(r),amt=parseFloat(r.querySelector('input[type=number]').value)||0;if(amt>0)pays.push({mode,amt})});
  if(!pays.length){toast('Enter at least one payment amount');return}
  const totalPay=pays.reduce((s,p)=>s+p.amt,0);
  if(totalPay>iv.pending+0.01){toast('Payment exceeds pending amount');return}
@@ -1602,7 +1789,7 @@ function pgBilling(){
   <div class="field"><label>Bill Rep</label><select id="bf_br" onchange="BILL_F.billRep=this.value;pgBilling()"><option value="">All</option>${reps.map(r=>`<option ${BILL_F.billRep===r?'selected':''}>${esc(r)}</option>`).join('')}</select></div>
   <div class="field"><label>Sales Type</label><select id="bf_sa" onchange="BILL_F.sales=this.value;pgBilling()"><option value="">All</option><option ${BILL_F.sales==='Membership'?'selected':''}>Membership</option><option ${BILL_F.sales==='PT'?'selected':''}>PT</option><option ${BILL_F.sales==='Group Class'?'selected':''}>Group Class</option></select></div>
  </div>
- <div class="grid g4" style="margin-bottom:12px">${stat('Cash collected',inr(cash),'ok')}${stat('Bank / UPI / Card',inr(bank))}${stat('Total billed',inr(tot),'br')}${stat('Balance due',inr(pend),'bad')}</div>
+ <div class="grid g4" style="margin-bottom:12px">${stat('Cash collected',inr(cash),'ok')}${stat('Bank collected',inr(bank))}${stat('Total billed',inr(tot),'br')}${stat('Balance due',inr(pend),'bad')}</div>
  <div class="tbl"><table><tr><th>Invoice</th><th>Date</th><th>Customer</th><th>Bill Rep</th><th>Description</th><th class="r">Total</th><th class="r">Paid</th><th class="r">Pending</th><th>Status</th><th></th></tr>${rows||'<tr><td colspan=10 class="mut">No invoices</td></tr>'}</table></div>`}
 function invoiceHTML(iv){const c=client(iv.clientId);const st=db.settings;
  const branch=iv.branch||c.branch||st.branch||'';
@@ -1665,14 +1852,17 @@ function openClient(id){const c=client(id);if(!c)return;
  const invs=db.invoices.filter(i=>i.clientId===id);
  const att=db.memberAtt.filter(a=>a.clientId===id).slice(-15).reverse();
  const paid=invs.reduce((s,i)=>s+i.paid,0),due=invs.reduce((s,i)=>s+i.pending,0);
+ const ptN=c.trainer?(trainerPtCounts()[c.trainer]||0):0;
+ const pl=clientPlan(c);
  openModal(`<div class="row" style="justify-content:space-between;align-items:flex-start"><div class="row" style="gap:12px;align-items:flex-start">
  ${c.photo?`<img class="photo-av" src="${c.photo}">`:`<div class="photo-av" style="display:flex;align-items:center;justify-content:center;color:var(--mut)">📷</div>`}
  <div><h2>${esc(c.name)} <span class="badge b-br">${c.id}</span> ${c.status==='Inactive'?'<span class="badge b-bad">Inactive</span>':''}</h2>
- <div class="sub">${esc(c.mobile)} · ${esc(c.email||'')} · Joined ${fmtD(c.joined)}</div>
+ <div class="sub">${formatMobile(c.mobile)} · ${esc(c.email||'')} · Joined ${fmtD(c.joined)}</div>
  <div class="sub" style="margin-top:4px"><b>Referral:</b> ${esc(c.ref||'—')} · <b>DOB:</b> ${fmtD(c.dob)} · <b>Anniversary:</b> ${fmtD(c.anniversary)}</div>
- <div class="sub" style="margin-top:4px"><b>Bill Rep:</b> ${esc(c.billRep||'—')}</div></div></div>
- <div class="row" style="gap:8px">${c.status!=='Inactive'?`<button class="btn" onclick="openSubForm('${id}')">➕ New / Renew Plan</button>`:''}<button class="btn sec" onclick="editClientPersonal('${id}')">Edit Details</button></div></div>
- <div class="grid g4" style="margin:12px 0">${stat('Total Paid',inr(paid),'ok')}${stat('Outstanding',inr(due),due>0?'bad':'')}${stat('Bill Rep',esc(c.billRep||'-'),'br')}${stat('Goal',esc(c.goal||'-'))}</div>
+ <div class="sub" style="margin-top:4px"><b>Trainer:</b> ${esc(c.trainer||'—')}${c.trainer&&ptN?` (${ptN} PT clients)`:''}</div></div></div>
+ <div class="row" style="gap:8px">${c.status!=='Inactive'?`<button class="btn" onclick="openSubForm('${id}')">➕ New / Renew Plan</button>`:''}<button class="btn sec" onclick="editClientPersonal('${id}')">Edit Address</button><button class="btn sec" onclick="openTrainerChangeRequest('${id}')">Change Trainer Request</button>${c.status!=='Inactive'?`<button class="btn sec dgr" onclick="deactivateClient('${id}')">Deactivate</button>`:`<button class="btn sec" onclick="activateClient('${id}');openClient('${id}')">Activate</button>`}</div></div>
+ <div class="grid g4" style="margin:12px 0">${stat('Sub Start',pl?fmtD(pl.start):'-','br')}${stat('Sub End',pl?fmtD(pl.end):'-','br')}${stat('Total Paid',inr(paid),'ok')}${stat('Outstanding',inr(due),due>0?'bad':'')}</div>
+ <div class="grid g3" style="margin-bottom:12px">${stat('Trainer',esc(c.trainer||'-'),'br')}${stat('PT Clients',ptN||'-')}${stat('Goal',esc(c.goal||'-'))}</div>
  <h3>Subscriptions</h3><div class="tbl"><table><tr><th>Type</th><th>Package</th><th>Start</th><th>End</th><th class="r">Amount</th><th>Status</th><th></th></tr>
  ${subs.map(s=>`<tr><td>${s.type} <span class="mut">(${s.kind})</span></td><td>${esc(s.pkg)}</td><td>${fmtD(s.start)}</td><td>${fmtD(s.end)}</td><td class="r">${inr(s.final)}</td><td><span class="badge ${subStatus(s)==='Active'?'b-ok':subStatus(s)==='Used'?'b-mut':subStatus(s)==='Frozen'?'b-warn':'b-bad'}">${subStatus(s)}</span></td>
  <td class="r">${subStatus(s)!=='Used'?`<button class="btn sm sec" onclick="openEditSub('${s.id}')">Edit</button>`:''}</td></tr>`).join('')||'<tr><td colspan=7 class="mut">None</td></tr>'}</table></div>
@@ -1683,35 +1873,83 @@ function openClient(id){const c=client(id);if(!c)return;
  <div class="row"><input id="cn_note" placeholder="Add a note (follow-up, measurement, etc.)" style="flex:1"><button class="btn sm" onclick="addNote('${id}')">Add</button></div>
  <div class="sub" style="margin-top:8px">${(c.notes||[]).map(n=>'• '+esc(n)).join('<br>')}</div>
  <div class="row" style="justify-content:flex-end;margin-top:14px;gap:8px;flex-wrap:wrap">
-  ${c.status!=='Inactive'?`<button class="btn dgr" onclick="deactivateClient('${id}')">Mark Inactive</button>`:`<button class="btn" onclick="activateClient('${id}');openClient('${id}')">Activate</button>`}
   <button class="btn sec" onclick="closeModal()">Close</button>
  </div>`)}
 function editClientPersonal(id){
  const c=client(id);if(!c)return;
- openModal(`<h2>Edit Personal Details — ${esc(c.id)}</h2>
- <div class="row" style="gap:16px;margin-bottom:12px"><img id="ep_prev" class="photo-av" style="${c.photo?'':'display:none'}" src="${c.photo||''}"><div class="field" style="width:180px"><label>Photo</label><input id="ep_photo" type="file" accept="image/*"></div></div>
- <div class="grid g3">
-  ${fld('ep_name','Name (locked)',c.name,'text','readonly class="ro caps"')}${sel('ep_gender','Gender *',['','Male','Female','Other'],c.gender)}${fld('ep_dob','DOB *',c.dob,'date')}
-  ${fld('ep_mobile','Mobile (locked)',c.mobile,'text','readonly class="ro"')}${fld('ep_wa','WhatsApp',c.wa)}${fld('ep_email','Email',c.email)}
-  ${fld('ep_anniv','Anniversary',c.anniversary,'date')}
-  ${fld('ep_addr','Address',c.addr,'text','class="caps"')}${fld('ep_city','City',c.city,'text','class="caps"')}${fld('ep_state','State',c.state,'text','class="caps"')}
-  ${fld('ep_pin','Pincode',c.pin)}${fld('ep_occ','Occupation',c.occ,'text','class="caps"')}${sel('ep_ref','Referral Source',['Walk-in','Facebook','Instagram','Google','Existing Member','Reference','Advertisement','Others'],c.ref)}
-  ${billRepSelect('ep_billrep',c.billRep,c.billRepId)}
+ openModal(`<h2>Edit Address — ${esc(c.name)} (${esc(c.id)})</h2>
+ <p class="sub" style="margin-bottom:12px">Only address fields are editable. Contact (+91 · 10 digits), name and other details are locked.</p>
+ <div class="grid g3" style="margin-bottom:12px">
+  ${fld('ep_name','Name',c.name,'text','readonly class="ro caps"')}${fld('ep_gender','Gender',c.gender,'text','readonly class="ro"')}${fld('ep_dob','DOB',c.dob,'text','readonly class="ro"')}
+  ${phoneField('ep_mobile','Mobile',c.mobile,true)}${fld('ep_email','Email',c.email||'','email','readonly class="ro"')}${fld('ep_trainer','Trainer',c.trainer||'—','text','readonly class="ro"')}
  </div>
- <div class="row" style="justify-content:flex-end;gap:8px;margin-top:12px"><button class="btn sec" onclick="openClient('${id}')">Cancel</button><button class="btn" onclick="saveClientPersonal('${id}')">Save</button></div>
- <script>bindCaps(['ep_addr','ep_city','ep_state','ep_occ'])<\/script>`)}
+ <div class="grid g2">
+  ${fld('ep_addr','Address *',c.addr,'text','class="caps"')}${fld('ep_city','City',c.city,'text','class="caps"')}
+  ${fld('ep_state','State',c.state,'text','class="caps"')}${fld('ep_pin','Pincode',c.pin)}
+ </div>
+ <div class="row" style="justify-content:flex-end;gap:8px;margin-top:12px"><button class="btn sec" onclick="openClient('${id}')">Cancel</button><button class="btn" onclick="saveClientPersonal('${id}')">Save Address</button></div>
+ <script>bindCaps(['ep_addr','ep_city','ep_state'])<\/script>`)}
 function saveClientPersonal(id){
  const c=client(id);if(!c)return;
- if(!val('ep_gender')||!val('ep_dob')){toast('Gender and DOB are mandatory');return}
- const br=readBillRep('ep_billrep');
- const apply=(photo)=>{
-  Object.assign(c,{gender:val('ep_gender'),dob:val('ep_dob'),wa:val('ep_wa'),email:val('ep_email'),anniversary:val('ep_anniv'),
-   addr:caps(val('ep_addr')),city:caps(val('ep_city')),state:caps(val('ep_state')),pin:val('ep_pin'),occ:caps(val('ep_occ')),ref:val('ep_ref'),
-   billRepId:br.billRepId||c.billRepId,billRep:br.billRep||c.billRep});
-  if(photo)c.photo=photo;
-  save();audit('Member Updated',c.id);toast('Saved');openClient(id);
- };
- if($('ep_photo')&&$('ep_photo').files&&$('ep_photo').files[0])readPhoto('ep_photo','ep_prev',apply);else apply('');
+ if(!val('ep_addr')){toast('Address is required');return}
+ Object.assign(c,{addr:caps(val('ep_addr')),city:caps(val('ep_city')),state:caps(val('ep_state')),pin:val('ep_pin')});
+ save();audit('Member Address Updated',c.id);toast('Address saved');openClient(id);
+}
+function openTrainerChangeRequest(clientId){
+ const c=client(clientId);if(!c)return;
+ const trainers=trainerStaffList();
+ const pending=(db.trainerRequests||[]).find(r=>r.clientId===clientId&&r.status==='Pending');
+ if(pending){toast('A trainer change request is already pending');return}
+ openModal(`<h2>Change Trainer Request</h2>
+ <p class="sub" style="margin-bottom:12px">${esc(c.name)} · Current trainer: <b>${esc(c.trainer||'—')}</b></p>
+ <div class="grid g2">
+  <div class="field"><label>Requested Trainer *</label><select id="tcr_trainer"><option value="">— Select —</option>
+   ${trainers.map(t=>`<option value="${esc(t.id)}" data-name="${esc(t.name)}">${esc(t.name)}</option>`).join('')}</select></div>
+  ${fld('tcr_reason','Reason / Notes','')}
+ </div>
+ <div class="row" style="justify-content:flex-end;gap:8px;margin-top:12px"><button class="btn sec" onclick="openClient('${clientId}')">Cancel</button><button class="btn" onclick="saveTrainerChangeRequest('${clientId}')">Submit Request</button></div>`);
+}
+function saveTrainerChangeRequest(clientId){
+ const c=client(clientId);if(!c)return;
+ const el=$('tcr_trainer');if(!el||!el.value){toast('Select a trainer');return}
+ const opt=el.selectedOptions[0];
+ const req={id:'TCR'+Date.now(),clientId,clientName:c.name,currentTrainer:c.trainer||'',requestedTrainerId:el.value,requestedTrainer:(opt&&opt.dataset.name)||opt.textContent,reason:val('tcr_reason'),status:'Pending',date:today(),by:USER?USER.name:''};
+ if(!db.trainerRequests)db.trainerRequests=[];
+ db.trainerRequests.unshift(req);
+ c.trainerChangePending=true;
+ save();audit('Trainer Change Request',c.id+' → '+req.requestedTrainer);toast('Request submitted for admin review');closeModal();openClient(clientId);
+}
+function approveTrainerChange(reqId){
+ const req=(db.trainerRequests||[]).find(r=>r.id===reqId);if(!req)return;
+ const c=client(req.clientId);if(!c){toast('Client not found');return}
+ c.trainer=req.requestedTrainer;c.trainerId=req.requestedTrainerId;c.trainerChangePending=false;
+ req.status='Approved';req.approvedOn=today();req.approvedBy=USER?USER.name:'';
+ save();audit('Trainer Change Approved',c.id+' → '+c.trainer);toast('Trainer updated');pgTrainerAnalysis();
+}
+function rejectTrainerChange(reqId){
+ const req=(db.trainerRequests||[]).find(r=>r.id===reqId);if(!req)return;
+ const c=client(req.clientId);if(c)c.trainerChangePending=false;
+ req.status='Rejected';req.approvedOn=today();req.approvedBy=USER?USER.name:'';
+ save();toast('Request rejected');pgTrainerAnalysis();
+}
+function isStandardClientId(id){return/^F[12]\d{7}$/.test(String(id||''))}
+function migrateClientIds(){
+ const need=(db.clients||[]).filter(c=>!isStandardClientId(c.id));
+ if(!need.length){toast('All clients already have F126/F226 IDs');return}
+ if(!confirm(`Assign F126/F226 IDs to ${need.length} client(s)?\n\nOld IDs are kept in legacyId.`))return;
+ const map={};
+ need.forEach(c=>{
+  const newId=nextClientId(c.branch||db.settings.branch);
+  map[c.id]=newId;
+  if(!c.legacyId)c.legacyId=c.id;
+  c.id=newId;
+ });
+ Object.entries(map).forEach(([oldId,newId])=>{
+  (db.subs||[]).filter(s=>s.clientId===oldId).forEach(s=>{s.clientId=newId});
+  (db.invoices||[]).filter(i=>i.clientId===oldId).forEach(i=>{i.clientId=newId});
+  (db.memberAtt||[]).filter(a=>a.clientId===oldId).forEach(a=>{a.clientId=newId});
+ });
+ save();audit('Client ID Migration',need.length+' clients → F126/F226 format');toast(need.length+' client IDs migrated');pgMore();
 }
 function addNote(id){const c=client(id);const n=val('cn_note');if(!n)return;c.notes=c.notes||[];c.notes.unshift(fmtD(today())+': '+n);save();audit('Note Added',c.id);openClient(id)}
 function openEditSub(subId){
@@ -1866,7 +2104,9 @@ function cbMatch(e,f){
  if(f.party&&!(e.party||'').toLowerCase().includes(f.party))return false;
  if(f.flow==='in'&&e.type!=='in')return false;
  if(f.flow==='out'&&e.type!=='out')return false;
- if(f.mode&&e.mode!==f.mode)return false;
+ if(f.mode==='Bank'&&!isBankEntryMode(e.mode))return false;
+ if(f.mode==='Cash'&&normCbMode(e.mode)!=='Cash')return false;
+ if(f.mode&&f.mode!=='Bank'&&f.mode!=='Cash'&&normCbMode(e.mode)!==f.mode)return false;
  if(f.sales&&cbDetectSalesType(e)!==f.sales)return false;
  if(f.role&&(e.roleCat||'')!==f.role)return false;
  return true;
@@ -1894,7 +2134,7 @@ function pgCashbook(){
  const t=today(),m=thisMonth();
  const openCash=db.settings.openingCash+cashIn('0000',addDays(t,-1),'Cash')-cashOut('0000',addDays(t,-1),'Cash');
  const cats=[...new Set([...(db.settings.incCats||[]),...(db.settings.expCats||[]),...db.cashbook.map(e=>e.category).filter(Boolean)])].sort();
- const modes=[...new Set([...(db.settings.payModes||['Cash','UPI','Card','Cheque','Bank Transfer']),...db.cashbook.map(e=>e.mode).filter(Boolean)])];
+ const modes=['Cash','Bank',...new Set(db.cashbook.map(e=>normCbMode(e.mode)).filter(m=>m!=='Cash'))].filter((m,i,a)=>a.indexOf(m)===i);
  const salesTypes=['Membership','PT','Group Class','Product Sales','Other Income','Expense'];
  const roles=['Master Admin','Admin','Staff','Trainer'];
  $('content').innerHTML=`
@@ -1925,7 +2165,7 @@ function pgCashbook(){
 function cbTable(f){const rows=db.cashbook.filter(f).slice().reverse().slice(0,300).map(e=>`
  <tr><td><input type="checkbox" class="cb_sel" value="${e.id}" ${e.status==='Inactive'?'disabled':''}></td>
  <td>${fmtD(e.date)}</td><td>${e.no}</td><td>${esc(e.particulars||'')}</td><td>${esc(e.category||'')}</td><td>${esc(e.party||'')}</td>
- <td>${esc(cbDetectSalesType(e))}</td><td>${esc(e.mode||'')}</td><td>${esc(e.roleCat||'—')}</td>
+ <td>${esc(cbDetectSalesType(e))}</td><td>${esc(formatPayMode(e.mode||''))}</td><td>${esc(e.roleCat||'—')}</td>
  <td class="r bold" style="color:${e.type==='in'?'var(--ok)':'var(--bad)'}">${e.type==='in'?'+':'−'}${inr(e.amount)}</td><td>${esc(e.by||'')}</td>
  <td>${e.status==='Inactive'?'<span class="badge b-mut">Inactive</span>':`<button class="btn sm dgr" onclick="inactiveCashEntry('${e.id}')">Inactive</button>`}</td></tr>`).join('');
  return`<table><tr><th><input type="checkbox" onclick="document.querySelectorAll('.cb_sel').forEach(c=>c.checked=this.checked)"></th><th>Date</th><th>Rcpt/Vchr</th><th>Particulars</th><th>Category</th><th>Party Name</th><th>Sales Type</th><th>Mode</th><th>Role</th><th class="r">Amount</th><th>By</th><th></th></tr>${rows||'<tr><td colspan=12 class="mut">No entries</td></tr>'}</table>`}
@@ -1942,39 +2182,35 @@ function bulkInactiveCash(){
  save();audit('Cashbook Bulk Inactive',ids.length+' entries');toast(ids.length+' marked inactive');applyCbFilters();
 }
 function deleteCashbookEntry(id){inactiveCashEntry(id)}
-function manageCbCats(){
+function manageCbCats(focusType){
  ensurePkgSettings();
  openModal(`<h2>Cashbook Categories</h2>
+ <p class="sub" style="margin-bottom:12px">Each item saves immediately. <b>Delete requires 2-step confirmation.</b></p>
  <div class="grid g2">
-  <div class="card"><h3>Income Categories</h3><textarea id="cb_inc" rows="8">${(db.settings.incCats||[]).join('\n')}</textarea></div>
-  <div class="card"><h3>Expense Categories</h3><textarea id="cb_exp" rows="8">${(db.settings.expCats||[]).join('\n')}</textarea></div>
+  <div class="card"><h3>Income Categories</h3>${catManageList('inc',db.settings.incCats||[])}</div>
+  <div class="card"><h3>Expense Categories</h3>${catManageList('exp',db.settings.expCats||[])}</div>
  </div>
- <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn sec" onclick="closeModal()">Cancel</button>
- <button class="btn" onclick="db.settings.incCats=val('cb_inc').split('\\n').map(s=>s.trim()).filter(Boolean);db.settings.expCats=val('cb_exp').split('\\n').map(s=>s.trim()).filter(Boolean);save();audit('Settings Changed','Cashbook categories');toast('Categories saved');closeModal();go('cashbook')">Save</button></div>`)}
-function editPayModes(){
- ensurePkgSettings();
- openModal(`<h2>Edit Mode of Payment</h2>
- <p class="sub" style="margin-bottom:10px">One mode per line. Used in billing, cashbook and expenses.</p>
- <textarea id="pm_edit" rows="8">${(db.settings.payModes||[]).join('\n')}</textarea>
- <div class="row" style="justify-content:flex-end;gap:8px;margin-top:12px">
-  <button class="btn sec" onclick="closeModal()">Cancel</button>
-  <button class="btn" onclick="db.settings.payModes=val('pm_edit').split('\\n').map(s=>s.trim()).filter(Boolean);save();audit('Settings Changed','Payment modes');toast('Payment modes saved');closeModal();go(PAGE)">Save Modes</button>
- </div>`)}
+ <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn" onclick="closeModal();if(PAGE==='cashbook')applyCbFilters()">Done</button></div>`);
+ if(focusType==='in'&&$('add_incCats'))$('add_incCats').focus();
+ if(focusType==='out'&&$('add_expCats'))$('add_expCats').focus();
+}
+function saveCbCats(){closeModal();if(PAGE==='cashbook')applyCbFilters();else if(PAGE==='expenses')pgExpenses()}
+function editPayModes(){pgSettings();setTimeout(()=>{const el=$('add_bankPayModes');if(el)el.focus()},200)}
 function exportCashbook(){
  const f=cbFilterState();
  const rows=db.cashbook.filter(e=>cbMatch(e,f));
  csvExport([['Date','No','Particulars','Category','Party Name','Sales Type','Mode','Role','Type','Amount','By','Status'],...rows.map(e=>[e.date,e.no,e.particulars,e.category,e.party,cbDetectSalesType(e),e.mode,e.roleCat,e.type,e.amount,e.by,e.status||'Active'])],'cashbook');
 }
 function cashForm(type){
- const cats=type==='in'?db.settings.incCats:db.settings.expCats;
+ ensurePkgSettings();
  if(type==='out'){
   openModal(`<h2>Expense Voucher</h2>
   <div class="grid g2">
    ${fld('cf_part','Particular')}${fld('cf_party','Party Name')}
-   ${fld('cf_gst','GST IN BILL ₹','0','number')}${sel('cf_cat','Category',cats)}
+   ${fld('cf_gst','GST IN BILL ₹','0','number','min="0" step="0.01"')}${catField('out')}
   </div>
   <div class="grid g3" style="margin-top:8px">
-   ${fld('cf_date','Date',today(),'date')}${sel('cf_mode','Payment Mode',['Cash','UPI','Bank Transfer','Card','Cheque'])}${fld('cf_amt','Amount ₹','','number')}
+   ${fld('cf_date','Date',today(),'date')}${payModeFieldHtml('cf','Cash')}${fld('cf_amt','Amount ₹','','number','min="0" step="0.01" oninput="if(this.value&&Number(this.value)<0)this.value=\'\'"')}
    ${fld('cf_by','Paid By',USER.name)}${fld('cf_notes','Notes')}
   </div>
   <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn sec" onclick="closeModal()">Cancel</button><button class="btn" onclick="saveCash('out')">Save Expense</button></div>`);
@@ -1982,20 +2218,23 @@ function cashForm(type){
  }
  openModal(`<h2>Cash In — Other Income</h2>
  <div class="grid g3">
-  ${fld('cf_date','Date',today(),'date')}${sel('cf_cat','Category',cats)}${fld('cf_part','Particulars')}
-  ${fld('cf_party','Received From')}${sel('cf_mode','Payment Mode',['Cash','UPI','Bank Transfer','Card','Cheque'])}${fld('cf_amt','Amount ₹','','number')}
+  ${fld('cf_date','Date',today(),'date')}${catField('in')}${fld('cf_part','Particulars')}
+  ${fld('cf_party','Received From')}${payModeFieldHtml('cf','Cash')}${fld('cf_amt','Amount ₹','','number','min="0" step="0.01" oninput="if(this.value&&Number(this.value)<0)this.value=\'\'"')}
   ${fld('cf_by','Collected By',USER.name)}${fld('cf_notes','Notes')}
  </div>
  <div class="row" style="justify-content:flex-end"><button class="btn sec" onclick="closeModal()">Cancel</button><button class="btn" onclick="saveCash('in')">Save Entry</button></div>`)}
 function saveCash(type){
- const amt=num('cf_amt');if(amt<=0){toast('Enter amount');return}
+ const amt=posAmount(num('cf_amt'),'Enter a positive amount');if(amt==null)return;
+ const gstAmt=type==='out'?num('cf_gst'):0;
+ if(gstAmt<0){toast('GST cannot be negative');return}
  if(type==='out'&&!val('cf_part')){toast('Enter particular');return}
  if(type==='out'&&!val('cf_party')){toast('Enter party name');return}
  const no=type==='in'?nextNo('receipt','RCP-'):nextNo('voucher','VCH-');
  const cat=val('cf_cat');
  const salesType=type==='out'?'Expense':(/product/i.test(cat)?'Product Sales':'Other Income');
  const roleCat=USER&&USER.role==='superadmin'?'Master Admin':(USER&&USER.role==='trainer'?'Trainer':(USER&&USER.role==='accountant'?'Admin':'Staff'));
- db.cashbook.push({id:'CB'+Date.now(),date:val('cf_date')||today(),type,no,particulars:val('cf_part')||cat,category:cat,party:val('cf_party'),mode:val('cf_mode'),amount:amt,gst:type==='out'?num('cf_gst'):0,by:val('cf_by'),notes:val('cf_notes'),salesType,roleCat,status:'Active'});
+ const mode=readPayMode('cf');
+ db.cashbook.push({id:'CB'+Date.now(),date:val('cf_date')||today(),type,no,particulars:val('cf_part')||cat,category:cat,party:val('cf_party'),mode,amount:amt,gst:type==='out'?gstAmt:0,by:val('cf_by'),notes:val('cf_notes'),salesType,roleCat,status:'Active'});
  save();audit(type==='in'?'Income Added':'Expense Added',val('cf_cat')+' · '+inr(amt));
  toast('Saved — cashbook, P&L & dashboard updated');closeModal();
  go(PAGE==='expenses'?'expenses':'cashbook')}
@@ -2005,7 +2244,7 @@ function expTable(rows){
  const list=(rows||[]).slice().reverse().slice(0,300);
  const body=list.map(e=>`
  <tr><td>${fmtD(e.date)}</td><td>${e.no}</td><td>${esc(e.particulars||'')}</td><td>${esc(e.party||'')}</td>
- <td class="r">${inr(e.gst||0)}</td><td>${esc(e.category||'')}</td><td>${e.mode||''}</td>
+ <td class="r">${inr(e.gst||0)}</td><td>${esc(e.category||'')}</td><td>${esc(formatPayMode(e.mode||''))}</td>
  <td class="r bold" style="color:var(--bad)">−${inr(e.amount)}</td><td>${esc(e.by||'')}</td>
  <td class="r"><button class="btn sm dgr" onclick="deleteCashbookEntry('${e.id}')">Delete</button></td></tr>`).join('');
  return`<table><tr><th>Date</th><th>Voucher</th><th>Particular</th><th>Party Name</th><th class="r">GST IN BILL</th><th>Category</th><th>Mode</th><th class="r">Amount</th><th>Paid By</th><th></th></tr>${body||'<tr><td colspan=10 class="mut">No expenses</td></tr>'}</table>`}
@@ -2016,7 +2255,7 @@ function pgExpenses(){
  const byCat={};monthExp.forEach(e=>byCat[e.category]=(byCat[e.category]||0)+e.amount);
  $('content').innerHTML=`
  <div class="row" style="justify-content:space-between"><div><h2>Expenses</h2><div class="sub">Particular · Party Name · GST IN BILL · Category — this month: <b>${inr(monthExp.reduce((s,e)=>s+e.amount,0))}</b></div></div>
- <button class="btn" onclick="cashForm('out')">－ Add Expense</button></div>
+ <div class="row"><button class="btn sec" onclick="manageCbCats('out')">Categories</button><button class="btn" onclick="cashForm('out')">－ Add Expense</button></div></div>
  <div class="grid g2" style="margin-top:12px">
  <div class="card"><h3>Category-wise (${m})</h3>${barChart(Object.entries(byCat).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([k,v])=>({x:k.slice(0,8),y:v})),'r')||''}</div>
  <div class="card"><h3>Expense Ledger (${m})</h3><div class="tbl"><table><tr><th>Category</th><th class="r">Amount</th></tr>
@@ -2026,11 +2265,19 @@ function pgExpenses(){
 
 /* ================= STAFF ================= */
 function pgStaff(){
- const rows=db.staff.map(s=>`<tr><td class="bold">${s.id}</td><td class="clickable" onclick="staffForm('${s.id}')">${esc(s.name)}</td><td>${esc(s.dept)}</td><td>${esc(s.phone)}</td><td>${esc(s.shift)}</td><td class="r">${inr(s.salary)}</td><td><span class="badge ${s.status==='Active'?'b-ok':'b-mut'}">${s.status}</span></td>
- <td><button class="btn sm sec" onclick="staffForm('${s.id}')">Edit</button></td></tr>`).join('');
- $('content').innerHTML=`<div class="row" style="justify-content:space-between"><div><h2>Staff Management</h2><div class="sub">${db.staff.length} staff</div></div>
+ const rows=db.staff.map(s=>`<tr><td class="bold">${s.id}</td><td class="clickable" onclick="staffForm('${s.id}')">${esc(s.name)}</td><td>${esc(s.dept)}</td><td>${esc(s.phone)}</td><td>${esc(s.shift)}</td><td class="r">${inr(s.salary)}</td><td><span class="badge ${s.status==='Active'?'b-ok':'b-mut'}">${s.status||'Active'}</span></td>
+ <td class="r" style="white-space:nowrap"><button class="btn sm sec" onclick="staffForm('${s.id}')">Edit</button>
+ ${s.status!=='Inactive'?`<button class="btn sm sec" onclick="deactivateStaff('${s.id}')">Deactivate</button>`:`<button class="btn sm" onclick="activateStaff('${s.id}')">Activate</button>`}</td></tr>`).join('');
+ $('content').innerHTML=`<div class="row" style="justify-content:space-between"><div><h2>Staff Management</h2><div class="sub">${db.staff.length} staff · IDs: Admin <b>26ADM###</b> · Super Admin <b>26SA###</b> · Staff <b>26TR/FOM/ACC###</b></div></div>
  <button class="btn" onclick="staffForm()">➕ Add Staff</button></div>
- <div class="tbl" style="margin-top:12px"><table><tr><th>ID</th><th>Name</th><th>Department</th><th>Contact</th><th>Shift</th><th class="r">Salary</th><th>Status</th><th></th></tr>${rows||'<tr><td colspan=8 class="mut">No staff yet</td></tr>'}</table></div>`}
+ <p class="sub" style="margin:10px 0">Staff cannot be deleted — use <b>Deactivate</b> only.</p>
+ <div class="tbl" style="margin-top:4px"><table><tr><th>ID</th><th>Name</th><th>Department</th><th>Contact</th><th>Shift</th><th class="r">Salary</th><th>Status</th><th></th></tr>${rows||'<tr><td colspan=8 class="mut">No staff yet</td></tr>'}</table></div>`}
+function deactivateStaff(id){
+ const s=staffById(id);if(!s)return;
+ if(!confirm(`Deactivate staff "${s.name}" (${s.id})?\n\nAccount stays in records.`))return;
+ s.status='Inactive';save();audit('Staff Deactivated',s.id+' '+s.name);toast('Staff deactivated');pgStaff();
+}
+function activateStaff(id){const s=staffById(id);if(!s)return;s.status='Active';save();audit('Staff Activated',s.id);toast('Staff activated');pgStaff()}
 function staffForm(id){
  const s=id?staffById(id):{};
  const canEdit=USER.role==='superadmin'||USER.role==='frontoffice'||(USER.role==='trainer'&&s.name&&s.name===USER.name)||(!id);
@@ -2041,7 +2288,7 @@ function staffForm(id){
  ${fld('st_phone','Contact *',s.phone)}${fld('st_email','Email',s.email)}${fld('st_dob','DOB',s.dob,'date')}
  ${fld('st_join','Joining Date',s.joining||today(),'date')}${fld('st_sal','Monthly Salary ₹',s.salary,'number')}${sel('st_shift','Shift',['Morning','Evening','Split Shift','Custom'],s.shift)}
  ${fld('st_bank','Bank A/c & IFSC',s.bank)}${fld('st_aadhaar','Aadhaar',s.aadhaar)}${fld('st_pan','PAN',s.pan)}
- ${fld('st_qual','Qualification',s.qual)}${fld('st_exp','Experience',s.exp)}${sel('st_status','Status',['Active','Inactive','Resigned'],s.status||'Active')}
+ ${fld('st_qual','Qualification',s.qual)}${fld('st_exp','Experience',s.exp)}${sel('st_status','Status',['Active','Inactive'],s.status==='Inactive'?'Inactive':'Active')}
  <div class="field"><label>Bill Rep?</label><select id="st_billrep"><option value="1" ${s.billRep!==false&&s.isBillRep!==false?'selected':''}>Yes — can collect / appear as Bill Rep</option><option value="0" ${s.billRep===false||s.isBillRep===false?'selected':''}>No</option></select></div>
  </div>
  <p class="sub">IDs: Trainer <b>26TR001</b> · FOM / Management / Reception <b>26FOM001</b> · Accountant <b>26ACC001</b></p>
@@ -2192,8 +2439,7 @@ function renderAccountSummary(){
  const cancelAmt=cancelled.reduce((s,i)=>s+Number(i.grand||0),0);
  const balanceAmt=invs.reduce((s,i)=>s+Number(i.pending||0),0);
  const payCash=cashIn(f,t,'Cash');
- const payUpi=cashIn(f,t,'UPI');
- const payCard=cashIn(f,t,'Card');
+ const payBank=cashIn(f,t,'Bank');
  if($('ac_summary'))$('ac_summary').innerHTML=`
   <div class="money-row">
    ${moneyCard('blue','Total Bill Amount',totalBill)}
@@ -2203,8 +2449,7 @@ function renderAccountSummary(){
   </div>
   <div class="pay-row">
    <div class="pay-box"><u onclick="go('cashbook');setTimeout(()=>{if($('cb_mode')){$('cb_mode').value='Cash';applyCbFilters()}},80)">Cash : ${inr(payCash)}</u></div>
-   <div class="pay-box"><u onclick="go('cashbook');setTimeout(()=>{if($('cb_mode')){$('cb_mode').value='UPI';applyCbFilters()}},80)">UPI : ${inr(payUpi)}</u></div>
-   <div class="pay-box"><u onclick="go('cashbook');setTimeout(()=>{if($('cb_mode')){$('cb_mode').value='Card';applyCbFilters()}},80)">Credit Card : ${inr(payCard)}</u></div>
+   <div class="pay-box"><u onclick="go('cashbook');setTimeout(()=>{if($('cb_mode')){$('cb_mode').value='Bank';applyCbFilters()}},80)">Bank (UPI / Card / …) : ${inr(payBank)}</u></div>
   </div>`;
 }
 function renderAccountLedgers(){
@@ -2648,12 +2893,72 @@ function pgGymPerformance(){
 }
 
 /* ================= YDL MENU PAGES ================= */
+function pgTrainerAnalysis(){
+ const m=thisMonth();
+ const ptCounts=trainerPtCounts();
+ const trainerStats={};
+ trainerStaffList().forEach(s=>{trainerStats[s.name]={clients:0,ptSubs:0,att:0,revenue:0}});
+ (db.clients||[]).forEach(c=>{
+  if(c.status==='Inactive'||!c.trainer)return;
+  if(!trainerStats[c.trainer])trainerStats[c.trainer]={clients:0,ptSubs:0,att:0,revenue:0};
+  trainerStats[c.trainer].clients++;
+ });
+ (db.subs||[]).filter(s=>s.type==='PT'&&subStatus(s)==='Active').forEach(s=>{
+  const c=client(s.clientId);const tr=(c&&c.trainer)||s.trainer||'';
+  if(!tr)return;
+  if(!trainerStats[tr])trainerStats[tr]={clients:0,ptSubs:0,att:0,revenue:0};
+  trainerStats[tr].ptSubs++;
+  trainerStats[tr].revenue+=Number(s.final||0);
+ });
+ (db.memberAtt||[]).filter(a=>a.date&&a.date.startsWith(m)).forEach(a=>{
+  const c=client(a.clientId);if(!c||!c.trainer)return;
+  if(!trainerStats[c.trainer])trainerStats[c.trainer]={clients:0,ptSubs:0,att:0,revenue:0};
+  trainerStats[c.trainer].att++;
+ });
+ const pending=(db.trainerRequests||[]).filter(r=>r.status==='Pending');
+ $('content').innerHTML=`<div class="row" style="justify-content:space-between;margin-bottom:12px"><div><h2>Trainer Analysis</h2><div class="sub">Admin Panel · ${esc(db.settings.gymName||'FITO6')} · ${m}</div></div>
+  <button class="btn sec" onclick="go('gymperformance')">Gym Performance</button></div>
+ <div class="grid g4" style="margin-bottom:14px">${stat('Trainers',Object.keys(trainerStats).length,'br')}${stat('Total PT Clients',Object.values(ptCounts).reduce((a,b)=>a+b,0),'ok')}${stat('Pending Trainer Changes',pending.length,pending.length?'warn':'')}${stat('PT Revenue (active)',inr(Object.values(trainerStats).reduce((s,t)=>s+t.revenue,0)),'ok')}</div>
+ <div class="card" style="margin-bottom:14px"><h3>Trainer-wise PT Client Count</h3>
+  <div class="tbl"><table><tr><th>Trainer</th><th>Assigned Members</th><th>Active PT</th><th>Visits (${m})</th><th class="r">PT Revenue</th></tr>
+  ${Object.entries(trainerStats).sort((a,b)=>(b[1].ptSubs||ptCounts[b[0]]||0)-(a[1].ptSubs||ptCounts[a[0]]||0)).map(([n,s])=>`<tr><td class="bold">${esc(n)}</td><td>${s.clients}</td><td><b>${ptCounts[n]||s.ptSubs||0}</b></td><td>${s.att}</td><td class="r">${inr(s.revenue)}</td></tr>`).join('')||'<tr><td colspan=5 class="mut">No trainer data</td></tr>'}
+  </table></div></div>
+ ${pending.length?`<div class="card"><h3>Pending Change Trainer Requests</h3><div class="tbl"><table><tr><th>Client</th><th>Current</th><th>Requested</th><th>Date</th><th></th></tr>
+  ${pending.map(r=>`<tr><td>${esc(r.clientName)}</td><td>${esc(r.currentTrainer||'—')}</td><td>${esc(r.requestedTrainer)}</td><td>${fmtD(r.date)}</td>
+  <td class="r"><button class="btn sm" onclick="approveTrainerChange('${r.id}')">Approve</button> <button class="btn sm sec" onclick="rejectTrainerChange('${r.id}')">Reject</button></td></tr>`).join('')}
+  </table></div></div>`:''}`;
+}
+function pgClientAnalysis(){
+ const all=db.clients||[];
+ const active=all.filter(c=>c.status!=='Inactive');
+ const inactive=all.filter(c=>c.status==='Inactive');
+ const withMem=active.filter(c=>{const ms=clientMemPlan(c);return ms&&subStatus(ms)==='Active'});
+ const withPt=active.filter(c=>db.subs.some(s=>s.clientId===c.id&&s.type==='PT'&&subStatus(s)==='Active'));
+ const noPlan=active.filter(c=>!clientMemPlan(c));
+ const byGender={Male:0,Female:0,Other:0};
+ active.forEach(c=>{const g=c.gender||'Other';byGender[g]=(byGender[g]||0)+1});
+ const legacy=all.filter(c=>!isStandardClientId(c.id)).length;
+ $('content').innerHTML=`<div class="row" style="justify-content:space-between;margin-bottom:12px"><div><h2>Client Analysis</h2><div class="sub">Admin Panel · membership &amp; client overview</div></div>
+  <button class="btn sec" onclick="go('clients')">My Members</button></div>
+ <div class="grid g4" style="margin-bottom:14px">${stat('Total Clients',all.length)}${stat('Active',active.length,'ok')}${stat('Inactive',inactive.length,'bad')}${stat('Active Membership',withMem.length,'ok')}</div>
+ <div class="grid g4" style="margin-bottom:14px">${stat('Active PT Clients',withPt.length,'br')}${stat('No Subscription',noPlan.length,'warn')}${stat('Non-standard IDs',legacy,legacy?'warn':'')}${stat('Male / Female',byGender.Male+' / '+byGender.Female)}</div>
+ <div class="grid g2">
+  <div class="card"><h3>Subscription Status (Active clients)</h3><div class="tbl"><table>
+   <tr><td>Active membership</td><td class="r bold">${withMem.length}</td></tr>
+   <tr><td>Active PT</td><td class="r bold">${withPt.length}</td></tr>
+   <tr><td>No plan</td><td class="r">${noPlan.length}</td></tr>
+  </table></div></div>
+  <div class="card"><h3>ID Format (F126 / F226)</h3><p class="sub">Standard: <b>F12600000</b> (branch 1) · <b>F22600000</b> (branch 2)</p>
+   <p class="sub" style="margin-top:8px">${legacy?`<span style="color:var(--bad)">${legacy} client(s) need migration</span>`:'All clients on standard IDs ✓'}</p>
+   ${legacy?`<button class="btn sm" style="margin-top:10px" onclick="migrateClientIds()">Migrate Client IDs</button>`:''}
+  </div></div>`;
+}
 function pgAnalysis(){
- $('content').innerHTML=`<div class="row" style="justify-content:space-between;margin-bottom:12px"><div><h2>Analysis</h2><div class="sub">Membership & collection insights</div></div>
-  <button class="btn sec" onclick="go('gymperformance')">Gym Performance</button>
-  <button class="btn sec" onclick="go('reports')">Classic Reports</button></div>
+ $('content').innerHTML=`<div class="row" style="justify-content:space-between;margin-bottom:12px"><div><h2>Analysis</h2><div class="sub">Reports &amp; insights</div></div></div>
   <div class="grid g3">
-   <div class="card clickable" onclick="go('gymperformance')"><h3>📊 Gym Performance</h3><p class="sub">Trainer & staff sales / attendance</p></div>
+   <div class="card clickable" onclick="go('traineranalysis')"><h3>🧑 Trainer Analysis</h3><p class="sub">PT client count, trainer performance, change requests</p></div>
+   <div class="card clickable" onclick="go('clientanalysis')"><h3>👥 Client Analysis</h3><p class="sub">Membership stats, ID migration, client breakdown</p></div>
+   <div class="card clickable" onclick="go('gymperformance')"><h3>📊 Gym Performance</h3><p class="sub">Staff sales &amp; attendance</p></div>
    <div class="card clickable" onclick="go('reports')"><h3>📈 Reports & Charts</h3><p class="sub">Collection, expense and membership reports</p></div>
    <div class="card clickable" onclick="go('accounts')"><h3>💵 Accounts / P&L</h3><p class="sub">Profit & loss overview</p></div>
    <div class="card clickable" onclick="go('meter')"><h3>⚡ EB Meter</h3><p class="sub">Day & night electricity readings</p></div>
@@ -2772,6 +3077,9 @@ function pgMore(){
   <div class="card clickable" onclick="go('trainer')"><h3>📱 Trainer Portal</h3><p class="sub">Mobile trainer home</p></div>
   <div class="card clickable" onclick="go('payroll')"><h3>💵 Payroll</h3><p class="sub">Salary generation</p></div>
   <div class="card clickable" onclick="go('settings')"><h3>⚙️ Settings</h3><p class="sub">IDs, branches, packages</p></div>
+  <div class="card" style="border-color:#dbeafe;background:#f8fbff"><h3>🆔 Migrate Client IDs</h3>
+   <p class="sub">Convert old IDs to <b>F12600000</b> / <b>F22600000</b> format (keeps legacyId)</p>
+   <button class="btn sm" style="margin-top:10px" onclick="migrateClientIds()">Run Migration</button></div>
  </div>`}
 function openDeleteData(){
  if(USER&&USER.role!=='superadmin'&&USER.role!=='gymadmin'&&USER.role!=='frontoffice'){toast('Only Admin can delete data');return}
@@ -2872,17 +3180,21 @@ function pgSettings(){
  <div class="card"><h3>Membership / Subscriptions</h3>
   <p class="sub" style="margin-bottom:10px">Packages: Membership · PT · Group Class</p>
   <button class="btn" onclick="go('memberships')">Open Memberships Module →</button></div>
- <div class="card"><h3>Subscription Types (editable)</h3>
-  <textarea id="se_subtypes" rows="6">${(s.subTypes||[]).join('\n')}</textarea>
-  <button class="btn" style="margin-top:10px" onclick="db.settings.subTypes=val('se_subtypes').split('\\n').map(x=>x.trim()).filter(Boolean);save();toast('Saved')">Save Types</button></div>
- <div class="card"><h3>Payment Modes (editable)</h3>
-  <textarea id="se_pay" rows="5">${(s.payModes||[]).join('\n')}</textarea>
-  <button class="btn" style="margin-top:10px" onclick="db.settings.payModes=val('se_pay').split('\\n').map(x=>x.trim()).filter(Boolean);save();audit('Settings Changed','Payment modes');toast('Saved')">Save Modes</button>
-  <button class="btn sec" style="margin-top:8px" onclick="editPayModes()">Quick Edit Modes</button></div>
- <div class="card"><h3>Income Categories</h3><textarea id="se_inc" rows="6">${(s.incCats||[]).join('\n')}</textarea>
-  <button class="btn" style="margin-top:10px" onclick="db.settings.incCats=val('se_inc').split('\\n').filter(Boolean);save();toast('Saved')">Save</button></div>
- <div class="card"><h3>Expense Categories</h3><textarea id="se_exp" rows="6">${(s.expCats||[]).join('\n')}</textarea>
-  <button class="btn" style="margin-top:10px" onclick="db.settings.expCats=val('se_exp').split('\\n').filter(Boolean);save();toast('Saved')">Save Categories</button></div>
+ <div class="card"><h3>Subscription Types</h3>
+  <p class="sub" style="margin-bottom:8px">One type per row · saves on Add/Rename/Delete · delete needs 2 confirmations.</p>
+  ${settingsListRows('subTypes',s.subTypes||[])}</div>
+ <div class="card"><h3>Payment Modes</h3>
+  <p class="sub" style="margin-bottom:8px"><b>Cash</b> is always available. Under <b>Bank</b> use UPI and Card.</p>
+  <div class="row" style="gap:8px;padding:10px;background:#eef6ff;border:1px solid #c5daf5;border-radius:6px;margin-bottom:12px;align-items:center">
+   <span style="font-weight:700">Cash</span><span class="badge b-ok">Fixed · cannot delete</span></div>
+  <h4 style="font-size:13px;margin:0 0 8px">Bank types (UPI / Card)</h4>
+  ${settingsListRows('bankPayModes',bankPayModes())}</div>
+ <div class="card"><h3>Income Categories</h3>
+  <p class="sub" style="margin-bottom:8px">Same list as Cashbook → Categories</p>
+  ${settingsListRows('incCats',s.incCats||[])}</div>
+ <div class="card"><h3>Expense Categories</h3>
+  <p class="sub" style="margin-bottom:8px">Same list as Cashbook → Categories</p>
+  ${settingsListRows('expCats',s.expCats||[])}</div>
  <div class="card"><h3>Bill Rep Management</h3>
   <p class="sub">Include <b>Management</b> department staff as bill reps.</p>
   <div class="tbl"><table><tr><th>Staff</th><th>Dept</th><th>ID</th><th>Bill Rep</th></tr>
@@ -2935,7 +3247,7 @@ function seedDemo(){
  db.staff.push({id:'ST'+nextNo('staff',''),name:'Suresh Trainer',dept:'Trainer',phone:'9800000001',salary:20000,shift:'Morning',status:'Active',joining:'2025-01-01'},
  {id:'ST'+nextNo('staff',''),name:'Meena Reception',dept:'Reception',phone:'9800000002',salary:15000,shift:'Evening',status:'Active',joining:'2025-03-01'});
  names.forEach((n,i)=>{
-  const id=nextClientId();
+  const id=nextClientId(db.settings.branch);
   const created=addDays(today(),-(i*11)%60);
   db.clients.push({id,name:caps(n[0]),gender:n[1],mobile:'98'+String(10000000+i*137).slice(0,8),joined:created,ref:['Walk-in','Instagram','Google','Reference'][i%4],branch:db.settings.branch,goal:'General Fitness',notes:[],status:'Active',dob:addDays(today(),-9000-i*40)});
   const pkg=db.settings.packages[i%4];const gstp=db.settings.gstPct;
