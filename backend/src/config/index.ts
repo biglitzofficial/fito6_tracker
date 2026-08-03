@@ -133,7 +133,10 @@ export const config = {
     expiresIn: process.env.JWT_EXPIRES_IN || '7d',
   },
   allowedOrigins: parseAllowedOrigins(process.env.FRONTEND_URL, process.env.ALLOWED_ORIGINS),
-  superAdminEmails: parseEmailList(process.env.SUPERADMIN_EMAILS),
+  superAdminEmails: (() => {
+    const fromEnv = parseEmailList(process.env.SUPERADMIN_EMAILS);
+    return fromEnv.length ? fromEnv : ['superadmin@fito6.com'];
+  })(),
   frontendUrl:
     normalizeOrigin(process.env.FRONTEND_URL?.split(',')[0]?.trim() || '') ||
     'http://localhost:3000',

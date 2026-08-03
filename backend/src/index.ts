@@ -7,9 +7,14 @@ async function start() {
   try {
     await pingFirebase();
     console.log('Firebase connected');
-    await ensurePlatformSuperAdmin();
   } catch (err) {
     console.error('Firebase warmup failed:', (err as Error).message);
+  }
+
+  try {
+    await ensurePlatformSuperAdmin();
+  } catch (err) {
+    console.error('Platform super admin bootstrap failed:', (err as Error).message);
   }
 
   app.listen(config.port, () => {
