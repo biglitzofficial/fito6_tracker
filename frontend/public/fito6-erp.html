@@ -775,6 +775,10 @@ function runCbImport(){
     if(!types.length){skip++;continue}
     types.forEach(([type,amount])=>{
      if(amount<=0){skip++;return}
+     if(type==='out'){
+      const bucket=ledgerBucket(normCbMode(o.mode));
+      if(!canAffordOutflow(bucket,amount,o.date)){skip++;return}
+     }
      const key=cbImportKey({...o,party},type,amount);
      let e=(db.cashbook||[]).find(x=>x.importKey===key);
      const isNew=!e;
@@ -1145,6 +1149,23 @@ function pgStub(title){$('content').innerHTML=`<div class="card"><h2>${esc(title
 function payListFor(dateFrom,dateTo){const out=[];db.invoices.forEach(iv=>(iv.payments||[]).forEach(p=>{if(p.date>=dateFrom&&p.date<=dateTo)out.push({...p,inv:iv})}));return out}
 function cashIn(d1,d2,mode){return db.cashbook.filter(e=>e.status!=='Inactive'&&e.type==='in'&&e.date>=d1&&e.date<=d2&&(!mode||(mode==='Bank'?isBankEntryMode(e.mode):mode==='Cash'?normCbMode(e.mode)==='Cash':normCbMode(e.mode)===mode))).reduce((s,e)=>s+e.amount,0)}
 function cashOut(d1,d2,mode){return db.cashbook.filter(e=>e.status!=='Inactive'&&e.type==='out'&&e.date>=d1&&e.date<=d2&&(!mode||(mode==='Bank'?isBankEntryMode(e.mode):mode==='Cash'?normCbMode(e.mode)==='Cash':normCbMode(e.mode)===mode))).reduce((s,e)=>s+e.amount,0)}
+function ledgerBucket(mode){return normCbMode(mode)==='Cash'?'Cash':'Bank'}
+function ledgerOpening(bucket){return bucket==='Cash'?(Number(db.settings.openingCash)||0):(Number(db.settings.openingBank)||0)}
+function ledgerBalance(bucket,asOfDate){const d=asOfDate||today();return ledgerOpening(bucket)+cashIn('0000',d,bucket)-cashOut('0000',d,bucket)}
+function blockNegativeOutflow(bucket,amount,entryDate,context){
+ if(amount<=ledgerBalance(bucket,entryDate||today()))return true;
+ const label=bucket==='Cash'?'Cash':'Bank';
+ const avail=ledgerBalance(bucket,entryDate||today());
+ alert(
+  'This entry is not allowed — it would create a negative balance.\n\n'+
+  (context?context+' · ':'')+
+  'Amount: '+inr(amount)+' ('+label+')\n'+
+  'Available '+label+' balance: '+inr(avail)+'\n\n'+
+  'You may have missed a cash-in / bank receipt entry. Please check the Cashbook and add missing collections before paying out.'
+ );
+ return false;
+}
+function canAffordOutflow(bucket,amount,entryDate){return amount<=ledgerBalance(bucket,entryDate||today())}
 function subStatus(s){if(s.status==='Used')return'Used';if(s.status==='Frozen')return'Frozen';if(s.status==='Expired')return'Expired';return s.end>=today()?'Active':'Expired'}
 function activeSubs(type){return db.subs.filter(s=>s.type===type&&subStatus(s)==='Active')}
 function expiredSubs(type){return db.subs.filter(s=>s.type===type&&subStatus(s)==='Expired')}
@@ -1744,6 +1765,9 @@ function savePayment(invId){
  const totalPay=pays.reduce((s,p)=>s+p.amt,0);
  if(totalPay>iv.pending+0.01){toast('Payment exceeds pending amount');return}
  const by=val('p_by')||USER.name;
+ for(const p of pays){
+  if(p.amt<=0||!Number.isFinite(p.amt)){toast('Enter positive payment amounts only');return}
+ }
  pays.forEach(p=>{
   const rc=nextNo('receipt','RCP-');
   iv.payments.push({date:today(),mode:p.mode,amt:p.amt,receipt:rc,by});
@@ -2234,7 +2258,12 @@ function saveCash(type){
  const salesType=type==='out'?'Expense':(/product/i.test(cat)?'Product Sales':'Other Income');
  const roleCat=USER&&USER.role==='superadmin'?'Master Admin':(USER&&USER.role==='trainer'?'Trainer':(USER&&USER.role==='accountant'?'Admin':'Staff'));
  const mode=readPayMode('cf');
- db.cashbook.push({id:'CB'+Date.now(),date:val('cf_date')||today(),type,no,particulars:val('cf_part')||cat,category:cat,party:val('cf_party'),mode,amount:amt,gst:type==='out'?gstAmt:0,by:val('cf_by'),notes:val('cf_notes'),salesType,roleCat,status:'Active'});
+ const entryDate=val('cf_date')||today();
+ if(type==='out'){
+  const bucket=ledgerBucket(mode);
+  if(!blockNegativeOutflow(bucket,amt,entryDate,type==='out'?'Cashbook expense':'Cashbook payment'))return;
+ }
+ db.cashbook.push({id:'CB'+Date.now(),date:entryDate,type,no,particulars:val('cf_part')||cat,category:cat,party:val('cf_party'),mode,amount:amt,gst:type==='out'?gstAmt:0,by:val('cf_by'),notes:val('cf_notes'),salesType,roleCat,status:'Active'});
  save();audit(type==='in'?'Income Added':'Expense Added',val('cf_cat')+' · '+inr(amt));
  toast('Saved — cashbook, P&L & dashboard updated');closeModal();
  go(PAGE==='expenses'?'expenses':'cashbook')}
@@ -2359,10 +2388,14 @@ function savePayroll(){
  const sid=val('pr_staff');const s=staffById(sid);if(!s){toast('Select staff');return}
  const basic=num('pr_basic'),incentive=num('pr_inc'),commission=num('pr_comm')+num('pr_pt'),bonus=num('pr_bonus'),deduction=num('pr_ded'),advance=num('pr_adv');
  const net=basic+incentive+commission+bonus-deduction-advance;
- const p={id:nextPayrollId(),month:val('pr_month'),staffId:sid,basic,incentive,commission,bonus,deduction,advance,net,date:today(),mode:val('pr_mode')};
+ if(net<=0){toast('Net salary must be positive');return}
+ const payMode=val('pr_mode')||'Cash';
+ const bucket=ledgerBucket(payMode==='Bank Transfer'?'Bank':payMode);
+ if(!blockNegativeOutflow(bucket,net,today(),'Salary payment for '+s.name))return;
+ const p={id:nextPayrollId(),month:val('pr_month'),staffId:sid,basic,incentive,commission,bonus,deduction,advance,net,date:today(),mode:payMode};
  db.payroll.push(p);
  // AUTOMATION → cashbook expense
- db.cashbook.push({id:'CB'+Date.now(),date:today(),type:'out',no:nextNo('voucher','VCH-'),particulars:'Salary '+p.month+' — '+s.name,category:'Salary',party:s.name,mode:p.mode,amount:net,by:USER.name,notes:'Payroll '+p.id,salesType:'Expense'});
+ db.cashbook.push({id:'CB'+Date.now(),date:today(),type:'out',no:nextNo('voucher','VCH-'),particulars:'Salary '+p.month+' — '+s.name,category:'Salary',party:s.name,mode:payMode,amount:net,by:USER.name,notes:'Payroll '+p.id,salesType:'Expense'});
  save();audit('Salary Updated',s.name+' · '+p.month+' · '+inr(net));
  toast('Salary generated & posted to cashbook');closeModal();go('payroll')}
 function printSlip(id){
