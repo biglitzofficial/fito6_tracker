@@ -303,11 +303,22 @@ function ensurePkgSettings(){
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const inr=n=>'₹'+Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:2});
-const today=()=>new Date().toISOString().slice(0,10);
+function parseLocalDate(dateStr){
+ if(!dateStr)return new Date(NaN);
+ const p=String(dateStr).slice(0,10).split('-').map(Number);
+ if(p.length<3||!p[0]||!p[1]||!p[2])return new Date(NaN);
+ return new Date(p[0],p[1]-1,p[2]);
+}
+function formatLocalDate(d){
+ if(!(d instanceof Date)||isNaN(d.getTime()))return '';
+ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+const today=()=>formatLocalDate(new Date());
 const thisMonth=()=>today().slice(0,7);
-const fmtD=d=>d?new Date(d+'T00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}):'-';
-function addMonths(dateStr,m){const d=new Date(dateStr+'T00:00');d.setMonth(d.getMonth()+m);return d.toISOString().slice(0,10)}
-function daysBetween(a,b){return Math.round((new Date(b)-new Date(a))/86400000)}
+const fmtD=d=>{const x=parseLocalDate(d);return x&&!isNaN(x.getTime())?x.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}):'-'};
+function addMonths(dateStr,m){const d=parseLocalDate(dateStr);if(isNaN(d.getTime()))return dateStr;d.setMonth(d.getMonth()+m);return formatLocalDate(d);}
+function addDays(dateStr,n){const d=parseLocalDate(dateStr);if(isNaN(d.getTime()))return dateStr;d.setDate(d.getDate()+n);return formatLocalDate(d);}
+function daysBetween(a,b){return Math.round((parseLocalDate(b)-parseLocalDate(a))/86400000);}
 function toast(m){const t=$('toast');t.textContent=m;t.style.display='block';clearTimeout(t._t);t._t=setTimeout(()=>t.style.display='none',2600)}
 function val(id){return $(id)?$(id).value.trim():''}
 function num(id){return parseFloat(val(id))||0}
@@ -1266,7 +1277,6 @@ function pgDashboard(){
 }
 function stat(l,v,cls){return`<div class="card stat ${cls||''}"><div class="l">${l}</div><div class="v">${v}</div></div>`}
 function line(l,v){return`<div class="row" style="justify-content:space-between;padding:4px 0"><span class="mut">${l}</span><span>${v}</span></div>`}
-function addDays(d,n){const x=new Date(d+'T00:00');x.setDate(x.getDate()+n);return x.toISOString().slice(0,10)}
 /* ================= CLIENTS ================= */
 let CL_F={q:'',gender:'',ref:'',trainer:'',status:'Active',service:'',membership:'',from:'',to:''};
 function clientPlan(c){
@@ -1707,6 +1717,8 @@ function calcSub(){const o=$('s_pkg').selectedOptions[0];if(!o)return;
  $('s_calc').innerHTML=`<div class="grid g6">${stat('Package Price',inr(price))}${stat('Selling Price',inr(woGst),'br')}${stat('GST Amount',inr(gstAmt))}${stat('Final Amount','<b>'+inr(final)+'</b>','br')}${stat('End Date',fmtD(end))}${stat('Validity',daysBetween(start,end)+1+' days')}</div>`;
  window._subCalc={months,price,sell:woGst,disc,gstp,gstAmt,woGst,final,start,end}}
 function saveSub(clientId,wizard){
+ const c=client(clientId);
+ if(!c){toast('Client not found');return}
  const x=window._subCalc;if(!x||x.final<=0){toast('Enter a valid selling price');return}
  const type=val('s_type');
  if(type==='Freeze Membership'){const ms=db.subs.filter(s=>s.clientId===clientId&&s.type==='Membership').pop();if(ms){ms.status=ms.status==='Frozen'?'':'Frozen';save();audit('Package Changed','Freeze toggled for '+clientId);toast('Membership freeze updated');closeModal();go('clients')}return}
@@ -1720,7 +1732,6 @@ function saveSub(clientId,wizard){
  db.subs.filter(s=>s.clientId===clientId&&s.type===t&&s.status!=='Used'&&s.status!=='Frozen').forEach(s=>{if(subStatus(s)==='Active'||s.status==='')s.status='Used'});
  const sub={id:'S'+Date.now(),clientId,type:t,kind,pkg:val('s_pkg')?$('s_pkg').selectedOptions[0].text.split(' — ')[0]:'Custom',price:x.price,sell:x.sell,disc:x.disc,gstPct:x.gstp,gstAmt:x.gstAmt,woGst:x.woGst,final:x.final,start:x.start,end:x.end,trainer:tr.trainer,trainerId:tr.trainerId,branch:val('s_branch'),billRepId:br.billRepId,billRep:br.billRep,status:'',created:today()};
  db.subs.push(sub);
- const c=client(clientId);
  if(tr.trainer){c.trainer=tr.trainer;c.trainerId=tr.trainerId}
  c.billRepId=br.billRepId;c.billRep=br.billRep;if(!c.billRepFrozen)c.billRepFrozen=true;
  // auto-generate invoice
@@ -2539,14 +2550,14 @@ function pgMeter(){
   const has=!!r&&(r.night!=null||r.day!=null);
   cells.push(`<div class="day ${has?'has':''}" onclick="meterEntry('${date}')">
    <div class="dn">${d}</div>
-   ${has?`<div class="sm">N: ${r.night??'—'}<br>D: ${r.day??'—'}</div>
+   ${has?`<div class="sm">D: ${r.day??'—'}<br>N: ${r.night??'—'}</div>
    <div class="fv">${r.final!=null?r.final+' u':'—'}</div>`:`<div class="sm">No entry</div>`}
   </div>`);
  }
  $('content').innerHTML=`
  <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:10px">
   <div><h2>EB Meter Reading</h2>
-   <div class="sub"><b>EB Night Reading</b> + <b>EB Day Reading</b> · Daily final = Day − Night · Month total = sum of daily finals</div></div>
+   <div class="sub"><b>EB Day Reading</b> first, then <b>EB Night Reading</b> · Daily final = Day − Night · Month total = sum of daily finals</div></div>
   <div class="row" style="gap:8px;align-items:end">
    <div class="field" style="margin:0"><label>Month</label><input type="month" id="mt_month" value="${ym}" onchange="METER_MONTH=this.value;pgMeter()"></div>
    <button class="btn" onclick="meterEntry(today())">＋ Today’s Entry</button>
@@ -2565,10 +2576,10 @@ function pgMeter(){
   </div>
  </div>
  <h3 style="margin-top:16px">Day-wise log (${ym})</h3>
- <div class="tbl"><table><tr><th>Date</th><th class="r">Night</th><th class="r">Day</th><th class="r">Final (Day−Night)</th><th>By</th><th>Notes</th><th></th></tr>
+ <div class="tbl"><table><tr><th>Date</th><th class="r">Day</th><th class="r">Night</th><th class="r">Final (Day−Night)</th><th>By</th><th>Notes</th><th></th></tr>
   ${monthRows.slice().reverse().map(r=>`<tr>
    <td class="clickable" onclick="meterEntry('${r.date}')">${fmtD(r.date)}</td>
-   <td class="r">${r.night??'—'}</td><td class="r">${r.day??'—'}</td>
+   <td class="r">${r.day??'—'}</td><td class="r">${r.night??'—'}</td>
    <td class="r bold">${r.final!=null?r.final:'—'}</td>
    <td>${esc(r.by||'')}</td><td>${esc(r.notes||'')}</td>
    <td class="r"><button class="btn sm sec" onclick="meterEntry('${r.date}')">Edit</button>
@@ -2581,10 +2592,10 @@ function meterEntry(date){
  const r=meterFor(date)||{date,night:'',day:'',notes:''};
  const preview=meterDayFinal(r.night,r.day);
  openModal(`<h2>EB Meter — ${fmtD(date)}</h2>
- <p class="sub" style="margin-bottom:12px">Enter <b>EB Night Reading</b> and <b>EB Day Reading</b>. Final for the day = <b>Day − Night</b>.</p>
+ <p class="sub" style="margin-bottom:12px">Enter <b>EB Day Reading</b> first, then <b>EB Night Reading</b>. Final for the day = <b>Day − Night</b>.</p>
  <div class="grid g3">
-  ${fld('mt_night','EB Night Reading',r.night??'','number')}
   ${fld('mt_day','EB Day Reading',r.day??'','number')}
+  ${fld('mt_night','EB Night Reading',r.night??'','number')}
   <div class="field"><label>Daily final (Day − Night)</label><input id="mt_final" readonly class="ro" value="${preview!=null?preview:''}"></div>
   ${fld('mt_notes','Notes',r.notes||'')}
   ${fld('mt_by','Entered By',r.by||(USER?USER.name:''))}
@@ -2599,7 +2610,7 @@ function meterEntry(date){
  <\/script>`)}
 function saveMeterEntry(date){
  const nightRaw=val('mt_night'),dayRaw=val('mt_day');
- if(nightRaw===''||dayRaw===''){toast('Enter both night and day readings');return}
+ if(nightRaw===''||dayRaw===''){toast('Enter both day and night readings');return}
  const night=parseFloat(nightRaw),day=parseFloat(dayRaw);
  if(!Number.isFinite(night)||!Number.isFinite(day)){toast('Invalid readings');return}
  const final=meterDayFinal(night,day);
@@ -3033,7 +3044,7 @@ function pgFitness(){
  $('content').innerHTML=`<h2>Fitness Center</h2><div class="sub" style="margin-bottom:12px">${esc(s.gymName||'FITO6')} · ${esc(s.branch||'')}</div>
   <div class="grid g3">
    <div class="card"><h3>🏢 Center</h3><p class="big bold">${esc(s.gymName||'FITO6')}</p><p class="sub">Branch: ${esc(s.branch||'Main')} (${esc(s.branchCode||'BR01')})</p></div>
-   <div class="card clickable" onclick="go('meter')"><h3>⚡ EB Meter</h3><p class="sub">Night & day readings</p></div>
+   <div class="card clickable" onclick="go('meter')"><h3>⚡ EB Meter</h3><p class="sub">Day & night electricity readings</p></div>
    <div class="card clickable" onclick="go('settings')"><h3>⚙️ Branches</h3><p class="sub">Create next branch ID</p></div>
    <div class="card clickable" onclick="go('batches')"><h3>🗓️ Classes</h3><p class="sub">Batches & group classes</p></div>
    <div class="card clickable" onclick="go('staff')"><h3>🧑 Team</h3><p class="sub">Staff & management</p></div>
