@@ -215,6 +215,84 @@ async function api(path,opts={}){
 function persistAuth(){localStorage.setItem(AUTHKEY,JSON.stringify({token:AUTH.token,businessId:AUTH.businessId,user:AUTH.user,businesses:AUTH.businesses||[]}))}
 function clearAuth(){AUTH={token:null,businessId:null,user:null,businesses:[]};localStorage.removeItem(AUTHKEY)}
 function restoreAuth(){try{const a=JSON.parse(localStorage.getItem(AUTHKEY)||'null');if(a&&a.token)AUTH=a}catch(e){}}
+function isAuthError(e){const m=String((e&&e.message)||'');return /401|403|authentication required|invalid token|invalid credentials|inactive account/i.test(m)}
+let _histBusy=false;
+function appHistState(page,modal){return{fito6:true,page:page||PAGE||'dashboard',modal:!!modal}}
+function pushAppHistory(state,replace){
+ if(_histBusy)return;
+ try{
+  const url=location.pathname+location.search;
+  if(replace)history.replaceState(state,'',url);
+  else history.pushState(state,'',url);
+ }catch(e){}
+}
+function setupHistoryNav(){
+ if(window._fito6Hist)return;
+ window._fito6Hist=true;
+ window.addEventListener('popstate',()=>{
+  _histBusy=true;
+  try{
+   const st=history.state;
+   const modalOpen=$('modalwrap')&&$('modalwrap').style.display==='flex';
+   if(modalOpen){
+    $('modalwrap').style.display='none';
+    if(st&&st.fito6&&st.page)go(st.page,null,{hist:true});
+    return;
+   }
+   if(st&&st.fito6&&st.page){go(st.page,null,{hist:true});return}
+   if(AUTH.token&&AUTH.user){
+    restoreAuth();
+    if(!USER||!$('app')||$('app').style.display==='none'){
+     enterAppFromAuth({quiet:true}).catch(e=>{if(isAuthError(e))logout()});
+    }else{
+     pushAppHistory(appHistState(PAGE,false),true);
+    }
+   }
+  }finally{_histBusy=false;}
+ });
+ window.addEventListener('pageshow',e=>{
+  if(!e.persisted)return;
+  restoreAuth();
+  if(AUTH.token&&AUTH.user&&(!$('app')||$('app').style.display==='none')){
+   enterAppFromAuth({quiet:true}).catch(()=>{});
+  }
+ });
+ document.addEventListener('click',e=>{const a=e.target.closest('a[href="#"]');if(a)e.preventDefault()},true);
+}
+async function enterAppFromAuth(opts={}){
+ if(!AUTH.token||!AUTH.user)throw new Error('No session');
+ if(!AUTH.businesses||!AUTH.businesses.length){
+  try{AUTH.businesses=await api('/businesses')}catch(e){
+   if(isAuthError(e))throw e;
+   AUTH.businesses=AUTH.businesses||[];
+  }
+ }
+ const isSuper=AUTH.user.role==='SUPERADMIN';
+ if(AUTH.businessId){
+  try{
+   const source=await loadFromCloud();
+   if(!opts.quiet&&source)toast('Session restored from cloud');
+  }catch(e){
+   if(isAuthError(e))throw e;
+   const local=loadLocalCache();
+   if(local){db=local;ensurePkgSettings();_cloudReady=false;if(!opts.quiet)toast('Cloud unavailable — using saved browser data')}
+   else throw e;
+  }
+ }else if(isSuper){
+  db=defaults();ensurePkgSettings();_cloudReady=false;
+ }else{
+  throw new Error('No business context');
+ }
+ USER={u:AUTH.user.email,p:'',role:mapCloudRole(AUTH.user.role,AUTH.user.email,AUTH.user.name),name:AUTH.user.name,cloudRole:AUTH.user.role,jobType:AUTH.user.jobType};
+ $('login').style.display='none';$('app').style.display='block';
+ $('tb_user').textContent=USER.name+' · '+USER.role+(isSuper&&!AUTH.businessId?' · platform':' · cloud');
+ $('sb_role').textContent=isSuper&&!AUTH.businessId?'FITO6 Platform':((db.settings&&db.settings.gymName)||'FITO6');
+ populateBizSwitcher(AUTH.businesses||[]);
+ buildNav();
+ go(homePage(),null,{hist:true});
+ pushAppHistory(appHistState(PAGE,false),true);
+ refreshTopbarNotifs();
+}
 
 function defaults(){return{
  settings:{gymName:'FITO6 FITNESS STUDIO',branch:'Main Branch',branches:['Main Branch'],branchCode:'BR01',gstNo:'',gstPct:18,
@@ -322,8 +400,8 @@ function daysBetween(a,b){return Math.round((parseLocalDate(b)-parseLocalDate(a)
 function toast(m){const t=$('toast');t.textContent=m;t.style.display='block';clearTimeout(t._t);t._t=setTimeout(()=>t.style.display='none',2600)}
 function val(id){return $(id)?$(id).value.trim():''}
 function num(id){return parseFloat(val(id))||0}
-function openModal(html){$('modal').innerHTML=html;$('modalwrap').style.display='flex';$('modal').querySelectorAll('script').forEach(s=>{try{eval(s.textContent)}catch(e){console.error(e)}})}
-function closeModal(){$('modalwrap').style.display='none'}
+function openModal(html,noHist){const wasOpen=$('modalwrap')&&$('modalwrap').style.display==='flex';$('modal').innerHTML=html;$('modalwrap').style.display='flex';$('modal').querySelectorAll('script').forEach(s=>{try{eval(s.textContent)}catch(e){console.error(e)}});if(!_histBusy&&!noHist&&!wasOpen)pushAppHistory(appHistState(PAGE,true),false)}
+function closeModal(fromPop){$('modalwrap').style.display='none';if(!fromPop&&!_histBusy){const st=history.state;if(st&&st.fito6&&st.modal)history.back()}}
 function audit(action,detail,oldV,newV){db.audit.unshift({ts:new Date().toISOString(),user:USER?USER.name:'-',role:USER?USER.role:'-',action,detail:detail||'',oldV:oldV||'',newV:newV||''});if(db.audit.length>3000)db.audit.length=3000;save()}
 function csvExport(rows,name){const csv=rows.map(r=>r.map(c=>'"'+String(c??'').replace(/"/g,'""')+'"').join(',')).join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download=name+'.csv';a.click();toast('Exported '+name+'.csv')}
 /* ---- YDL CSV Import (Members / Enquiries) ---- */
@@ -924,9 +1002,25 @@ function refreshTopbarNotifs(){
 }
 function filterCashMode(mode){go('cashbook');setTimeout(()=>{if($('cb_mode')){$('cb_mode').value=(mode==='Cash'?'Cash':'Bank');applyCbFilters()}},50)}
 function lineChart(data,color){
+ if(!data||!data.length)return'<p class="mut">No data</p>';
  const max=Math.max(...data.map(d=>d.y),1),w=320,h=140,pad=18;
- const pts=data.map((d,i)=>{const x=pad+(i*(w-2*pad)/Math.max(data.length-1,1));const y=h-pad-((d.y/max)*(h-2*pad));return x+','+y}).join(' ');
- return`<svg class="linechart" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><polyline fill="none" stroke="${color||'var(--brand)'}" stroke-width="2.5" points="${pts}"/>${data.map((d,i)=>{const x=pad+(i*(w-2*pad)/Math.max(data.length-1,1));const y=h-pad-((d.y/max)*(h-2*pad));return`<circle cx="${x}" cy="${y}" r="3" fill="${color||'#ff6a00'}"/>`}).join('')}</svg><div class="row" style="justify-content:space-between;font-size:10px;color:var(--mut)">${data.map(d=>`<span>${d.x}</span>`).join('')}</div>`;
+ const xAt=i=>pad+(i*(w-2*pad)/Math.max(data.length-1,1));
+ const yAt=v=>h-pad-((v/max)*(h-2*pad));
+ const pts=data.map((d,i)=>xAt(i)+','+yAt(d.y)).join(' ');
+ const labels=data.map((d,i)=>`<span style="position:absolute;left:${(xAt(i)/w*100).toFixed(2)}%;transform:translateX(-50%);white-space:nowrap">${esc(String(d.x))}</span>`).join('');
+ return`<svg class="linechart" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><polyline fill="none" stroke="${color||'var(--brand)'}" stroke-width="2.5" points="${pts}"/>${data.map((d,i)=>`<circle cx="${xAt(i)}" cy="${yAt(d.y)}" r="3" fill="${color||'#ff6a00'}"/>`).join('')}</svg><div style="position:relative;height:18px;margin-top:4px;font-size:10px;color:var(--mut)">${labels}</div>`;
+}
+function localMonthKey(offset){
+ const d=new Date();
+ return formatLocalDate(new Date(d.getFullYear(),d.getMonth()+offset,1)).slice(0,7);
+}
+function sortClientsDateWise(list){
+ return list.slice().sort((a,b)=>{
+  const da=(a.joined||a.created||'').slice(0,10);
+  const db=(b.joined||b.created||'').slice(0,10);
+  if(da!==db)return db.localeCompare(da);
+  return (a.name||'').localeCompare(b.name||'');
+ });
 }
 function activeClients(){return(db.clients||[]).filter(c=>c.status!=='Inactive')}
 function isGroupClassType(t){return/group\s*class|dance|boxing|zumba|yoga/i.test(t||'')}
@@ -1104,7 +1198,7 @@ async function doLogin(){
   $('sb_role').textContent=isSuper&&!AUTH.businessId?'FITO6 Platform':((db.settings&&db.settings.gymName)||(businesses&&businesses[0]&&businesses[0].name)||'FITO6');
   populateBizSwitcher(AUTH.businesses||[]);
   audit('Login','Cloud login · '+email);
-  buildNav();go(homePage());refreshTopbarNotifs();
+  buildNav();go(homePage(),null,{hist:true});pushAppHistory(appHistState(PAGE,false),true);refreshTopbarNotifs();
   if(isSuper&&!AUTH.businessId)toast('Platform Super Admin — create gym admins to add gyms');
  }catch(e){
   clearAuth();_cloudReady=false;
@@ -1149,11 +1243,12 @@ function markNavOn(p){
  });
  if(parent){const b=$('navbtn_'+parent.id);if(b)b.classList.add('on')}
 }
-function go(p,arg){if(!canPage(p)){toast('No permission');return} PAGE=p;
+function go(p,arg,opts){if(!canPage(p)){toast('No permission');return} PAGE=p;
  closeNavDrops();closeTbDrops();markNavOn(p);
  const pages={platform:pgPlatform,gymadmins:pgGymAdmins,gymperformance:pgGymPerformance,traineranalysis:pgTrainerAnalysis,clientanalysis:pgClientAnalysis,dashboard:pgDashboard,trainer:pgTrainerPortal,clients:pgClients,leads:pgLeads,followups:pgFollowups,memberships:pgMemberships,billing:pgBilling,cashbook:pgCashbook,expenses:pgExpenses,meter:pgMeter,staff:pgStaff,attendance:pgAttendance,payroll:pgPayroll,batches:pgBatches,todos:pgTodos,reports:pgReports,accounts:pgAccounts,audit:pgAudit,settings:pgSettings,analysis:pgAnalysis,notifications:pgNotifications,trainers:pgTrainers,fitness:pgFitness,attreports:pgAttReports,help:pgHelp,appointments:pgAppointments,more:pgMore};
  if(pages[p])pages[p](arg);else pgStub(PAGES[p]?PAGES[p][1]:p);
- refreshTopbarNotifs()}
+ refreshTopbarNotifs();
+ if(!opts||(!opts.hist&&!opts.silent))pushAppHistory(appHistState(p,$('modalwrap')&&$('modalwrap').style.display==='flex'),false)}
 function pgStub(title){$('content').innerHTML=`<div class="card"><h2>${esc(title)}</h2><p class="sub">This module is ready in the menu. Full screens coming next.</p></div>`}
 
 /* ================= COMPUTED HELPERS ================= */
@@ -1178,6 +1273,19 @@ function blockNegativeOutflow(bucket,amount,entryDate,context){
 }
 function canAffordOutflow(bucket,amount,entryDate){return amount<=ledgerBalance(bucket,entryDate||today())}
 function subStatus(s){if(s.status==='Used')return'Used';if(s.status==='Frozen')return'Frozen';if(s.status==='Expired')return'Expired';return s.end>=today()?'Active':'Expired'}
+function subPkgType(s){
+ if(!s)return'—';
+ const pkg=(s.pkg||'').trim();
+ if(pkg&&!/^(active|expired|used|frozen)$/i.test(pkg))return pkg;
+ const iv=(db.invoices||[]).find(i=>i.subId===s.id);
+ if(iv&&iv.desc){const m=iv.desc.match(/^[^·]+·\s*([^(]+)/);if(m)return m[1].trim()}
+ return pkg||'—';
+}
+function subServiceLabel(s){
+ if(!s)return'—';
+ const k=s.kind?` (${s.kind})`:'';
+ return (s.type||'Membership')+k;
+}
 function activeSubs(type){return db.subs.filter(s=>s.type===type&&subStatus(s)==='Active')}
 function expiredSubs(type){return db.subs.filter(s=>s.type===type&&subStatus(s)==='Expired')}
 function barChart(data,cls){
@@ -1208,11 +1316,11 @@ function pgDashboard(){
  const pres=attToday.filter(a=>a.status==='Present').length,abs=attToday.filter(a=>a.status==='Absent').length,late=attToday.filter(a=>a.status==='Late').length,half=attToday.filter(a=>a.status==='Half Day').length;
  const lb={};db.invoices.forEach(iv=>{if(iv.date.slice(0,7)!==m)return;const k=iv.by||'—';lb[k]=lb[k]||{t:0,m:0};lb[k].m+=iv.grand;if(iv.date===t)lb[k].t+=iv.grand});
  const days7=[...Array(7)].map((_,i)=>addDays(t,i-6));
- const dailyColl=days7.map(d=>({x:d.slice(8),y:payListFor(d,d).reduce((s,p)=>s+p.amt,0)}));
- const months6=[...Array(6)].map((_,i)=>{const d=new Date();d.setMonth(d.getMonth()-(5-i));return d.toISOString().slice(0,7)});
+ const dailyColl=days7.map(d=>({x:fmtD(d).replace(/\s\d{4}$/,''),y:payListFor(d,d).reduce((s,p)=>s+p.amt,0)}));
+ const months6=[...Array(6)].map((_,i)=>localMonthKey(i-5));
  const monthColl=months6.map(mm=>({x:mm.slice(5),y:db.invoices.reduce((s,iv)=>s+iv.payments.filter(p=>p.date.slice(0,7)===mm).reduce((a,p)=>a+p.amt,0),0)}));
  const monthExp=months6.map(mm=>({x:mm.slice(5),y:cashOut(mm+'-01',mm+'-31')}));
- const memGrowth=months6.map(mm=>({x:mm.slice(5),y:db.subs.filter(s=>s.type==='Membership'&&s.created&&s.created.slice(0,7)<=mm&&s.end>=mm+'-01'&&s.status!=='Used').length}));
+ const memGrowth=months6.map(mm=>({x:mm.slice(5),y:(db.clients||[]).filter(c=>c.joined&&c.joined.slice(0,7)===mm).length}));
  const expiredN=expiredSubs('Membership').length;
  const irregular=activeClients().filter(c=>{
   const last=db.memberAtt.filter(a=>a.clientId===c.id).sort((a,b)=>b.date.localeCompare(a.date))[0];
@@ -1259,7 +1367,7 @@ function pgDashboard(){
   <div class="card"><h3>Daily Collection Graph (7 days)</h3>${lineChart(dailyColl,'#ff6a00')}</div>
   <div class="card"><h3>Monthly Collection Graph</h3>${lineChart(monthColl,'#18a558')}</div>
   <div class="card"><h3>Monthly Expenses Graph</h3>${lineChart(monthExp,'#e0393e')}</div>
-  <div class="card"><h3>Active Membership Growth</h3>${barChart(memGrowth,'g')}</div>
+  <div class="card"><h3>New Members by Month</h3>${barChart(memGrowth,'g')}</div>
  </div>
  <div class="grid g2" style="margin-top:18px">
   <div class="card"><h3>Referral Source</h3><div class="tbl"><table><tr><th>Source</th><th class="r">Clients</th></tr>
@@ -1272,7 +1380,7 @@ function pgDashboard(){
   <div class="card"><h3>🏆 Sales Leaderboard (${m})</h3><div class="tbl"><table><tr><th>Sold By</th><th class="r">Today</th><th class="r">This Month</th></tr>
    ${Object.entries(lb).sort((a,b)=>b[1].m-a[1].m).map(([k,v])=>`<tr><td>${esc(k)}</td><td class="r">${inr(v.t)}</td><td class="r bold">${inr(v.m)}</td></tr>`).join('')||'<tr><td colspan=3 class="mut">No sales yet this month</td></tr>'}</table></div></div>
   <div class="card"><h3>⏳ Expiring in 7 days</h3><div class="tbl"><table><tr><th>Member</th><th>Package</th><th>Ends</th><th></th></tr>
-   ${expiring7.slice(0,8).map(s=>{const c=client(s.clientId);return`<tr><td class="clickable" onclick="openClient('${s.clientId}')">${esc(c?c.name:'?')}</td><td>${esc(s.pkg)}</td><td>${fmtD(s.end)}</td><td><button class="btn sm" onclick="openSubForm('${s.clientId}','Renew Membership')">Renew</button></td></tr>`}).join('')||'<tr><td colspan=4 class="mut">Nothing expiring soon</td></tr>'}</table></div></div>
+   ${expiring7.slice().sort((a,b)=>a.end.localeCompare(b.end)).slice(0,8).map(s=>{const c=client(s.clientId);return`<tr><td class="clickable" onclick="openClient('${s.clientId}')">${esc(c?c.name:'?')}</td><td>${esc(s.pkg)}</td><td>${fmtD(s.end)}</td><td><button class="btn sm" onclick="openSubForm('${s.clientId}','Renew Membership')">Renew</button></td></tr>`}).join('')||'<tr><td colspan=4 class="mut">Nothing expiring soon</td></tr>'}</table></div></div>
  </div>`;
 }
 function stat(l,v,cls){return`<div class="card stat ${cls||''}"><div class="l">${l}</div><div class="v">${v}</div></div>`}
@@ -1329,7 +1437,7 @@ function resetClientFilters(){
  pgClients();
 }
 function exportClientsCsv(){
- const list=clientListFiltered();
+ const list=sortClientsDateWise(clientListFiltered());
  const ptMap=trainerPtCounts();
  csvExport([['ID','Name','Mobile','Email','Gender','Joined','Status','Sub Start','Sub End','Trainer','PT Clients','Referral'],
   ...list.map(c=>{
@@ -1343,7 +1451,7 @@ function pgClients(){
  const activeN=all.filter(c=>c.status!=='Inactive').length;
  const inactiveN=all.filter(c=>c.status==='Inactive').length;
  const noSubN=all.filter(c=>c.status!=='Inactive'&&!clientMemPlan(c)).length;
- const list=clientListFiltered();
+ const list=sortClientsDateWise(clientListFiltered());
  const trainers=[...new Set(all.map(c=>c.trainer).filter(Boolean))].sort();
  const refs=[...new Set(all.map(c=>c.ref).filter(Boolean))].sort();
  const pkgs=[...new Set((db.settings.packages||[]).map(p=>p.name).concat(db.subs.filter(s=>s.type==='Membership').map(s=>s.pkg)))].filter(Boolean).sort();
@@ -1415,7 +1523,7 @@ function pgClients(){
   ${stat('Total Inactive',inactiveN,'bad')}
   ${stat('No Subscription',noSubN,'warn')}
  </div>
- <div class="sub" style="margin-bottom:8px">Showing <b>${list.length}</b> members (filtered)</div>
+ <div class="sub" style="margin-bottom:8px">Showing <b>${list.length}</b> members · sorted by join date (newest first)</div>
  <div class="tbl"><table id="cl_tbl">
   <tr><th><input type="checkbox" onclick="document.querySelectorAll('.cl_sel').forEach(c=>c.checked=this.checked)"></th>
   <th>ID</th><th>Name</th><th>Mobile</th><th>Email</th><th>Sub Start</th><th>Sub End</th><th>Status</th><th>Trainer (PT count)</th><th>Source</th><th></th></tr>
@@ -1653,25 +1761,52 @@ function trainerStaffList(){
  if(!list.length)list=(db.staff||[]).filter(s=>s.status!=='Inactive');
  return list;
 }
+function canAssignTrainer(){
+ return USER&&(USER.role==='superadmin'||USER.role==='gymadmin'||USER.role==='frontoffice');
+}
+function trainerOptionsForClient(c){
+ const list=trainerStaffList().slice();
+ const seen=new Set(list.map(t=>(t.name||'').toLowerCase()));
+ if(c&&c.trainer&&!seen.has(c.trainer.toLowerCase()))list.unshift({id:c.trainerId||'',name:c.trainer,dept:''});
+ return list;
+}
+function trainerAssignSelectHTML(c,selectId){
+ const trainers=trainerOptionsForClient(c);
+ const opts=['<option value="">— Select trainer —</option>'].concat(trainers.map(s=>{
+  const sel=(c.trainerId&&s.id===c.trainerId)||(!c.trainerId&&c.trainer&&s.name===c.trainer)?'selected':'';
+  return`<option value="${esc(s.id)}" data-name="${esc(s.name)}" ${sel}>${esc(s.name)}${s.dept?' ('+esc(s.dept)+')':''}</option>`;
+ }));
+ return`<div class="field" style="min-width:240px"><label>Assigned Trainer</label><select id="${selectId}">${opts.join('')}</select></div>`;
+}
+function readTrainerSelect(selectId){
+ const el=$(selectId);if(!el||!el.value)return{trainerId:'',trainer:''};
+ const opt=el.selectedOptions[0];
+ return{trainerId:el.value,trainer:(opt&&opt.dataset.name)||opt.textContent.split(' (')[0]};
+}
+function saveClientTrainer(id){
+ if(!canAssignTrainer()){toast('No permission to assign trainer');return}
+ const c=client(id);if(!c)return;
+ const tr=readTrainerSelect('cp_trainer');
+ c.trainer=tr.trainer||'';c.trainerId=tr.trainerId||'';
+ save();audit('Trainer Assigned',c.id+' → '+(tr.trainer||'none'));toast('Trainer saved');openClient(id);
+}
 function isPtType(t){return /PT/i.test(t||'')}
 function trainerSelectHTML(client){
- const trainers=trainerStaffList();
+ const trainers=trainerOptionsForClient(client);
  const opts=['<option value="">— Select trainer staff —</option>']
   .concat(trainers.map(s=>{
    const sel=client.trainerId===s.id||(!client.trainerId&&client.trainer===s.name)?'selected':'';
    return`<option value="${esc(s.id)}" data-name="${esc(s.name)}" ${sel}>${esc(s.name)}${s.dept?' ('+esc(s.dept)+')':''}</option>`;
   }));
- return`<div class="field" id="s_trainer_wrap" style="display:none;grid-column:1/-1">
-  <label>Assign Trainer (Staff) *</label>
+ return`<div class="field" id="s_trainer_wrap" style="grid-column:1/-1">
+  <label>Assign Trainer (Staff)</label>
   <select id="s_trainer">${opts.join('')}</select>
-  <div class="sub" style="margin-top:4px">Required for <b>New PT</b> / <b>Renew PT</b>. Add trainers under Staff → Department = Trainer.</div>
+  <div class="sub" style="margin-top:4px">Required for <b>New PT</b> / <b>Renew PT</b>. Optional for membership — also assign from client profile.</div>
  </div>`;
 }
 function syncTrainerField(){
  const wrap=$('s_trainer_wrap');if(!wrap)return;
- const show=isPtType(val('s_type'));
- wrap.style.display=show?'block':'none';
- if(!show&&$('s_trainer'))$('s_trainer').value='';
+ wrap.style.display='block';
 }
 function readTrainer(){
  const el=$('s_trainer');if(!el||!el.value)return{trainerId:'',trainer:''};
@@ -1730,7 +1865,7 @@ function saveSub(clientId,wizard){
  if(isPtType(type)&&!tr.trainer){toast('Select trainer staff for PT / Renew PT');return}
  // Mark prior same-type active subs as Used
  db.subs.filter(s=>s.clientId===clientId&&s.type===t&&s.status!=='Used'&&s.status!=='Frozen').forEach(s=>{if(subStatus(s)==='Active'||s.status==='')s.status='Used'});
- const sub={id:'S'+Date.now(),clientId,type:t,kind,pkg:val('s_pkg')?$('s_pkg').selectedOptions[0].text.split(' — ')[0]:'Custom',price:x.price,sell:x.sell,disc:x.disc,gstPct:x.gstp,gstAmt:x.gstAmt,woGst:x.woGst,final:x.final,start:x.start,end:x.end,trainer:tr.trainer,trainerId:tr.trainerId,branch:val('s_branch'),billRepId:br.billRepId,billRep:br.billRep,status:'',created:today()};
+ const sub={id:'S'+Date.now(),clientId,type:t,kind,pkg:val('s_pkg')?$('s_pkg').selectedOptions[0].text.split(' — ')[0]:'Custom',price:x.price,sell:x.sell,disc:x.disc,gstPct:x.gstp,gstAmt:x.gstAmt,woGst:x.woGst,final:x.final,start:x.start,end:x.end,trainer:tr.trainer||c.trainer||'',trainerId:tr.trainerId||c.trainerId||'',branch:val('s_branch'),billRepId:br.billRepId,billRep:br.billRep,status:'',created:today()};
  db.subs.push(sub);
  if(tr.trainer){c.trainer=tr.trainer;c.trainerId=tr.trainerId}
  c.billRepId=br.billRepId;c.billRep=br.billRep;if(!c.billRepFrozen)c.billRepFrozen=true;
@@ -1897,9 +2032,10 @@ function openClient(id){const c=client(id);if(!c)return;
  <div class="sub" style="margin-top:4px"><b>Trainer:</b> ${esc(c.trainer||'—')}${c.trainer&&ptN?` (${ptN} PT clients)`:''}</div></div></div>
  <div class="row" style="gap:8px">${c.status!=='Inactive'?`<button class="btn" onclick="openSubForm('${id}')">➕ New / Renew Plan</button>`:''}<button class="btn sec" onclick="editClientPersonal('${id}')">Edit Address</button><button class="btn sec" onclick="openTrainerChangeRequest('${id}')">Change Trainer Request</button>${c.status!=='Inactive'?`<button class="btn sec dgr" onclick="deactivateClient('${id}')">Deactivate</button>`:`<button class="btn sec" onclick="activateClient('${id}');openClient('${id}')">Activate</button>`}</div></div>
  <div class="grid g4" style="margin:12px 0">${stat('Sub Start',pl?fmtD(pl.start):'-','br')}${stat('Sub End',pl?fmtD(pl.end):'-','br')}${stat('Total Paid',inr(paid),'ok')}${stat('Outstanding',inr(due),due>0?'bad':'')}</div>
- <div class="grid g3" style="margin-bottom:12px">${stat('Trainer',esc(c.trainer||'-'),'br')}${stat('PT Clients',ptN||'-')}${stat('Goal',esc(c.goal||'-'))}</div>
- <h3>Subscriptions</h3><div class="tbl"><table><tr><th>Type</th><th>Package</th><th>Start</th><th>End</th><th class="r">Amount</th><th>Status</th><th></th></tr>
- ${subs.map(s=>`<tr><td>${s.type} <span class="mut">(${s.kind})</span></td><td>${esc(s.pkg)}</td><td>${fmtD(s.start)}</td><td>${fmtD(s.end)}</td><td class="r">${inr(s.final)}</td><td><span class="badge ${subStatus(s)==='Active'?'b-ok':subStatus(s)==='Used'?'b-mut':subStatus(s)==='Frozen'?'b-warn':'b-bad'}">${subStatus(s)}</span></td>
+ ${canAssignTrainer()?`<div class="row" style="align-items:flex-end;gap:10px;margin-bottom:12px;flex-wrap:wrap">${trainerAssignSelectHTML(c,'cp_trainer')}<button class="btn sm" onclick="saveClientTrainer('${id}')">Save Trainer</button><div class="sub" style="margin:0;padding-bottom:8px">Pick trainer staff · ${ptN||0} PT clients under selected trainer</div></div>`:`<div class="grid g3" style="margin-bottom:12px">${stat('Trainer',esc(c.trainer||'-'),'br')}${stat('PT Clients',ptN||'-')}${stat('Goal',esc(c.goal||'-'))}</div>`}
+ ${canAssignTrainer()?`<div class="grid g2" style="margin-bottom:12px">${stat('PT Clients',ptN||'-')}${stat('Goal',esc(c.goal||'-'))}</div>`:''}
+ <h3>Subscriptions</h3><div class="tbl"><table><tr><th>Package Type</th><th>Service</th><th>Start</th><th>End</th><th class="r">Amount</th><th>Status</th><th></th></tr>
+ ${subs.map(s=>`<tr><td class="bold">${esc(subPkgType(s))}</td><td>${esc(subServiceLabel(s))}</td><td>${fmtD(s.start)}</td><td>${fmtD(s.end)}</td><td class="r">${inr(s.final)}</td><td><span class="badge ${subStatus(s)==='Active'?'b-ok':subStatus(s)==='Used'?'b-mut':subStatus(s)==='Frozen'?'b-warn':'b-bad'}">${subStatus(s)}</span></td>
  <td class="r">${subStatus(s)!=='Used'?`<button class="btn sm sec" onclick="openEditSub('${s.id}')">Edit</button>`:''}</td></tr>`).join('')||'<tr><td colspan=7 class="mut">None</td></tr>'}</table></div>
  <h3 style="margin-top:12px">Invoices & Payments</h3><div class="tbl"><table><tr><th>Invoice</th><th>Date</th><th class="r">Total</th><th class="r">Paid</th><th class="r">Pending</th><th></th></tr>
  ${invs.map(i=>`<tr><td>${i.no}</td><td>${fmtD(i.date)}</td><td class="r">${inr(i.grand)}</td><td class="r">${inr(i.paid)}</td><td class="r">${inr(i.pending)}</td><td><button class="btn sm sec" onclick="showInvoice('${i.id}')">View</button>${i.pending>0?` <button class="btn sm" onclick="openModal('<h2>Collect</h2>'+payFormHTML('${i.id}',false))">Collect</button>`:''}</td></tr>`).join('')||'<tr><td colspan=6 class="mut">None</td></tr>'}</table></div>
@@ -1932,14 +2068,15 @@ function saveClientPersonal(id){
 }
 function openTrainerChangeRequest(clientId){
  const c=client(clientId);if(!c)return;
- const trainers=trainerStaffList();
+ const trainers=trainerOptionsForClient(c);
+ if(!trainers.length){toast('Add trainer staff first (Staff → Department = Trainer)');return}
  const pending=(db.trainerRequests||[]).find(r=>r.clientId===clientId&&r.status==='Pending');
  if(pending){toast('A trainer change request is already pending');return}
  openModal(`<h2>Change Trainer Request</h2>
  <p class="sub" style="margin-bottom:12px">${esc(c.name)} · Current trainer: <b>${esc(c.trainer||'—')}</b></p>
  <div class="grid g2">
-  <div class="field"><label>Requested Trainer *</label><select id="tcr_trainer"><option value="">— Select —</option>
-   ${trainers.map(t=>`<option value="${esc(t.id)}" data-name="${esc(t.name)}">${esc(t.name)}</option>`).join('')}</select></div>
+  <div class="field"><label>Requested Trainer *</label><select id="tcr_trainer"><option value="">— Select trainer —</option>
+   ${trainers.map(t=>`<option value="${esc(t.id)}" data-name="${esc(t.name)}">${esc(t.name)}${t.dept?' ('+esc(t.dept)+')':''}</option>`).join('')}</select></div>
   ${fld('tcr_reason','Reason / Notes','')}
  </div>
  <div class="row" style="justify-content:flex-end;gap:8px;margin-top:12px"><button class="btn sec" onclick="openClient('${clientId}')">Cancel</button><button class="btn" onclick="saveTrainerChangeRequest('${clientId}')">Submit Request</button></div>`);
@@ -2017,10 +2154,10 @@ function openEditSub(subId){
    </select></div>
   <div class="field"><label>Branch</label><input id="es_branch" value="${esc(s.branch||db.settings.branch||'')}"></div>
   ${billRepSelect('es_billrep',s.billRep||c.billRep,s.billRepId||c.billRepId)}
-  ${s.type==='PT'?`<div class="field"><label>Trainer (Staff)</label>
+  <div class="field"><label>Trainer (Staff)</label>
    <select id="es_trainer"><option value="">— Select trainer —</option>
-   ${trainers.map(t=>`<option value="${esc(t.id)}" data-name="${esc(t.name)}" ${s.trainerId===t.id||s.trainer===t.name?'selected':''}>${esc(t.name)}${t.dept?' ('+esc(t.dept)+')':''}</option>`).join('')}
-   </select></div>`:''}
+   ${trainerOptionsForClient(c).map(t=>`<option value="${esc(t.id)}" data-name="${esc(t.name)}" ${s.trainerId===t.id||s.trainer===t.name||(!s.trainerId&&c.trainer===t.name)?'selected':''}>${esc(t.name)}${t.dept?' ('+esc(t.dept)+')':''}</option>`).join('')}
+   </select></div>
  </div>
  <div class="card" style="background:#fafbfd;margin-top:10px" id="es_calc"></div>
  <p class="sub" style="margin-top:8px">Choose package from dropdown — name, price &amp; end date update. Linked unpaid invoice totals update on save.</p>
@@ -2074,11 +2211,9 @@ function saveEditSub(subId){
  const br=readBillRep('es_billrep');
  if(!br.billRep){toast('Select Bill Rep');return}
  let trainer=s.trainer||'',trainerId=s.trainerId||'';
- if(s.type==='PT'){
-  const tr=(()=>{const el=$('es_trainer');if(!el||!el.value)return{trainerId:'',trainer:''};const opt=el.selectedOptions[0];return{trainerId:el.value,trainer:(opt&&opt.dataset.name)||opt.textContent.split(' (')[0]}})();
-  if(!tr.trainer){toast('Select trainer for PT');return}
-  trainer=tr.trainer;trainerId=tr.trainerId;
- }
+ const tr=(()=>{const el=$('es_trainer');if(!el||!el.value)return{trainerId:'',trainer:''};const opt=el.selectedOptions[0];return{trainerId:el.value,trainer:(opt&&opt.dataset.name)||opt.textContent.split(' (')[0]}})();
+ if(s.type==='PT'&&!tr.trainer){toast('Select trainer for PT');return}
+ if(tr.trainer){trainer=tr.trainer;trainerId=tr.trainerId}
  const st=val('es_status');
  const oldFinal=s.final;
  Object.assign(s,{
@@ -2201,9 +2336,8 @@ function cbTable(f){const rows=db.cashbook.filter(f).slice().reverse().slice(0,3
  <tr><td><input type="checkbox" class="cb_sel" value="${e.id}" ${e.status==='Inactive'?'disabled':''}></td>
  <td>${fmtD(e.date)}</td><td>${e.no}</td><td>${esc(e.particulars||'')}</td><td>${esc(e.category||'')}</td><td>${esc(e.party||'')}</td>
  <td>${esc(cbDetectSalesType(e))}</td><td>${esc(formatPayMode(e.mode||''))}</td><td>${esc(e.roleCat||'—')}</td>
- <td class="r bold" style="color:${e.type==='in'?'var(--ok)':'var(--bad)'}">${e.type==='in'?'+':'−'}${inr(e.amount)}</td><td>${esc(e.by||'')}</td>
- <td>${e.status==='Inactive'?'<span class="badge b-mut">Inactive</span>':`<button class="btn sm dgr" onclick="inactiveCashEntry('${e.id}')">Inactive</button>`}</td></tr>`).join('');
- return`<table><tr><th><input type="checkbox" onclick="document.querySelectorAll('.cb_sel').forEach(c=>c.checked=this.checked)"></th><th>Date</th><th>Rcpt/Vchr</th><th>Particulars</th><th>Category</th><th>Party Name</th><th>Sales Type</th><th>Mode</th><th>Role</th><th class="r">Amount</th><th>By</th><th></th></tr>${rows||'<tr><td colspan=12 class="mut">No entries</td></tr>'}</table>`}
+ <td class="r bold" style="color:${e.type==='in'?'var(--ok)':'var(--bad)'}">${e.type==='in'?'+':'−'}${inr(e.amount)}</td><td>${esc(e.by||'')}</td></tr>`).join('');
+ return`<table><tr><th><input type="checkbox" onclick="document.querySelectorAll('.cb_sel').forEach(c=>c.checked=this.checked)"></th><th>Date</th><th>Rcpt/Vchr</th><th>Particulars</th><th>Category</th><th>Party Name</th><th>Sales Type</th><th>Mode</th><th>Role</th><th class="r">Amount</th><th>By</th></tr>${rows||'<tr><td colspan=11 class="mut">No entries</td></tr>'}</table>`}
 function inactiveCashEntry(id){
  const e=db.cashbook.find(x=>x.id===id);if(!e)return;
  if(!confirm(`Mark cashbook entry ${e.no} inactive?`))return;
@@ -2318,10 +2452,17 @@ function deactivateStaff(id){
  s.status='Inactive';save();audit('Staff Deactivated',s.id+' '+s.name);toast('Staff deactivated');pgStaff();
 }
 function activateStaff(id){const s=staffById(id);if(!s)return;s.status='Active';save();audit('Staff Activated',s.id);toast('Staff activated');pgStaff()}
+function canManageStaff(id){
+ if(!USER)return false;
+ if(USER.role==='superadmin'||USER.role==='gymadmin'||USER.role==='frontoffice')return true;
+ if(id&&USER.role==='trainer'){const s=staffById(id);return !!(s&&s.name&&s.name===USER.name)}
+ return false;
+}
 function staffForm(id){
  const s=id?staffById(id):{};
- const canEdit=USER.role==='superadmin'||USER.role==='frontoffice'||(USER.role==='trainer'&&s.name&&s.name===USER.name)||(!id);
- if(!canEdit&&id){toast('No permission to edit this profile');return}
+ if(id&&!s){toast('Staff not found');return}
+ if(id&&!canManageStaff(id)){toast('No permission to edit this profile');return}
+ if(!id&&!canManageStaff()){toast('No permission to add staff');return}
  openModal(`<h2>${id?'Edit Staff — '+esc(s.name):'Add Staff'}</h2>
  <div class="grid g3">
  ${fld('st_name','Name *',s.name)}${sel('st_dept','Department',['Trainer','Management','Reception','Front Office','Cleaner','Manager','Accountant'],s.dept||'Management')}${sel('st_gender','Gender',['Male','Female','Other'],s.gender)}
@@ -2334,6 +2475,8 @@ function staffForm(id){
  <p class="sub">IDs: Trainer <b>26TR001</b> · FOM / Management / Reception <b>26FOM001</b> · Accountant <b>26ACC001</b></p>
  <div class="row" style="justify-content:flex-end"><button class="btn sec" onclick="closeModal()">Cancel</button><button class="btn" onclick="saveStaff('${id||''}')">Save</button></div>`)}
 function saveStaff(id){
+ if(id&&!canManageStaff(id)){toast('No permission to edit this profile');return}
+ if(!id&&!canManageStaff()){toast('No permission to add staff');return}
  if(!val('st_name')||!val('st_phone')){toast('Name and contact required');return}
  let s=id?staffById(id):null;const isNew=!s;
  const dept=val('st_dept');
@@ -3314,28 +3457,14 @@ function seedDemo(){
 /* ================= INIT ================= */
 (async function boot(){
  await initApiConfig();
+ setupHistoryNav();
  restoreAuth();
  if(AUTH.token&&AUTH.user){
   try{
-   if(!AUTH.businesses||!AUTH.businesses.length){try{AUTH.businesses=await api('/businesses')}catch(e){AUTH.businesses=[]}}
-   const isSuper=AUTH.user.role==='SUPERADMIN';
-   if(AUTH.businessId){
-    const source=await loadFromCloud();
-    if(source)toast('Session restored from cloud');
-   }else if(isSuper){
-    db=defaults();ensurePkgSettings();_cloudReady=false;
-   }else{
-    throw new Error('No business context');
-   }
-   USER={u:AUTH.user.email,p:'',role:mapCloudRole(AUTH.user.role,AUTH.user.email,AUTH.user.name),name:AUTH.user.name,cloudRole:AUTH.user.role,jobType:AUTH.user.jobType};
-   $('login').style.display='none';$('app').style.display='block';
-   $('tb_user').textContent=USER.name+' · '+USER.role+(isSuper&&!AUTH.businessId?' · platform':' · cloud');
-   $('sb_role').textContent=isSuper&&!AUTH.businessId?'FITO6 Platform':((db.settings&&db.settings.gymName)||'FITO6');
-   populateBizSwitcher(AUTH.businesses||[]);
-   buildNav();go(homePage());refreshTopbarNotifs();
+   await enterAppFromAuth({quiet:false});
   }catch(e){
-   clearAuth();_cloudReady=false;
-   console.warn('Session restore failed',e);
+   if(isAuthError(e)||(e&&e.message==='No business context')){clearAuth();_cloudReady=false}
+   else console.warn('Session restore failed',e);
   }
  }
  const pw=$('lg_p');if(pw)pw.addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
