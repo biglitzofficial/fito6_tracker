@@ -47,6 +47,9 @@ h2{font-size:20px;margin-bottom:4px} h3{font-size:15px;margin-bottom:10px}
 .stat.clickable{cursor:pointer}.stat.clickable:hover{border-color:var(--brand)}
 .photo-av{width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid var(--line);background:#eef1f6}
 .linechart{width:100%;height:160px}
+.flow-chart{width:100%;min-height:200px;background:linear-gradient(180deg,#eef2f7 0%,#e2e8f0 100%);border-radius:8px;padding:8px 6px 4px;border:1px solid #d8e0ea}
+.flow-chart svg{width:100%;height:200px;display:block}
+.flow-chart-bars svg{height:210px}
 .cal{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
 .cal .hd{font-size:11px;font-weight:700;color:var(--mut);text-align:center;padding:6px}
 .cal .day{background:#fff;border:1px solid var(--line);border-radius:8px;min-height:88px;padding:6px;cursor:pointer;display:flex;flex-direction:column;gap:2px}
@@ -1001,14 +1004,73 @@ function refreshTopbarNotifs(){
  if(drop)drop.innerHTML=due.length?due.map(i=>{const c=client(i.clientId);return`<a href="#" onclick="closeTbDrops();showInvoice('${i.id}');return false">${esc(i.no)} · ${esc(c?c.name:'?')} · ${inr(i.pending)}</a>`}).join('')+'<a href="#" onclick="closeTbDrops();go(\'billing\');return false"><b>View all billing →</b></a>':'<div style="padding:10px" class="mut">No pending bills</div>';
 }
 function filterCashMode(mode){go('cashbook');setTimeout(()=>{if($('cb_mode')){$('cb_mode').value=(mode==='Cash'?'Cash':'Bank');applyCbFilters()}},50)}
-function lineChart(data,color){
+function chartFmtNum(v){
+ v=Number(v)||0;
+ if(v>=100000)return (v/100000).toFixed(1)+'L';
+ if(v>=1000)return (v/1000).toFixed(1)+'k';
+ return String(Math.round(v));
+}
+function chartFmtMoney(v){
+ v=Number(v)||0;
+ if(v>=100000)return '₹'+(v/100000).toFixed(1)+'L';
+ if(v>=1000)return '₹'+(v/1000).toFixed(1)+'k';
+ return '₹'+Math.round(v).toLocaleString('en-IN');
+}
+function flowGrid(w,h,padL,padR,padT,padB,max,fmt){
+ const plotH=h-padT-padB;
+ max=Math.max(Number(max)||1,1);
+ fmt=fmt||chartFmtNum;
+ const grid=[0,0.25,0.5,0.75,1].map(p=>`<line x1="${padL}" y1="${padT+plotH*(1-p)}" x2="${w-padR}" y2="${padT+plotH*(1-p)}" stroke="#c5d3e6" stroke-width="1"/>`).join('');
+ const yLabels=[0,0.25,0.5,0.75,1].map(p=>`<text x="${padL-6}" y="${padT+plotH*(1-p)+4}" text-anchor="end" fill="#64748b" font-size="9" font-weight="600">${esc(fmt(max*p))}</text>`).join('');
+ return grid+yLabels
+  +`<line x1="${padL}" y1="${padT+plotH}" x2="${w-padR}" y2="${padT+plotH}" stroke="#94a3b8" stroke-width="1.2"/>`
+  +`<line x1="${padL}" y1="${padT}" x2="${padL}" y2="${padT+plotH}" stroke="#94a3b8" stroke-width="1.2"/>`;
+}
+function lineChart(data,color,opts){
  if(!data||!data.length)return'<p class="mut">No data</p>';
- const max=Math.max(...data.map(d=>d.y),1),w=320,h=140,pad=18;
- const xAt=i=>pad+(i*(w-2*pad)/Math.max(data.length-1,1));
- const yAt=v=>h-pad-((v/max)*(h-2*pad));
- const pts=data.map((d,i)=>xAt(i)+','+yAt(d.y)).join(' ');
- const labels=data.map((d,i)=>`<span style="position:absolute;left:${(xAt(i)/w*100).toFixed(2)}%;transform:translateX(-50%);white-space:nowrap">${esc(String(d.x))}</span>`).join('');
- return`<svg class="linechart" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><polyline fill="none" stroke="${color||'var(--brand)'}" stroke-width="2.5" points="${pts}"/>${data.map((d,i)=>`<circle cx="${xAt(i)}" cy="${yAt(d.y)}" r="3" fill="${color||'#ff6a00'}"/>`).join('')}</svg><div style="position:relative;height:18px;margin-top:4px;font-size:10px;color:var(--mut)">${labels}</div>`;
+ opts=opts||{};
+ const fmt=opts.money?chartFmtMoney:chartFmtNum;
+ const stroke=color||'#18a558';
+ const w=420,h=210,padL=48,padR=18,padT=32,padB=38;
+ const max=Math.max(...data.map(d=>d.y),1);
+ const plotW=w-padL-padR,plotH=h-padT-padB;
+ const xAt=i=>padL+(i*plotW/Math.max(data.length-1,1));
+ const yAt=v=>padT+plotH-(v/max*plotH);
+ const pts=data.map((d,i)=>`${xAt(i)},${yAt(d.y)}`).join(' ');
+ const area=`${padL},${padT+plotH} ${pts} ${xAt(data.length-1)},${padT+plotH}`;
+ const nodes=data.map((d,i)=>{
+  const x=xAt(i),y=yAt(d.y),lbl=fmt(d.y);
+  const fs=lbl.length>5?8:9;
+  return `<g><circle cx="${x}" cy="${y}" r="17" fill="${stroke}" stroke="#fff" stroke-width="2.5"/><text x="${x}" y="${y+4}" text-anchor="middle" fill="#fff" font-size="${fs}" font-weight="700">${esc(lbl)}</text></g>`;
+ }).join('');
+ const labels=data.map((d,i)=>`<text x="${xAt(i)}" y="${h-10}" text-anchor="middle" fill="#64748b" font-size="10" font-weight="600">${esc(String(d.x))}</text>`).join('');
+ return `<div class="flow-chart"><svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet">${flowGrid(w,h,padL,padR,padT,padB,max,fmt)}<polygon points="${area}" fill="${stroke}" fill-opacity="0.14"/><polyline fill="none" stroke="${stroke}" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" points="${pts}"/>${nodes}${labels}</svg></div>`;
+}
+function barChart(data,theme,opts){
+ if(!data||!data.length)return'<p class="mut">No data</p>';
+ opts=opts||{};
+ const themes={blue:['#7ec8ff','#2563eb'],orange:['#ffc285','#ff6a00'],green:['#7ee0a8','#18a558'],red:['#fca5a5','#e0393e'],g:['#7ee0a8','#18a558'],r:['#fca5a5','#e0393e']};
+ const [c1,c2]=themes[theme]||themes.blue;
+ const gid='bg'+(theme||'blue')+Math.random().toString(36).slice(2,6);
+ const money=opts.money||theme==='orange'||theme==='red'||theme==='r';
+ const fmt=money?chartFmtMoney:chartFmtNum;
+ const w=420,h=210,padL=44,padR=14,padT=28,padB=38;
+ const max=Math.max(...data.map(d=>d.y),1);
+ const plotW=w-padL-padR,plotH=h-padT-padB;
+ const slot=plotW/data.length;
+ const barW=Math.max(14,slot*0.52);
+ const bars=data.map((d,i)=>{
+  const cx=padL+i*slot+slot/2;
+  const bh=Math.max(3,d.y/max*plotH);
+  const y=padT+plotH-bh;
+  const x=cx-barW/2;
+  const lbl=fmt(d.y);
+  return `<rect x="${x}" y="${y}" width="${barW}" height="${bh}" rx="4" fill="url(#${gid})"/><text x="${cx}" y="${Math.max(padT+10,y-6)}" text-anchor="middle" fill="#1e293b" font-size="9" font-weight="700">${esc(lbl)}</text>`;
+ }).join('');
+ const trendPts=data.map((d,i)=>{const cx=padL+i*slot+slot/2;const y=padT+plotH-(d.y/max*plotH);return `${cx},${y}`}).join(' ');
+ const labels=data.map((d,i)=>`<text x="${padL+i*slot+slot/2}" y="${h-10}" text-anchor="middle" fill="#64748b" font-size="10" font-weight="600">${esc(String(d.x))}</text>`).join('');
+ const arrow=data.length>1?(()=>{const x1=padL+slot/2,y1=padT+plotH-(data[0].y/max*plotH);const x2=padL+(data.length-1)*slot+slot/2,y2=padT+plotH-(data[data.length-1].y/max*plotH);return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="rgba(37,99,235,0.35)" stroke-width="14" stroke-linecap="round"/><polyline fill="none" stroke="#fff" stroke-width="2" stroke-dasharray="6,5" opacity="0.9" points="${trendPts}"/>`})():'';
+ return `<div class="flow-chart flow-chart-bars"><svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet"><defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${c1}"/><stop offset="100%" stop-color="${c2}"/></linearGradient></defs>${flowGrid(w,h,padL,padR,padT,padB,max,fmt)}${bars}${arrow}${labels}</svg></div>`;
 }
 function localMonthKey(offset){
  const d=new Date();
@@ -1288,9 +1350,6 @@ function subServiceLabel(s){
 }
 function activeSubs(type){return db.subs.filter(s=>s.type===type&&subStatus(s)==='Active')}
 function expiredSubs(type){return db.subs.filter(s=>s.type===type&&subStatus(s)==='Expired')}
-function barChart(data,cls){
- const max=Math.max(...data.map(d=>d.y),1);
- return `<div class="bars">${data.map(d=>`<div class="b"><span class="y">${d.y?(d.y>=1000?(d.y/1000).toFixed(1)+'k':d.y):''}</span><div class="bar ${cls||''}" style="height:${Math.round(d.y/max*100)}%"></div><span class="x">${d.x}</span></div>`).join('')}</div>`}
 
 /* ================= DASHBOARD ================= */
 function pgDashboard(){
@@ -1364,10 +1423,10 @@ function pgDashboard(){
    ${line('Cash today',inr(cashTot))}${line('Bank today',inr(bankTot))}${line('Total today',inr(collToday))}</div>
  </div>
  <div class="grid g2" style="margin-top:18px">
-  <div class="card"><h3>Daily Collection Graph (7 days)</h3>${lineChart(dailyColl,'#ff6a00')}</div>
-  <div class="card"><h3>Monthly Collection Graph</h3>${lineChart(monthColl,'#18a558')}</div>
-  <div class="card"><h3>Monthly Expenses Graph</h3>${lineChart(monthExp,'#e0393e')}</div>
-  <div class="card"><h3>New Members by Month</h3>${barChart(memGrowth,'g')}</div>
+  <div class="card"><h3>Daily Collection Graph (7 days)</h3>${barChart(dailyColl,'orange')}</div>
+  <div class="card"><h3>Monthly Collection Graph</h3>${lineChart(monthColl,'#18a558',{money:true})}</div>
+  <div class="card"><h3>Monthly Expenses Graph</h3>${lineChart(monthExp,'#e0393e',{money:true})}</div>
+  <div class="card"><h3>New Members by Month</h3>${barChart(memGrowth,'blue')}</div>
  </div>
  <div class="grid g2" style="margin-top:18px">
   <div class="card"><h3>Referral Source</h3><div class="tbl"><table><tr><th>Source</th><th class="r">Clients</th></tr>
@@ -2029,16 +2088,16 @@ function openClient(id){const c=client(id);if(!c)return;
  <div><h2>${esc(c.name)} <span class="badge b-br">${c.id}</span> ${c.status==='Inactive'?'<span class="badge b-bad">Inactive</span>':''}</h2>
  <div class="sub">${formatMobile(c.mobile)} · ${esc(c.email||'')} · Joined ${fmtD(c.joined)}</div>
  <div class="sub" style="margin-top:4px"><b>Referral:</b> ${esc(c.ref||'—')} · <b>DOB:</b> ${fmtD(c.dob)} · <b>Anniversary:</b> ${fmtD(c.anniversary)}</div>
- <div class="sub" style="margin-top:4px"><b>Trainer:</b> ${esc(c.trainer||'—')}${c.trainer&&ptN?` (${ptN} PT clients)`:''}</div></div></div>
+ <div class="sub" style="margin-top:4px"><b>Trainer:</b> ${esc(c.trainer||'—')}${c.trainer&&ptN?` (${ptN} PT clients)`:''} · <b>Bill Rep:</b> ${esc(c.billRep||'—')}${c.billRepFrozen?' <span class="mut">(locked)</span>':''}</div></div></div>
  <div class="row" style="gap:8px">${c.status!=='Inactive'?`<button class="btn" onclick="openSubForm('${id}')">➕ New / Renew Plan</button>`:''}<button class="btn sec" onclick="editClientPersonal('${id}')">Edit Address</button><button class="btn sec" onclick="openTrainerChangeRequest('${id}')">Change Trainer Request</button>${c.status!=='Inactive'?`<button class="btn sec dgr" onclick="deactivateClient('${id}')">Deactivate</button>`:`<button class="btn sec" onclick="activateClient('${id}');openClient('${id}')">Activate</button>`}</div></div>
  <div class="grid g4" style="margin:12px 0">${stat('Sub Start',pl?fmtD(pl.start):'-','br')}${stat('Sub End',pl?fmtD(pl.end):'-','br')}${stat('Total Paid',inr(paid),'ok')}${stat('Outstanding',inr(due),due>0?'bad':'')}</div>
- ${canAssignTrainer()?`<div class="row" style="align-items:flex-end;gap:10px;margin-bottom:12px;flex-wrap:wrap">${trainerAssignSelectHTML(c,'cp_trainer')}<button class="btn sm" onclick="saveClientTrainer('${id}')">Save Trainer</button><div class="sub" style="margin:0;padding-bottom:8px">Pick trainer staff · ${ptN||0} PT clients under selected trainer</div></div>`:`<div class="grid g3" style="margin-bottom:12px">${stat('Trainer',esc(c.trainer||'-'),'br')}${stat('PT Clients',ptN||'-')}${stat('Goal',esc(c.goal||'-'))}</div>`}
- ${canAssignTrainer()?`<div class="grid g2" style="margin-bottom:12px">${stat('PT Clients',ptN||'-')}${stat('Goal',esc(c.goal||'-'))}</div>`:''}
+ ${canAssignTrainer()?`<div class="row" style="align-items:flex-end;gap:10px;margin-bottom:12px;flex-wrap:wrap">${trainerAssignSelectHTML(c,'cp_trainer')}<button class="btn sm" onclick="saveClientTrainer('${id}')">Save Trainer</button><div class="sub" style="margin:0;padding-bottom:8px">Pick trainer staff · ${ptN||0} PT clients under selected trainer</div></div>`:`<div class="grid g4" style="margin-bottom:12px">${stat('Trainer',esc(c.trainer||'-'),'br')}${stat('Bill Rep',esc(c.billRep||'-'),'br')}${stat('PT Clients',ptN||'-')}${stat('Goal',esc(c.goal||'-'))}</div>`}
+ ${canAssignTrainer()?`<div class="grid g3" style="margin-bottom:12px">${stat('Bill Rep',esc(c.billRep||'-'),'br')}${stat('PT Clients',ptN||'-')}${stat('Goal',esc(c.goal||'-'))}</div>`:''}
  <h3>Subscriptions</h3><div class="tbl"><table><tr><th>Package Type</th><th>Service</th><th>Start</th><th>End</th><th class="r">Amount</th><th>Status</th><th></th></tr>
  ${subs.map(s=>`<tr><td class="bold">${esc(subPkgType(s))}</td><td>${esc(subServiceLabel(s))}</td><td>${fmtD(s.start)}</td><td>${fmtD(s.end)}</td><td class="r">${inr(s.final)}</td><td><span class="badge ${subStatus(s)==='Active'?'b-ok':subStatus(s)==='Used'?'b-mut':subStatus(s)==='Frozen'?'b-warn':'b-bad'}">${subStatus(s)}</span></td>
  <td class="r">${subStatus(s)!=='Used'?`<button class="btn sm sec" onclick="openEditSub('${s.id}')">Edit</button>`:''}</td></tr>`).join('')||'<tr><td colspan=7 class="mut">None</td></tr>'}</table></div>
- <h3 style="margin-top:12px">Invoices & Payments</h3><div class="tbl"><table><tr><th>Invoice</th><th>Date</th><th class="r">Total</th><th class="r">Paid</th><th class="r">Pending</th><th></th></tr>
- ${invs.map(i=>`<tr><td>${i.no}</td><td>${fmtD(i.date)}</td><td class="r">${inr(i.grand)}</td><td class="r">${inr(i.paid)}</td><td class="r">${inr(i.pending)}</td><td><button class="btn sm sec" onclick="showInvoice('${i.id}')">View</button>${i.pending>0?` <button class="btn sm" onclick="openModal('<h2>Collect</h2>'+payFormHTML('${i.id}',false))">Collect</button>`:''}</td></tr>`).join('')||'<tr><td colspan=6 class="mut">None</td></tr>'}</table></div>
+ <h3 style="margin-top:12px">Invoices & Payments</h3><div class="tbl"><table><tr><th>Invoice</th><th>Date</th><th>Bill Rep</th><th class="r">Total</th><th class="r">Paid</th><th class="r">Pending</th><th></th></tr>
+ ${invs.map(i=>`<tr><td>${i.no}</td><td>${fmtD(i.date)}</td><td>${esc(i.billRep||i.by||c.billRep||'-')}</td><td class="r">${inr(i.grand)}</td><td class="r">${inr(i.paid)}</td><td class="r">${inr(i.pending)}</td><td><button class="btn sm sec" onclick="showInvoice('${i.id}')">View</button>${i.pending>0?` <button class="btn sm" onclick="openModal('<h2>Collect</h2>'+payFormHTML('${i.id}',false))">Collect</button>`:''}</td></tr>`).join('')||'<tr><td colspan=7 class="mut">None</td></tr>'}</table></div>
  <h3 style="margin-top:12px">Recent Attendance</h3><div class="sub">${att.map(a=>fmtD(a.date)+' '+a.time).join(' · ')||'No check-ins yet'}</div>
  <h3 style="margin-top:12px">Notes</h3>
  <div class="row"><input id="cn_note" placeholder="Add a note (follow-up, measurement, etc.)" style="flex:1"><button class="btn sm" onclick="addNote('${id}')">Add</button></div>
