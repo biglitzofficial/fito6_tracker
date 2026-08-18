@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { StaffJobType } from '../types/enums';
-import { authenticate, adminOnly } from '../middleware/auth';
+import { authenticate, adminOnly, AuthRequest } from '../middleware/auth';
 import { auditLog } from '../middleware/auditLog';
 import { staffService } from '../services/staff.service';
 import { asyncHandler, sendSuccess } from '../utils/response';
@@ -44,9 +44,15 @@ router.get(
 router.post(
   '/',
   auditLog('CREATE_STAFF', 'Staff'),
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: AuthRequest, res) => {
     const data = createSchema.parse(req.body);
-    const staff = await staffService.create(data);
+    const businessId =
+      typeof req.headers['x-business-id'] === 'string' ? req.headers['x-business-id'].trim() : undefined;
+    const staff = await staffService.create({
+      ...data,
+      businessId,
+      createdByUserId: req.user!.userId,
+    });
     sendSuccess(res, staff, 201);
   })
 );

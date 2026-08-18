@@ -1196,8 +1196,8 @@ function mapCloudRole(role,email,name){
  if(role==='SUPERADMIN')return'superadmin';
  if(role==='ADMIN')return'gymadmin';
  const tip=((email||'')+' '+(name||'')+' '+(USER&&USER.jobType||'')).toLowerCase();
- if(/train/.test(tip)||(AUTH.user&&/train/i.test(AUTH.user.jobType||'')))return'trainer';
- if(/account/.test(tip))return'accountant';
+ if(/train/i.test(AUTH.user&&AUTH.user.jobType||'')||/train/.test(tip))return'trainer';
+ if(/account/i.test(AUTH.user&&AUTH.user.jobType||'')||/account/.test(tip))return'accountant';
  return'frontoffice';
 }
 function homePage(){if(!USER)return'dashboard';if(USER.role==='superadmin')return'platform';if(USER.role==='trainer')return'trainer';return'dashboard'}
@@ -2498,24 +2498,79 @@ function pgExpenses(){
 
 /* ================= STAFF ================= */
 function pgStaff(){
- const rows=db.staff.map(s=>`<tr><td class="bold">${s.id}</td><td class="clickable" onclick="staffForm('${s.id}')">${esc(s.name)}</td><td>${esc(s.dept)}</td><td>${esc(s.phone)}</td><td>${esc(s.shift)}</td><td class="r">${inr(s.salary)}</td><td><span class="badge ${s.status==='Active'?'b-ok':'b-mut'}">${s.status||'Active'}</span></td>
+ const rows=db.staff.map(s=>`<tr><td class="bold">${s.id}</td><td class="clickable" onclick="staffForm('${s.id}')">${esc(s.name)}</td><td>${esc(s.dept)}</td><td>${esc(s.phone)}</td><td>${s.loginUserId?`<span class="badge b-ok" title="${esc(s.loginEmail||'')}">Login</span>`:'<span class="badge b-mut">No login</span>'}</td><td>${esc(s.shift)}</td><td class="r">${inr(s.salary)}</td><td><span class="badge ${s.status==='Active'?'b-ok':'b-mut'}">${s.status||'Active'}</span></td>
  <td class="r" style="white-space:nowrap"><button class="btn sm sec" onclick="staffForm('${s.id}')">Edit</button>
  ${s.status!=='Inactive'?`<button class="btn sm sec" onclick="deactivateStaff('${s.id}')">Deactivate</button>`:`<button class="btn sm" onclick="activateStaff('${s.id}')">Activate</button>`}</td></tr>`).join('');
- $('content').innerHTML=`<div class="row" style="justify-content:space-between"><div><h2>Staff Management</h2><div class="sub">${db.staff.length} staff · IDs: Admin <b>26ADM###</b> · Super Admin <b>26SA###</b> · Staff <b>26TR/FOM/ACC###</b></div></div>
+ $('content').innerHTML=`<div class="row" style="justify-content:space-between"><div><h2>Staff Management</h2><div class="sub">${db.staff.length} staff · IDs: Admin <b>26ADM###</b> · Super Admin <b>26SA###</b> · Staff <b>26TR/FOM/ACC###</b>${canCreateStaffLogin()?' · Gym Admin can create ERP login':''}</div></div>
  <button class="btn" onclick="staffForm()">➕ Add Staff</button></div>
- <p class="sub" style="margin:10px 0">Staff cannot be deleted — use <b>Deactivate</b> only.</p>
- <div class="tbl" style="margin-top:4px"><table><tr><th>ID</th><th>Name</th><th>Department</th><th>Contact</th><th>Shift</th><th class="r">Salary</th><th>Status</th><th></th></tr>${rows||'<tr><td colspan=8 class="mut">No staff yet</td></tr>'}</table></div>`}
+ <p class="sub" style="margin:10px 0">Staff cannot be deleted — use <b>Deactivate</b> only. ${canCreateStaffLogin()?'Tick <b>Create login</b> when adding staff so they can sign in.':''}</p>
+ <div class="tbl" style="margin-top:4px"><table><tr><th>ID</th><th>Name</th><th>Department</th><th>Contact</th><th>Login</th><th>Shift</th><th class="r">Salary</th><th>Status</th><th></th></tr>${rows||'<tr><td colspan=9 class="mut">No staff yet</td></tr>'}</table></div>`}
 function deactivateStaff(id){
  const s=staffById(id);if(!s)return;
  if(!confirm(`Deactivate staff "${s.name}" (${s.id})?\n\nAccount stays in records.`))return;
- s.status='Inactive';save();audit('Staff Deactivated',s.id+' '+s.name);toast('Staff deactivated');pgStaff();
+ s.status='Inactive';
+ if(s.loginUserId&&canCreateStaffLogin()){
+  api('/staff/'+s.loginUserId+'/disable',{method:'PATCH'}).catch(e=>toast(e.message||'Login disable failed'));
+ }
+ save();audit('Staff Deactivated',s.id+' '+s.name);toast('Staff deactivated');pgStaff();
 }
-function activateStaff(id){const s=staffById(id);if(!s)return;s.status='Active';save();audit('Staff Activated',s.id);toast('Staff activated');pgStaff()}
+function activateStaff(id){
+ const s=staffById(id);if(!s)return;
+ s.status='Active';
+ if(s.loginUserId&&canCreateStaffLogin()){
+  api('/staff/'+s.loginUserId+'/enable',{method:'PATCH'}).catch(e=>toast(e.message||'Login enable failed'));
+ }
+ save();audit('Staff Activated',s.id);toast('Staff activated');pgStaff();
+}
 function canManageStaff(id){
  if(!USER)return false;
  if(USER.role==='superadmin'||USER.role==='gymadmin'||USER.role==='frontoffice')return true;
  if(id&&USER.role==='trainer'){const s=staffById(id);return !!(s&&s.name&&s.name===USER.name)}
  return false;
+}
+function canCreateStaffLogin(){
+ return USER&&(USER.role==='superadmin'||USER.role==='gymadmin')&&AUTH.token&&AUTH.businessId;
+}
+function deptToJobType(dept){
+ const d=(dept||'').toLowerCase();
+ if(/train/.test(d))return'TRAINER';
+ if(/account/.test(d))return'GENERAL';
+ if(/manage|recept|front|manager|sales|fom/.test(d))return'SALES';
+ return'GENERAL';
+}
+function validateStaffPassword(pw){
+ if(!pw||pw.length<8)return'Password must be at least 8 characters';
+ if(!/[A-Z]/.test(pw)||!/[a-z]/.test(pw)||!/[0-9]/.test(pw))return'Password needs uppercase, lowercase, and a number';
+ return'';
+}
+function toggleStaffLoginFields(){
+ const on=$('st_createlogin')&&$('st_createlogin').checked;
+ const box=$('st_login_fields');if(box)box.style.display=on?'grid':'none';
+}
+function staffLoginSectionHTML(s,id){
+ if(!canCreateStaffLogin())return'';
+ s=s||{};
+ const hasLogin=!!s.loginUserId;
+ if(hasLogin){
+  return`<div class="card" style="grid-column:1/-1;padding:12px;margin-top:4px;background:#f8fafc;border:1px solid var(--line)">
+   <h3 style="margin:0 0 10px;font-size:14px">ERP Login <span class="badge b-ok">Active</span></h3>
+   <div class="grid g2">
+    <div class="field"><label>Login Email</label><input readonly class="ro" value="${esc(s.loginEmail||s.email||'')}"></div>
+    <div class="field"><label>Status</label><input readonly class="ro" value="${s.status==='Inactive'?'Disabled':'Can sign in'}"></div>
+   </div>
+   <div class="field" style="margin-top:8px"><label>New Password (reset)</label><input id="st_newpass" type="password" placeholder="Leave blank to keep current password" autocomplete="new-password"></div>
+   <p class="sub" style="margin:8px 0 0">Staff uses the same login page with email + password.</p>
+  </div>`;
+ }
+ return`<div class="card" style="grid-column:1/-1;padding:12px;margin-top:4px;background:#f8fafc;border:1px solid var(--line)">
+  <h3 style="margin:0 0 10px;font-size:14px">ERP Login</h3>
+  <div class="field" style="margin-bottom:8px"><label><input type="checkbox" id="st_createlogin" ${!id?'checked':''} onchange="toggleStaffLoginFields()"> Create login for this staff</label></div>
+  <div id="st_login_fields" class="grid g2" style="display:${!id?'grid':'none'}">
+   ${fld('st_login_email','Login Email *',s.loginEmail||s.email||'','email')}
+   ${fld('st_login_pass','Temporary Password *','','password')}
+  </div>
+  <p class="sub" style="margin:8px 0 0">Password: 8+ characters with uppercase, lowercase, and a number.</p>
+ </div>`;
 }
 function staffForm(id){
  const s=id?staffById(id):{};
@@ -2530,21 +2585,46 @@ function staffForm(id){
  ${fld('st_bank','Bank A/c & IFSC',s.bank)}${fld('st_aadhaar','Aadhaar',s.aadhaar)}${fld('st_pan','PAN',s.pan)}
  ${fld('st_qual','Qualification',s.qual)}${fld('st_exp','Experience',s.exp)}${sel('st_status','Status',['Active','Inactive'],s.status==='Inactive'?'Inactive':'Active')}
  <div class="field"><label>Bill Rep?</label><select id="st_billrep"><option value="1" ${s.billRep!==false&&s.isBillRep!==false?'selected':''}>Yes — can collect / appear as Bill Rep</option><option value="0" ${s.billRep===false||s.isBillRep===false?'selected':''}>No</option></select></div>
+ ${staffLoginSectionHTML(s,id)}
  </div>
  <p class="sub">IDs: Trainer <b>26TR001</b> · FOM / Management / Reception <b>26FOM001</b> · Accountant <b>26ACC001</b></p>
- <div class="row" style="justify-content:flex-end"><button class="btn sec" onclick="closeModal()">Cancel</button><button class="btn" onclick="saveStaff('${id||''}')">Save</button></div>`)}
-function saveStaff(id){
+ <div class="row" style="justify-content:flex-end"><button class="btn sec" onclick="closeModal()">Cancel</button><button class="btn" id="st_save_btn" onclick="saveStaff('${id||''}')">Save</button></div>`)}
+async function saveStaff(id){
  if(id&&!canManageStaff(id)){toast('No permission to edit this profile');return}
  if(!id&&!canManageStaff()){toast('No permission to add staff');return}
  if(!val('st_name')||!val('st_phone')){toast('Name and contact required');return}
- let s=id?staffById(id):null;const isNew=!s;
- const dept=val('st_dept');
- if(!s){s={id:nextStaffId(dept)};db.staff.push(s)}
- const old=isNew?'':JSON.stringify({salary:s.salary,status:s.status});
- const billOk=val('st_billrep')!=='0';
- Object.assign(s,{name:val('st_name'),dept,gender:val('st_gender'),phone:val('st_phone'),email:val('st_email'),dob:val('st_dob'),joining:val('st_join'),salary:num('st_sal'),shift:val('st_shift'),bank:val('st_bank'),aadhaar:val('st_aadhaar'),pan:val('st_pan'),qual:val('st_qual'),exp:val('st_exp'),status:val('st_status'),billRep:billOk,isBillRep:billOk});
- save();audit(isNew?'Staff Added':'Staff Updated',s.id+' '+s.name,old,JSON.stringify({salary:s.salary,status:s.status}));
- toast('Staff saved · '+s.id);closeModal();go('staff')}
+ const btn=$('st_save_btn');if(btn){btn.disabled=true;btn.textContent='Saving…'}
+ try{
+  let s=id?staffById(id):null;const isNew=!s;
+  const dept=val('st_dept');
+  if(!s){s={id:nextStaffId(dept)};db.staff.push(s)}
+  const old=isNew?'':JSON.stringify({salary:s.salary,status:s.status});
+  const billOk=val('st_billrep')!=='0';
+  Object.assign(s,{name:val('st_name'),dept,gender:val('st_gender'),phone:val('st_phone'),email:val('st_email'),dob:val('st_dob'),joining:val('st_join'),salary:num('st_sal'),shift:val('st_shift'),bank:val('st_bank'),aadhaar:val('st_aadhaar'),pan:val('st_pan'),qual:val('st_qual'),exp:val('st_exp'),status:val('st_status'),billRep:billOk,isBillRep:billOk});
+  const wantLogin=!s.loginUserId&&canCreateStaffLogin()&&($('st_createlogin')?$('st_createlogin').checked:false);
+  const loginEmail=(val('st_login_email')||val('st_email')||'').toLowerCase().trim();
+  const loginPass=val('st_login_pass')||'';
+  const newPass=val('st_newpass')||'';
+  if(wantLogin){
+   if(!loginEmail){toast('Enter login email for staff');return}
+   const pwErr=validateStaffPassword(loginPass);if(pwErr){toast(pwErr);return}
+   const created=await api('/staff',{method:'POST',body:{
+    name:s.name,email:loginEmail,phone:s.phone||undefined,salary:s.salary||0,
+    joiningDate:s.joining||today(),password:loginPass,jobType:deptToJobType(dept),sendWelcomeEmail:false
+   }});
+   s.loginUserId=created.id;s.loginEmail=created.email||loginEmail;
+   if(!s.email)s.email=loginEmail;
+   audit('Staff Login Created',s.id+' · '+loginEmail);
+  }else if(s.loginUserId&&newPass&&canCreateStaffLogin()){
+   const pwErr=validateStaffPassword(newPass);if(pwErr){toast(pwErr);return}
+   await api('/staff/'+s.loginUserId+'/password',{method:'PATCH',body:{password:newPass}});
+   audit('Staff Login Password Reset',s.id+' · '+s.loginEmail);
+  }
+  save();audit(isNew?'Staff Added':'Staff Updated',s.id+' '+s.name,old,JSON.stringify({salary:s.salary,status:s.status}));
+  toast('Staff saved · '+s.id+(s.loginUserId?' · login ready':''));closeModal();go('staff');
+ }catch(e){toast(e.message||'Save failed')}
+ finally{if(btn){btn.disabled=false;btn.textContent='Save'}}
+}
 
 /* ================= ATTENDANCE ================= */
 function pgAttendance(){

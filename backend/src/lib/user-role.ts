@@ -24,6 +24,7 @@ export async function attachStaff(user: User & { id: string }) {
   return {
     ...userWithoutPassword,
     role,
+    jobType: staff?.jobType || null,
     staff: staff ? { ...staff, salary: Number(staff.salary) } : null,
   };
 }

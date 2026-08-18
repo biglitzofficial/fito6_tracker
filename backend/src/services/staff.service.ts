@@ -5,6 +5,7 @@ import { hashPassword, validatePassword } from '../utils/password';
 import { sendStaffWelcomeEmail } from '../lib/email';
 import { AppError } from '../utils/response';
 import { config } from '../config';
+import { businessService } from './business.service';
 
 async function withStaff(user: User & { id: string }) {
   const staff = await findOne<Staff>(COL.staff, 'userId', user.id);
@@ -36,6 +37,8 @@ export const staffService = {
     password: string;
     jobType?: StaffJobType;
     sendWelcomeEmail?: boolean;
+    businessId?: string;
+    createdByUserId?: string;
   }) {
     const existing = await findOne<User>(COL.users, 'email', data.email.toLowerCase());
     if (existing) throw new AppError(400, 'Email already exists');
@@ -62,6 +65,22 @@ export const staffService = {
       joiningDate: new Date(data.joiningDate),
       jobType: data.jobType || StaffJobType.GENERAL,
     });
+
+    if (data.businessId) {
+      if (data.createdByUserId) {
+        const membership = await businessService.getMembership(data.createdByUserId, data.businessId);
+        if (!membership) throw new AppError(403, 'You do not have access to this business');
+      }
+      const existingMember = await businessService.getMembership(user.id, data.businessId);
+      if (!existingMember) {
+        await create(COL.businessMembers, {
+          businessId: data.businessId,
+          userId: user.id,
+          role: Role.STAFF,
+          isActive: true,
+        });
+      }
+    }
 
     if (data.sendWelcomeEmail && config.email.configured) {
       sendStaffWelcomeEmail(user.email, user.name, data.password).catch(console.error);
