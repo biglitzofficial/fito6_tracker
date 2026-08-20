@@ -310,7 +310,7 @@ function defaults(){return{
   adminIds:{superAdmin:'',admin:''}},
  users:[],
  seq:{client:1000,invoice:1,receipt:1,voucher:1,staff:100,trainer:0,payroll:0,clientByYear:{},clientByBranch:{}},
- clients:[],subs:[],invoices:[],cashbook:[],staff:[],staffAtt:[],memberAtt:[],payroll:[],audit:[],leads:[],batches:[],classes:[],todos:[],meterReadings:[],appointments:[]};}
+ clients:[],subs:[],invoices:[],cashbook:[],staff:[],staffAtt:[],memberAtt:[],payroll:[],audit:[],leads:[],batches:[],classes:[],todos:[],meterReadings:[],appointments:[],interviews:[]};}
 
 function cacheLocal(){try{localStorage.setItem(DBKEY,JSON.stringify(db))}catch(e){}}
 function loadLocalCache(){try{return JSON.parse(localStorage.getItem(DBKEY))}catch(e){return null}}
@@ -376,6 +376,8 @@ function ensurePkgSettings(){
  if(!Array.isArray(db.todos))db.todos=[];
  if(!Array.isArray(db.meterReadings))db.meterReadings=[];
  if(!Array.isArray(db.trainerRequests))db.trainerRequests=[];
+ if(!Array.isArray(db.appointments))db.appointments=[];
+ if(!Array.isArray(db.interviews))db.interviews=[];
  (db.clients||[]).forEach(c=>{if(!c.status)c.status='Active';if(c.billRep&&!c.billRepFrozen)c.billRepFrozen=true});
  (db.cashbook||[]).forEach(e=>{if(!e.status)e.status='Active'});
 }
@@ -1089,12 +1091,12 @@ function isGroupClassType(t){return/group\s*class|dance|boxing|zumba|yoga/i.test
 
 /* ================= AUTH & NAV ================= */
 let USER=null,PAGE='dashboard';
-const ALL_PAGES=['platform','gymadmins','gymperformance','traineranalysis','clientanalysis','dashboard','leads','followups','clients','analysis','memberships','billing','batches','accounts','cashbook','expenses','notifications','trainers','trainer','fitness','staff','attendance','attreports','settings','help','appointments','payroll','todos','reports','meter','audit','more'];
+const ALL_PAGES=['platform','gymadmins','gymperformance','traineranalysis','clientanalysis','dashboard','leads','followups','clients','analysis','memberships','billing','batches','accounts','cashbook','expenses','notifications','trainers','trainer','fitness','staff','attendance','attreports','settings','help','appointments','payroll','todos','reports','meter','audit','interviews','more'];
 const GYM_ADMIN_PAGES=ALL_PAGES.filter(p=>!['platform','gymadmins'].includes(p));
 const MENUS={
  superadmin:['platform','gymadmins',...GYM_ADMIN_PAGES],
  gymadmin:['dashboard','traineranalysis','clientanalysis',...GYM_ADMIN_PAGES.filter(p=>!['dashboard','traineranalysis','clientanalysis'].includes(p))],
- frontoffice:['dashboard','leads','followups','clients','analysis','gymperformance','memberships','billing','batches','accounts','cashbook','expenses','notifications','trainers','fitness','staff','attendance','attreports','appointments','todos','meter','help','more','settings','reports'],
+ frontoffice:['dashboard','leads','followups','clients','analysis','gymperformance','memberships','billing','batches','accounts','cashbook','expenses','notifications','trainers','fitness','staff','attendance','attreports','appointments','todos','meter','help','more','settings','reports','interviews'],
  accountant:['dashboard','analysis','gymperformance','accounts','cashbook','expenses','attendance','attreports','settings','payroll','reports','meter','help','more','billing'],
  trainer:['trainer','clients','attendance','batches','todos','appointments','help']};
 const PAGES={
@@ -1104,7 +1106,7 @@ const PAGES={
  expenses:['📤','Expenses'],notifications:['💬','Notification & WhatsApp'],trainers:['🧑','Trainers'],trainer:['📱','Trainer Portal'],
  fitness:['🏢','Fitness Center'],staff:['🧑','Staff'],attendance:['🕒','Attendance'],attreports:['📑','Attendance Reports'],
  settings:['⚙️','App Settings'],help:['❓','Tutorial & Help'],appointments:['📅','Appointments'],payroll:['💵','Payroll'],
- todos:['✅','To-do List'],reports:['📊','Reports'],meter:['⚡','EB Meter'],audit:['🛡️','Audit Log'],more:['⋯','More Options']};
+ todos:['✅','To-do List'],reports:['📊','Reports'],meter:['⚡','EB Meter'],audit:['🛡️','Audit Log'],interviews:['📝','Interview Candidates'],more:['⋯','More Options']};
 const NAV_TREE=[
  {id:'platform',icon:'🌐',label:'Platform',page:'platform'},
  {id:'gymadmins',icon:'🏋️',label:'Gym Admins',page:'gymadmins'},
@@ -1185,6 +1187,7 @@ const NAV_TREE=[
  ]},
  {id:'appointments',icon:'📅',label:'Appointments',page:'appointments'},
  {id:'more',icon:'⋯',label:'More Options',kids:[
+  {label:'Interview Candidates',page:'interviews'},
   {label:'Import YDL CSV',page:'more',fn:"openYdlImport('auto')"},
   {label:'Delete Current Data',page:'more',fn:'openDeleteData()'},
   {label:'To-do List',page:'todos'},
@@ -1307,7 +1310,7 @@ function markNavOn(p){
 }
 function go(p,arg,opts){if(!canPage(p)){toast('No permission');return} PAGE=p;
  closeNavDrops();closeTbDrops();markNavOn(p);
- const pages={platform:pgPlatform,gymadmins:pgGymAdmins,gymperformance:pgGymPerformance,traineranalysis:pgTrainerAnalysis,clientanalysis:pgClientAnalysis,dashboard:pgDashboard,trainer:pgTrainerPortal,clients:pgClients,leads:pgLeads,followups:pgFollowups,memberships:pgMemberships,billing:pgBilling,cashbook:pgCashbook,expenses:pgExpenses,meter:pgMeter,staff:pgStaff,attendance:pgAttendance,payroll:pgPayroll,batches:pgBatches,todos:pgTodos,reports:pgReports,accounts:pgAccounts,audit:pgAudit,settings:pgSettings,analysis:pgAnalysis,notifications:pgNotifications,trainers:pgTrainers,fitness:pgFitness,attreports:pgAttReports,help:pgHelp,appointments:pgAppointments,more:pgMore};
+ const pages={platform:pgPlatform,gymadmins:pgGymAdmins,gymperformance:pgGymPerformance,traineranalysis:pgTrainerAnalysis,clientanalysis:pgClientAnalysis,dashboard:pgDashboard,trainer:pgTrainerPortal,clients:pgClients,leads:pgLeads,followups:pgFollowups,memberships:pgMemberships,billing:pgBilling,cashbook:pgCashbook,expenses:pgExpenses,meter:pgMeter,staff:pgStaff,attendance:pgAttendance,payroll:pgPayroll,batches:pgBatches,todos:pgTodos,reports:pgReports,accounts:pgAccounts,audit:pgAudit,settings:pgSettings,analysis:pgAnalysis,notifications:pgNotifications,trainers:pgTrainers,fitness:pgFitness,attreports:pgAttReports,help:pgHelp,appointments:pgAppointments,interviews:pgInterviews,more:pgMore};
  if(pages[p])pages[p](arg);else pgStub(PAGES[p]?PAGES[p][1]:p);
  refreshTopbarNotifs();
  if(!opts||(!opts.hist&&!opts.silent))pushAppHistory(appHistState(p,$('modalwrap')&&$('modalwrap').style.display==='flex'),false)}
@@ -3554,13 +3557,143 @@ function saveAppt(){
  db.appointments.push({id:'AP'+Date.now(),date:val('ap_date'),time:val('ap_time'),person:val('ap_person'),with:val('ap_with'),type:val('ap_type'),notes:val('ap_notes')});
  save();toast('Appointment saved');closeModal();go('appointments');
 }
+
+/* ================= INTERVIEW CANDIDATES ================= */
+const INT_ROLES=['Trainer','Front Office','Sales','Accountant','Manager','Cleaner','Security','Other'];
+const INT_STATUS=['Waiting','Scheduled','Interviewed','Selected','Joined','On Hold','Rejected'];
+let INT_F={status:'',role:'',q:''};
+function interviewStatusBadge(st){
+ const s=st||'Waiting';
+ const cls=s==='Joined'||s==='Selected'?'b-ok':s==='Rejected'?'b-bad':s==='Waiting'||s==='On Hold'?'b-warn':s==='Scheduled'||s==='Interviewed'?'b-br':'b-mut';
+ return`<span class="badge ${cls}">${esc(s)}</span>`;
+}
+function ensureInterviews(){if(!Array.isArray(db.interviews))db.interviews=[]}
+function pgInterviews(){
+ ensureInterviews();
+ const q=(INT_F.q||'').trim().toLowerCase();
+ let rows=db.interviews.slice();
+ if(INT_F.status)rows=rows.filter(r=>(r.status||'')===INT_F.status);
+ if(INT_F.role)rows=rows.filter(r=>(r.role||'')===INT_F.role);
+ if(q)rows=rows.filter(r=>[r.name,r.contact,r.place,r.role,r.remarks,r.status].join(' ').toLowerCase().includes(q));
+ rows.sort((a,b)=>{
+  const da=a.schedule||a.enquiryDate||'';
+  const db_=b.schedule||b.enquiryDate||'';
+  return db_.localeCompare(da);
+ });
+ const counts=INT_STATUS.reduce((m,s)=>{m[s]=db.interviews.filter(r=>(r.status||'Waiting')===s).length;return m},{});
+ $('content').innerHTML=`
+ <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px">
+  <div><h2>Interview Candidates</h2><div class="sub">Excel-style hiring sheet · enquiry → interview → join</div></div>
+  <div class="row" style="gap:8px">
+   <button class="btn sec" onclick="exportInterviews()">⬇ Export CSV</button>
+   <button class="btn" onclick="interviewForm()">＋ Add Candidate</button>
+  </div>
+ </div>
+ <div class="money-row" style="grid-template-columns:repeat(auto-fit,minmax(110px,1fr));margin-top:12px">
+  ${INT_STATUS.map(s=>`<div class="stat card clickable" onclick="INT_F.status='${s}';pgInterviews()"><div class="l">${esc(s)}</div><div class="v" style="font-size:18px">${counts[s]||0}</div></div>`).join('')}
+ </div>
+ <div class="toolbar" style="margin-top:4px">
+  <div class="field"><label>Search</label><input id="int_q" value="${esc(INT_F.q||'')}" placeholder="Name, phone, place…" onkeydown="if(event.key==='Enter'){INT_F.q=this.value;pgInterviews()}"></div>
+  <div class="field"><label>Status</label><select id="int_fs" onchange="INT_F.status=this.value;pgInterviews()"><option value="">All</option>${INT_STATUS.map(s=>`<option value="${esc(s)}" ${INT_F.status===s?'selected':''}>${esc(s)}</option>`).join('')}</select></div>
+  <div class="field"><label>Job Role</label><select id="int_fr" onchange="INT_F.role=this.value;pgInterviews()"><option value="">All</option>${INT_ROLES.map(s=>`<option value="${esc(s)}" ${INT_F.role===s?'selected':''}>${esc(s)}</option>`).join('')}</select></div>
+  <button class="btn sec sm" onclick="INT_F.q=($('int_q')&&$('int_q').value)||'';pgInterviews()">Search</button>
+  <button class="btn sec sm" onclick="INT_F={status:'',role:'',q:''};pgInterviews()">Clear</button>
+ </div>
+ <div class="tbl" style="margin-top:8px"><table>
+  <tr>
+   <th>#</th><th>Enquiry Date</th><th>Name</th><th>Contact No</th><th>Place</th>
+   <th>Exp (Yrs)</th><th>Job Role</th><th>Interview Schedule</th><th>Status</th><th>Remarks</th><th></th>
+  </tr>
+  ${rows.map((r,i)=>`<tr>
+   <td class="mut">${i+1}</td>
+   <td>${fmtD(r.enquiryDate)}</td>
+   <td class="bold">${esc(r.name||'')}</td>
+   <td>${esc(r.contact||'')}</td>
+   <td>${esc(r.place||'')}</td>
+   <td class="c">${esc(r.experience!=null&&r.experience!==''?r.experience:'—')}</td>
+   <td>${esc(r.role||'')}</td>
+   <td>${r.schedule?fmtD(r.schedule)+(r.scheduleTime?' · '+esc(r.scheduleTime):''):'<span class="mut">—</span>'}</td>
+   <td>${interviewStatusBadge(r.status)}</td>
+   <td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(r.remarks||'')}">${esc(r.remarks||'')}</td>
+   <td class="r" style="white-space:nowrap">
+    <button class="btn sm sec" onclick="interviewForm('${r.id}')">Edit</button>
+    <button class="btn sm dgr" onclick="deleteInterview('${r.id}')">Del</button>
+   </td>
+  </tr>`).join('')||'<tr><td colspan="11" class="mut">No candidates yet — click Add Candidate</td></tr>'}
+ </table></div>`;
+}
+function interviewForm(id){
+ ensureInterviews();
+ const r=id?db.interviews.find(x=>x.id===id):{};
+ if(id&&!r){toast('Candidate not found');return}
+ openModal(`<h2>${id?'Edit':'Add'} Interview Candidate</h2>
+ <div class="grid g3">
+  ${fld('iv_date','Enquiry Date',r.enquiryDate||today(),'date')}
+  ${fld('iv_name','Name *',r.name||'')}
+  ${fld('iv_contact','Contact No',r.contact||'')}
+  ${fld('iv_place','Place',r.place||'')}
+  ${fld('iv_exp','Total Years of Experience',r.experience!=null?r.experience:'','number')}
+  ${sel('iv_role','Job Role / Category',['',...INT_ROLES],r.role||'')}
+  ${fld('iv_sched','Interview Schedule',r.schedule||'','date')}
+  ${fld('iv_time','Interview Time',r.scheduleTime||'','time')}
+  ${sel('iv_status','Status',INT_STATUS,r.status||'Waiting')}
+ </div>
+ <div class="field"><label>Remarks</label><textarea id="iv_remarks" rows="3" style="width:100%;resize:vertical">${esc(r.remarks||'')}</textarea></div>
+ <div class="row" style="justify-content:flex-end;gap:8px;margin-top:10px">
+  <button class="btn sec" onclick="closeModal()">Cancel</button>
+  <button class="btn" onclick="saveInterview('${id||''}')">Save</button>
+ </div>`)}
+function saveInterview(id){
+ ensureInterviews();
+ const name=caps(val('iv_name'));
+ if(!name){toast('Name required');return}
+ let r=id?db.interviews.find(x=>x.id===id):null;
+ const data={
+  enquiryDate:val('iv_date')||today(),
+  name,
+  contact:val('iv_contact'),
+  place:caps(val('iv_place')),
+  experience:val('iv_exp')===''?'':Number(val('iv_exp')),
+  role:val('iv_role')||'Other',
+  schedule:val('iv_sched'),
+  scheduleTime:val('iv_time'),
+  status:val('iv_status')||'Waiting',
+  remarks:val('iv_remarks')
+ };
+ if(!r){
+  r={id:'IV'+Date.now()+Math.random().toString(36).slice(2,5),created:today(),createdBy:USER?USER.name:''};
+  db.interviews.push(r);
+ }
+ Object.assign(r,data);
+ save();audit(id?'Interview Updated':'Interview Added',r.name+' · '+(r.role||'')+' · '+(r.status||''));
+ toast('Candidate saved');closeModal();pgInterviews();
+}
+function deleteInterview(id){
+ ensureInterviews();
+ const r=db.interviews.find(x=>x.id===id);if(!r)return;
+ if(!confirm('Delete candidate '+r.name+'?'))return;
+ db.interviews=db.interviews.filter(x=>x.id!==id);
+ save();audit('Interview Deleted',r.name);toast('Deleted');pgInterviews();
+}
+function exportInterviews(){
+ ensureInterviews();
+ csvExport([
+  ['Enquiry Date','Name','Contact No','Place','Years Experience','Job Role','Interview Schedule','Interview Time','Status','Remarks'],
+  ...db.interviews.map(r=>[r.enquiryDate||'',r.name||'',r.contact||'',r.place||'',r.experience??'',r.role||'',r.schedule||'',r.scheduleTime||'',r.status||'',r.remarks||''])
+ ],'interview-candidates');
+}
+
 function pgMore(){
  const counts={
   clients:(db.clients||[]).length,leads:(db.leads||[]).length,subs:(db.subs||[]).length,
-  invoices:(db.invoices||[]).length,cashbook:(db.cashbook||[]).length,att:(db.memberAtt||[]).length
+  invoices:(db.invoices||[]).length,cashbook:(db.cashbook||[]).length,att:(db.memberAtt||[]).length,
+  interviews:(db.interviews||[]).length
  };
  $('content').innerHTML=`<h2>More Options</h2><div class="sub" style="margin-bottom:12px">Import, cleanup and extras</div>
  <div class="grid g3">
+  <div class="card clickable" onclick="go('interviews')"><h3>📝 Interview Candidates</h3>
+   <p class="sub">Hiring sheet — enquiry date, contact, role, schedule, status · ${counts.interviews} records</p>
+   <button class="btn sm" style="margin-top:10px" onclick="event.stopPropagation();go('interviews')">Open Sheet</button></div>
   <div class="card clickable" onclick="openYdlImport('auto')"><h3>⬆ Import YDL CSV</h3><p class="sub">Upload Members / Enquiries with YDL columns</p>
    <button class="btn sm" style="margin-top:10px" onclick="event.stopPropagation();openYdlImport('auto')">Open Import</button></div>
   <div class="card clickable" onclick="downloadYdlTemplate()"><h3>⬇ Import Template</h3><p class="sub">Download blank CSV with all YDL fields</p></div>
@@ -3586,7 +3719,8 @@ function openDeleteData(){
   clients:(db.clients||[]).length,leads:(db.leads||[]).length,subs:(db.subs||[]).length,
   invoices:(db.invoices||[]).length,cash:(db.cashbook||[]).length,staff:(db.staff||[]).length,
   att:(db.memberAtt||[]).length+(db.staffAtt||[]).length,todos:(db.todos||[]).length,
-  meter:(db.meterReadings||[]).length,appt:(db.appointments||[]).length,payroll:(db.payroll||[]).length
+  meter:(db.meterReadings||[]).length,appt:(db.appointments||[]).length,payroll:(db.payroll||[]).length,
+  interviews:(db.interviews||[]).length
  };
  openModal(`<h2 style="color:var(--bad)">Delete Current Data</h2>
  <p class="sub" style="margin-bottom:12px">Choose what to remove. <b>Settings / packages are kept</b> unless you tick Wipe settings. This cannot be undone.</p>
@@ -3601,6 +3735,7 @@ function openDeleteData(){
   <label class="card" style="display:flex;gap:10px;align-items:center;cursor:pointer"><input type="checkbox" id="del_meter"> EB Meter (${n.meter})</label>
   <label class="card" style="display:flex;gap:10px;align-items:center;cursor:pointer"><input type="checkbox" id="del_appt"> Appointments (${n.appt})</label>
   <label class="card" style="display:flex;gap:10px;align-items:center;cursor:pointer"><input type="checkbox" id="del_payroll"> Payroll (${n.payroll})</label>
+  <label class="card" style="display:flex;gap:10px;align-items:center;cursor:pointer"><input type="checkbox" id="del_interviews"> Interview Candidates (${n.interviews})</label>
   <label class="card" style="display:flex;gap:10px;align-items:center;cursor:pointer"><input type="checkbox" id="del_staff"> Staff (${n.staff})</label>
   <label class="card" style="display:flex;gap:10px;align-items:center;cursor:pointer"><input type="checkbox" id="del_audit"> Audit Log</label>
   <label class="card" style="display:flex;gap:10px;align-items:center;cursor:pointer"><input type="checkbox" id="del_seq"> Reset ID counters</label>
@@ -3626,6 +3761,7 @@ function runDeleteData(){
  if($('del_meter')&&$('del_meter').checked){db.meterReadings=[];parts.push('meter')}
  if($('del_appt')&&$('del_appt').checked){db.appointments=[];parts.push('appointments')}
  if($('del_payroll')&&$('del_payroll').checked){db.payroll=[];parts.push('payroll')}
+ if($('del_interviews')&&$('del_interviews').checked){db.interviews=[];parts.push('interviews')}
  if($('del_staff')&&$('del_staff').checked){db.staff=[];parts.push('staff')}
  if($('del_audit')&&$('del_audit').checked){db.audit=[];parts.push('audit')}
  if($('del_seq')&&$('del_seq').checked){
@@ -3639,7 +3775,7 @@ function runDeleteData(){
  }
  if(!parts.length){toast('Nothing selected');return}
  // Ensure arrays exist
- ['clients','leads','subs','invoices','cashbook','staff','staffAtt','memberAtt','payroll','audit','batches','classes','todos','meterReadings','appointments'].forEach(k=>{if(!Array.isArray(db[k]))db[k]=[]});
+ ['clients','leads','subs','invoices','cashbook','staff','staffAtt','memberAtt','payroll','audit','batches','classes','todos','meterReadings','appointments','interviews'].forEach(k=>{if(!Array.isArray(db[k]))db[k]=[]});
  if(!db.seq)db.seq=defaults().seq;
  save();
  try{audit('Data Deleted',parts.join(', '))}catch(e){}
