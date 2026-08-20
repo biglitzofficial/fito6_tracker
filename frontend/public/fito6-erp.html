@@ -1154,6 +1154,7 @@ const NAV_TREE=[
  ]},
  {id:'trainers',icon:'🧑',label:'Trainers',kids:[
   {label:'Trainer List',page:'trainers'},
+  {label:'Add New Trainer',page:'trainers',fn:'trainerForm()'},
   {label:'Trainer Portal',page:'trainer'},
   {label:'Assign To-dos',page:'todos'}
  ]},
@@ -1188,8 +1189,7 @@ const NAV_TREE=[
   {label:'Delete Current Data',page:'more',fn:'openDeleteData()'},
   {label:'To-do List',page:'todos'},
   {label:'Audit Log',page:'audit'},
-  {label:'EB Meter',page:'meter'},
-  {label:'Trainer Portal',page:'trainer'}
+  {label:'EB Meter',page:'meter'}
  ]}
 ];
 function mapCloudRole(role,email,name){
@@ -1615,7 +1615,7 @@ function renderWizard(){
  <div id="wizbody">${s===1?wizStep1():s===2?subFormHTML(WIZ.clientId,'New Membership',true):payFormHTML(WIZ.invId,true)}</div>
  <script>if(${s}===1){bindCaps(['w_name','w_addr','w_city','w_state','w_occ','w_med','w_idn','w_emg']);}<\/script>`)}
 function fld(id,l,v,t,extra){return`<div class="field"><label>${l}</label><input id="${id}" type="${t||'text'}" value="${esc(v||'')}" ${extra||''}></div>`}
-function sel(id,l,opts,v){return`<div class="field"><label>${l}</label><select id="${id}">${opts.map(o=>`<option ${o===v?'selected':''}>${o}</option>`).join('')}</select></div>`}
+function sel(id,l,opts,v,extra){return`<div class="field"><label>${l}</label><select id="${id}" ${extra||''}>${opts.map(o=>`<option ${o===v?'selected':''}>${o}</option>`).join('')}</select></div>`}
 function staffBillRepList(){
  const list=(db.staff||[]).filter(s=>s.status!=='Inactive'&&(s.billRep!==false));
  // Prefer staff flagged as bill reps when any exist
@@ -2498,29 +2498,73 @@ function pgExpenses(){
 
 /* ================= STAFF ================= */
 function pgStaff(){
- const rows=db.staff.map(s=>`<tr><td class="bold">${s.id}</td><td class="clickable" onclick="staffForm('${s.id}')">${esc(s.name)}</td><td>${esc(s.dept)}</td><td>${esc(s.phone)}</td><td>${s.loginUserId?`<span class="badge b-ok" title="${esc(s.loginEmail||'')}">Login</span>`:'<span class="badge b-mut">No login</span>'}</td><td>${esc(s.shift)}</td><td class="r">${inr(s.salary)}</td><td><span class="badge ${s.status==='Active'?'b-ok':'b-mut'}">${s.status||'Active'}</span></td>
- <td class="r" style="white-space:nowrap"><button class="btn sm sec" onclick="staffForm('${s.id}')">Edit</button>
- ${s.status!=='Inactive'?`<button class="btn sm sec" onclick="deactivateStaff('${s.id}')">Deactivate</button>`:`<button class="btn sm" onclick="activateStaff('${s.id}')">Activate</button>`}</td></tr>`).join('');
- $('content').innerHTML=`<div class="row" style="justify-content:space-between"><div><h2>Staff Management</h2><div class="sub">${db.staff.length} staff · IDs: Admin <b>26ADM###</b> · Super Admin <b>26SA###</b> · Staff <b>26TR/FOM/ACC###</b>${canCreateStaffLogin()?' · Gym Admin can create ERP login':''}</div></div>
+ const rows=db.staff.map(s=>`<tr>
+  <td><input type="checkbox" class="st_sel" value="${s.id}"></td>
+  <td class="bold">${s.id}</td>
+  <td class="clickable" onclick="staffForm('${s.id}')">${esc(s.name)}</td>
+  <td>${esc(s.dept)}</td>
+  <td>${esc(s.phone)}</td>
+  <td>${esc(s.email||'—')}</td>
+  <td>${fmtD(s.joining)||'—'}</td>
+  <td>${esc(s.gender||'—')}</td>
+  <td>${s.loginUserId?`<span class="badge b-ok" title="${esc(s.loginEmail||'')}">Login</span>`:'<span class="badge b-mut">No login</span>'}</td>
+  <td>${formatStaffShift(s)}</td>
+  <td class="r">${inr(s.salary)}</td>
+  <td><span class="badge ${s.status==='Active'?'b-ok':'b-mut'}">${s.status||'Active'}</span></td>
+  <td class="r"><button class="btn sm sec" onclick="staffForm('${s.id}')">Edit</button></td></tr>`).join('');
+ $('content').innerHTML=`<div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:10px"><div><h2>Staff Management</h2><div class="sub">${db.staff.length} staff · IDs: Admin <b>26ADM###</b> · Super Admin <b>26SA###</b> · Staff <b>26TR/FOM/ACC###</b>${canCreateStaffLogin()?' · Gym Admin can create ERP login':''}</div></div>
  <button class="btn" onclick="staffForm()">➕ Add Staff</button></div>
- <p class="sub" style="margin:10px 0">Staff cannot be deleted — use <b>Deactivate</b> only. ${canCreateStaffLogin()?'Tick <b>Create login</b> when adding staff so they can sign in.':''}</p>
- <div class="tbl" style="margin-top:4px"><table><tr><th>ID</th><th>Name</th><th>Department</th><th>Contact</th><th>Login</th><th>Shift</th><th class="r">Salary</th><th>Status</th><th></th></tr>${rows||'<tr><td colspan=9 class="mut">No staff yet</td></tr>'}</table></div>`}
+ <div class="row" style="margin:10px 0;gap:8px;flex-wrap:wrap;align-items:center">
+  <button class="btn sec sm" onclick="document.querySelectorAll('.st_sel').forEach(c=>c.checked=true)">Select All</button>
+  <button class="btn sec sm" onclick="document.querySelectorAll('.st_sel').forEach(c=>c.checked=false)">Deselect All</button>
+  <button class="btn dgr sm" onclick="bulkDeactivateStaff()">Deactivate Selected</button>
+  <button class="btn sm sec" onclick="bulkActivateStaff()">Activate Selected</button>
+ </div>
+ <p class="sub" style="margin:0 0 10px">Select staff using checkboxes · use toolbar to deactivate or activate in bulk. ${canCreateStaffLogin()?'Tick <b>Create login</b> when adding staff so they can sign in.':''}</p>
+ <div class="tbl" style="margin-top:4px"><table><tr><th><input type="checkbox" onclick="document.querySelectorAll('.st_sel').forEach(c=>c.checked=this.checked)"></th><th>ID</th><th>Name</th><th>Department</th><th>Contact</th><th>Email</th><th>Joined</th><th>Gender</th><th>Login</th><th>Shift Times</th><th class="r">Salary</th><th>Status</th><th></th></tr>${rows||'<tr><td colspan=13 class="mut">No staff yet</td></tr>'}</table></div>`}
+function staffSelectedIds(){
+ return[...document.querySelectorAll('.st_sel:checked')].map(c=>c.value);
+}
+async function applyStaffStatus(ids,status){
+ let n=0;
+ for(const id of ids){
+  const s=staffById(id);if(!s||s.status===status)continue;
+  s.status=status;
+  if(s.loginUserId&&canCreateStaffLogin()){
+   try{
+    await api('/staff/'+s.loginUserId+(status==='Inactive'?'/disable':'/enable'),{method:'PATCH'});
+   }catch(e){toast((s.name||id)+': '+(e.message||'Login update failed'))}
+  }
+  n++;
+ }
+ return n;
+}
+async function bulkDeactivateStaff(){
+ const ids=staffSelectedIds();
+ if(!ids.length){toast('Select staff first');return}
+ if(!confirm(`Deactivate ${ids.length} selected staff?\n\nRecords are kept — login is disabled if set.`))return;
+ const n=await applyStaffStatus(ids,'Inactive');
+ save();audit('Staff Bulk Deactivated',n+' staff');toast(n?n+' deactivated':'No active staff selected');pgStaff();
+}
+async function bulkActivateStaff(){
+ const ids=staffSelectedIds();
+ if(!ids.length){toast('Select staff first');return}
+ if(!confirm(`Activate ${ids.length} selected staff?`))return;
+ const n=await applyStaffStatus(ids,'Active');
+ save();audit('Staff Bulk Activated',n+' staff');toast(n?n+' activated':'No inactive staff selected');pgStaff();
+}
 function deactivateStaff(id){
  const s=staffById(id);if(!s)return;
  if(!confirm(`Deactivate staff "${s.name}" (${s.id})?\n\nAccount stays in records.`))return;
- s.status='Inactive';
- if(s.loginUserId&&canCreateStaffLogin()){
-  api('/staff/'+s.loginUserId+'/disable',{method:'PATCH'}).catch(e=>toast(e.message||'Login disable failed'));
- }
- save();audit('Staff Deactivated',s.id+' '+s.name);toast('Staff deactivated');pgStaff();
+ applyStaffStatus([id],'Inactive').then(n=>{
+  save();audit('Staff Deactivated',s.id+' '+s.name);toast('Staff deactivated');pgStaff();
+ });
 }
 function activateStaff(id){
  const s=staffById(id);if(!s)return;
- s.status='Active';
- if(s.loginUserId&&canCreateStaffLogin()){
-  api('/staff/'+s.loginUserId+'/enable',{method:'PATCH'}).catch(e=>toast(e.message||'Login enable failed'));
- }
- save();audit('Staff Activated',s.id);toast('Staff activated');pgStaff();
+ applyStaffStatus([id],'Active').then(n=>{
+  save();audit('Staff Activated',s.id);toast('Staff activated');pgStaff();
+ });
 }
 function canManageStaff(id){
  if(!USER)return false;
@@ -2537,6 +2581,92 @@ function deptToJobType(dept){
  if(/account/.test(d))return'GENERAL';
  if(/manage|recept|front|manager|sales|fom/.test(d))return'SALES';
  return'GENERAL';
+}
+function isTrainerStaff(sOrDept){
+ const d=typeof sOrDept==='string'?sOrDept:(sOrDept&&sOrDept.dept)||'';
+ return /train|pt/i.test(d);
+}
+function fmtTime12(t){
+ if(!t)return'';
+ const p=String(t).split(':');
+ let h=parseInt(p[0],10),m=(p[1]||'00').slice(0,2);
+ if(isNaN(h))return t;
+ const ap=h>=12?'PM':'AM';
+ h=h%12||12;
+ return h+':'+m+' '+ap;
+}
+function formatStaffShift(s){
+ if(!s)return'—';
+ if(Array.isArray(s.shiftSlots)&&s.shiftSlots.length){
+  const txt=s.shiftSlots.filter(x=>x&&(x.from||x.to)).map(x=>fmtTime12(x.from)+'–'+fmtTime12(x.to)).join(', ');
+  if(txt)return esc(txt);
+ }
+ return esc(s.shift||'—');
+}
+function defaultTrainerShiftSlots(){
+ return [{from:'05:00',to:'10:00'},{from:'17:00',to:'22:00'}];
+}
+function staffShiftSlots(s){
+ if(s&&Array.isArray(s.shiftSlots)&&s.shiftSlots.length)return s.shiftSlots.slice(0,2);
+ if(s&&isTrainerStaff(s))return defaultTrainerShiftSlots();
+ return [{from:'',to:''}];
+}
+function staffShiftSlotRowHTML(slot,i){
+ return`<div class="row st_slot_row" style="gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:6px">
+  <div class="field" style="margin:0;min-width:120px"><label>Shift ${i+1} From</label><input type="time" class="st_slot_from" value="${esc(slot.from||'')}"></div>
+  <div class="field" style="margin:0;min-width:120px"><label>To</label><input type="time" class="st_slot_to" value="${esc(slot.to||'')}"></div>
+  ${i>=1?`<button type="button" class="btn sm sec" onclick="removeStaffShiftSlot(this)">Remove</button>`:''}
+ </div>`;
+}
+function staffShiftTimesHTML(s){
+ s=s||{};
+ const slots=staffShiftSlots(s);
+ return`<div id="st_shift_wrap" class="card" style="grid-column:1/-1;padding:12px;background:#f8fafc;border:1px solid var(--line);display:${isTrainerStaff(s)?'block':'none'}">
+  <h3 style="margin:0 0 10px;font-size:14px">Trainer Shift Times <span class="mut">(same day · up to 2 slots)</span></h3>
+  <div id="st_shift_slots">${slots.map(staffShiftSlotRowHTML).join('')}</div>
+  <button type="button" class="btn sm sec" id="st_add_slot" onclick="addStaffShiftSlot()" style="margin-top:6px;display:${slots.length>=2?'none':'inline-block'}">＋ Add 2nd Shift</button>
+  <p class="sub" style="margin:8px 0 0">Example: 05:00–10:00 and 17:00–22:00 on the same day.</p>
+ </div>`;
+}
+function toggleStaffShiftSection(){
+ const dept=val('st_dept')||'';
+ const show=isTrainerStaff(dept);
+ const wrap=$('st_shift_wrap');if(wrap)wrap.style.display=show?'block':'none';
+ const typeWrap=$('st_shift_type_wrap');if(typeWrap)typeWrap.style.display=show?'none':'block';
+ const box=$('st_shift_slots');
+ if(show&&box&&!box.querySelector('.st_slot_row')){
+  box.innerHTML=defaultTrainerShiftSlots().map(staffShiftSlotRowHTML).join('');
+  const addBtn=$('st_add_slot');if(addBtn)addBtn.style.display='none';
+ }else if(show){
+  const addBtn=$('st_add_slot');if(addBtn)addBtn.style.display=box&&box.querySelectorAll('.st_slot_row').length>=2?'none':'inline-block';
+ }
+}
+function addStaffShiftSlot(){
+ const box=$('st_shift_slots');if(!box)return;
+ if(box.querySelectorAll('.st_slot_row').length>=2){toast('Maximum 2 shifts per day');return}
+ box.insertAdjacentHTML('beforeend',staffShiftSlotRowHTML({from:'17:00',to:'22:00'},1));
+ const addBtn=$('st_add_slot');if(addBtn)addBtn.style.display='none';
+}
+function removeStaffShiftSlot(btn){
+ const row=btn&&btn.closest('.st_slot_row');if(row)row.remove();
+ const addBtn=$('st_add_slot');if(addBtn)addBtn.style.display='inline-block';
+}
+function readStaffShiftSlots(){
+ return[...document.querySelectorAll('.st_slot_row')].map(row=>({
+  from:row.querySelector('.st_slot_from')?.value||'',
+  to:row.querySelector('.st_slot_to')?.value||''
+ })).filter(x=>x.from||x.to);
+}
+function deriveShiftLabel(slots){
+ if(!slots||!slots.length)return'Custom';
+ if(slots.length>=2)return'Split Shift';
+ const h=parseInt((slots[0].from||'').split(':')[0],10);
+ if(!isNaN(h)&&h<12)return'Morning';
+ if(!isNaN(h)&&h>=17)return'Evening';
+ return'Custom';
+}
+function trainerStaffByName(name){
+ return(db.staff||[]).find(s=>s.name&&s.name===name)||null;
 }
 function validateStaffPassword(pw){
  if(!pw||pw.length<8)return'Password must be at least 8 characters';
@@ -2572,23 +2702,47 @@ function staffLoginSectionHTML(s,id){
   <p class="sub" style="margin:8px 0 0">Password: 8+ characters with uppercase, lowercase, and a number.</p>
  </div>`;
 }
-function staffForm(id){
- const s=id?staffById(id):{};
+function listTrainersForPage(){
+ return (db.staff||[]).filter(s=>{
+  if(/^26TR/i.test(s.id||''))return true;
+  if(s.dept==='Trainer'||s.dept==='PT')return true;
+  return /train|pt/i.test((s.dept||'')+' '+(s.jobType||'')+' '+(s.role||''));
+ });
+}
+function trainerForm(id){
+ if(id){
+  const s=staffById(id);
+  if(!s){toast('Trainer not found');return}
+  if(!canManageStaff(id)){toast('No permission to edit this trainer');return}
+  return staffForm(id,{trainerMode:true,returnPage:'trainers'});
+ }
+ if(!canManageStaff()){toast('No permission to add trainer');return}
+ staffForm(null,{dept:'Trainer',trainerMode:true,returnPage:'trainers'});
+}
+function staffForm(id,preset){
+ preset=preset||{};
+ const isTrainerMode=!!(preset.trainerMode||preset.dept==='Trainer');
+ const s=id?staffById(id):{dept:preset.dept||''};
  if(id&&!s){toast('Staff not found');return}
  if(id&&!canManageStaff(id)){toast('No permission to edit this profile');return}
  if(!id&&!canManageStaff()){toast('No permission to add staff');return}
- openModal(`<h2>${id?'Edit Staff — '+esc(s.name):'Add Staff'}</h2>
+ window._staffFormPreset=preset;
+ const defaultDept=s.dept||(preset.dept||'Management');
+ openModal(`<h2>${id?(isTrainerMode?'Edit Trainer':'Edit Staff')+' — '+esc(s.name):(isTrainerMode?'Add New Trainer':'Add Staff')}</h2>
  <div class="grid g3">
- ${fld('st_name','Name *',s.name)}${sel('st_dept','Department',['Trainer','Management','Reception','Front Office','Cleaner','Manager','Accountant'],s.dept||'Management')}${sel('st_gender','Gender',['Male','Female','Other'],s.gender)}
+ ${fld('st_name','Name *',s.name)}${sel('st_dept','Department',['Trainer','Management','Reception','Front Office','Cleaner','Manager','Accountant'],defaultDept,'onchange="toggleStaffShiftSection()"')}${sel('st_gender','Gender',['Male','Female','Other'],s.gender)}
  ${fld('st_phone','Contact *',s.phone)}${fld('st_email','Email',s.email)}${fld('st_dob','DOB',s.dob,'date')}
- ${fld('st_join','Joining Date',s.joining||today(),'date')}${fld('st_sal','Monthly Salary ₹',s.salary,'number')}${sel('st_shift','Shift',['Morning','Evening','Split Shift','Custom'],s.shift)}
+ ${fld('st_join','Joining Date',s.joining||today(),'date')}${fld('st_sal','Monthly Salary ₹',s.salary,'number')}
+ <div id="st_shift_type_wrap">${sel('st_shift','Shift',['Morning','Evening','Split Shift','Custom'],s.shift)}</div>
+ ${staffShiftTimesHTML(s)}
  ${fld('st_bank','Bank A/c & IFSC',s.bank)}${fld('st_aadhaar','Aadhaar',s.aadhaar)}${fld('st_pan','PAN',s.pan)}
  ${fld('st_qual','Qualification',s.qual)}${fld('st_exp','Experience',s.exp)}${sel('st_status','Status',['Active','Inactive'],s.status==='Inactive'?'Inactive':'Active')}
  <div class="field"><label>Bill Rep?</label><select id="st_billrep"><option value="1" ${s.billRep!==false&&s.isBillRep!==false?'selected':''}>Yes — can collect / appear as Bill Rep</option><option value="0" ${s.billRep===false||s.isBillRep===false?'selected':''}>No</option></select></div>
  ${staffLoginSectionHTML(s,id)}
  </div>
  <p class="sub">IDs: Trainer <b>26TR001</b> · FOM / Management / Reception <b>26FOM001</b> · Accountant <b>26ACC001</b></p>
- <div class="row" style="justify-content:flex-end"><button class="btn sec" onclick="closeModal()">Cancel</button><button class="btn" id="st_save_btn" onclick="saveStaff('${id||''}')">Save</button></div>`)}
+ <div class="row" style="justify-content:flex-end"><button class="btn sec" onclick="closeModal()">Cancel</button><button class="btn" id="st_save_btn" onclick="saveStaff('${id||''}')">Save</button></div>`);
+ setTimeout(toggleStaffShiftSection,0);}
 async function saveStaff(id){
  if(id&&!canManageStaff(id)){toast('No permission to edit this profile');return}
  if(!id&&!canManageStaff()){toast('No permission to add staff');return}
@@ -2600,7 +2754,17 @@ async function saveStaff(id){
   if(!s){s={id:nextStaffId(dept)};db.staff.push(s)}
   const old=isNew?'':JSON.stringify({salary:s.salary,status:s.status});
   const billOk=val('st_billrep')!=='0';
-  Object.assign(s,{name:val('st_name'),dept,gender:val('st_gender'),phone:val('st_phone'),email:val('st_email'),dob:val('st_dob'),joining:val('st_join'),salary:num('st_sal'),shift:val('st_shift'),bank:val('st_bank'),aadhaar:val('st_aadhaar'),pan:val('st_pan'),qual:val('st_qual'),exp:val('st_exp'),status:val('st_status'),billRep:billOk,isBillRep:billOk});
+  let shiftSlots=[],shift=val('st_shift');
+  if(isTrainerStaff(dept)){
+   shiftSlots=readStaffShiftSlots();
+   if(!shiftSlots.length){toast('Add at least one trainer shift time');return}
+   for(const sl of shiftSlots){
+    if(!sl.from||!sl.to){toast('Enter both From and To for each shift slot');return}
+    if(sl.from>=sl.to){toast('Shift end time must be after start time');return}
+   }
+   shift=deriveShiftLabel(shiftSlots);
+  }
+  Object.assign(s,{name:val('st_name'),dept,gender:val('st_gender'),phone:val('st_phone'),email:val('st_email'),dob:val('st_dob'),joining:val('st_join'),salary:num('st_sal'),shift,shiftSlots:isTrainerStaff(dept)?shiftSlots:(s.shiftSlots||[]),bank:val('st_bank'),aadhaar:val('st_aadhaar'),pan:val('st_pan'),qual:val('st_qual'),exp:val('st_exp'),status:val('st_status'),billRep:billOk,isBillRep:billOk});
   const wantLogin=!s.loginUserId&&canCreateStaffLogin()&&($('st_createlogin')?$('st_createlogin').checked:false);
   const loginEmail=(val('st_login_email')||val('st_email')||'').toLowerCase().trim();
   const loginPass=val('st_login_pass')||'';
@@ -2621,7 +2785,9 @@ async function saveStaff(id){
    audit('Staff Login Password Reset',s.id+' · '+s.loginEmail);
   }
   save();audit(isNew?'Staff Added':'Staff Updated',s.id+' '+s.name,old,JSON.stringify({salary:s.salary,status:s.status}));
-  toast('Staff saved · '+s.id+(s.loginUserId?' · login ready':''));closeModal();go('staff');
+  toast('Staff saved · '+s.id+(s.loginUserId?' · login ready':''));closeModal();
+  const preset=window._staffFormPreset||{};window._staffFormPreset=null;
+  go(preset.returnPage||(isTrainerStaff(dept)?'trainers':'staff'));
  }catch(e){toast(e.message||'Save failed')}
  finally{if(btn){btn.disabled=false;btn.textContent='Save'}}
 }
@@ -2962,13 +3128,15 @@ function saveClass(id){
 function pgTrainerPortal(){
  const t=today();
  const myName=USER.name;
+ const me=trainerStaffByName(myName);
  const myPt=db.subs.filter(s=>s.type==='PT'&&subStatus(s)==='Active'&&(s.trainer===myName||!s.trainer));
  const myTodos=(db.todos||[]).filter(x=>!x.done&&(x.owner===myName||x.ownerEmail===USER.u));
  const att=db.memberAtt.filter(a=>a.date===t).length;
  $('content').innerHTML=`
  <div class="trainer-portal">
   <h2>Trainer Portal</h2>
-  <div class="sub">Mobile view · ${esc(myName)}</div>
+  <div class="sub">Mobile view · ${esc(myName)}${me&&me.shiftSlots&&me.shiftSlots.length?' · Today: '+formatStaffShift(me):''}</div>
+  ${me&&isTrainerStaff(me)?`<div class="card" style="margin:12px 0"><h3 style="margin-bottom:8px">My Shift Times</h3><p class="big bold">${formatStaffShift(me)}</p><p class="sub">Same-day slots · contact admin to change in Staff → Edit</p></div>`:''}
   <div class="grid g2" style="margin:16px 0">
    ${stat('My Active PT',myPt.length,'ok')}${stat('Open Todos',myTodos.length,'br')}
    ${stat('Check-ins today',att)}${stat('Date',fmtD(t))}
@@ -2991,7 +3159,7 @@ function pgTrainerPortal(){
 function pgLeads(){
  if(!db.leads)db.leads=[];
  const rows=db.leads.slice().reverse().map(l=>`<tr>
-  <td>${esc(l.code||l.id||'')}</td><td>${fmtD(l.date)}</td><td class="bold">${esc(l.name)}</td><td>${esc(l.mobile||'')}</td>
+  <td>${esc(l.code||l.id||'')}</td><td>${fmtD(l.date)}</td><td class="bold">${esc(l.name)}</td><td>${formatMobile(l.mobile)}</td>
   <td>${esc(l.source||'')}</td><td>${esc(l.leadType||'')}</td><td>${esc(l.status||'New')}</td>
   <td>${esc(l.handledBy||'')}</td><td>${fmtD(l.follow)}</td>
   <td class="r"><button class="btn sm sec" onclick="leadForm('${l.id}')">Edit</button>
@@ -3003,7 +3171,7 @@ function pgLeads(){
   <button class="btn sec" onclick="openYdlImport('leads')">⬆ Import CSV</button>
   <button class="btn" onclick="leadForm()">＋ Add Lead</button>
  </div></div>
- <div class="tbl" style="margin-top:12px"><table><tr><th>Code</th><th>Date</th><th>Name</th><th>Number</th><th>Source</th><th>Lead Type</th><th>Status</th><th>Handled By</th><th>Follow-up</th><th></th></tr>
+ <div class="tbl" style="margin-top:12px"><table><tr><th>Code</th><th>Date</th><th>Name</th><th>Mobile</th><th>Source</th><th>Lead Type</th><th>Status</th><th>Handled By</th><th>Follow-up</th><th></th></tr>
  ${rows||'<tr><td colspan=10 class="mut">No leads yet — use Import CSV for your YDL sheet</td></tr>'}</table></div>`;
 }
 function pgFollowups(){
@@ -3013,16 +3181,18 @@ function pgFollowups(){
  <div class="row" style="justify-content:space-between"><div><h2>Follow-ups</h2><div class="sub">${due.filter(l=>l.follow<=today()).length} due today or overdue</div></div>
  <button class="btn" onclick="go('leads')">All Leads</button></div>
  <div class="tbl" style="margin-top:12px"><table><tr><th>Follow date</th><th>Name</th><th>Mobile</th><th>Status</th><th>Notes</th><th></th></tr>
- ${due.map(l=>`<tr style="${l.follow<=today()?'background:#fff5f5':''}"><td>${fmtD(l.follow)}</td><td class="bold">${esc(l.name)}</td><td>${esc(l.mobile||'')}</td>
+ ${due.map(l=>`<tr style="${l.follow<=today()?'background:#fff5f5':''}"><td>${fmtD(l.follow)}</td><td class="bold">${esc(l.name)}</td><td>${formatMobile(l.mobile)}</td>
  <td>${esc(l.status||'New')}</td><td>${esc(l.notes||'')}</td>
  <td class="r"><button class="btn sm sec" onclick="leadForm('${l.id}')">Update</button></td></tr>`).join('')||'<tr><td colspan=6 class="mut">No follow-ups scheduled</td></tr>'}
  </table></div>`;
 }
 function leadForm(id){
  const l=id?(db.leads||[]).find(x=>x.id===id):{};
- openModal(`<h2>${id?'Edit':'Add'} Lead / Enquiry</h2><div class="grid g3">
-  ${fld('ld_code','Code',l.code||'')}${fld('ld_name','Name *',l.name)}${fld('ld_isd','ISD Code',l.isdCode||'91')}
-  ${fld('ld_mobile','Number',l.mobile)}${fld('ld_wa','WhatsApp',l.wa||'')}${fld('ld_email','Email',l.email||'')}
+ openModal(`<h2>${id?'Edit':'Add'} Lead / Enquiry</h2>
+ <p class="sub" style="margin-bottom:10px">Mobile is <b>+91</b> with 10 digits — same as member page.</p>
+ <div class="grid g3">
+  ${fld('ld_code','Code',l.code||'')}${fld('ld_name','Name *',l.name)}
+  ${phoneField('ld_mobile','Mobile *',l.mobile,false)}${phoneField('ld_wa','WhatsApp',l.wa||l.mobile,false)}${fld('ld_email','Email',l.email||'')}
   ${sel('ld_gender','Gender',['','Male','Female','Other'],l.gender||'')}
   ${fld('ld_date','Date of Enquiry',l.date||today(),'date')}${fld('ld_dob','DOB',l.dob||'','date')}
   ${fld('ld_follow','Follow-up Date',l.follow||addDays(today(),1),'date')}
@@ -3044,10 +3214,14 @@ function leadForm(id){
   <button class="btn" onclick="saveLead('${id||''}')">Save</button></div>`)}
 function saveLead(id){
  if(!val('ld_name')){toast('Name required');return}
+ const mobile=normalizeMobile(val('ld_mobile'));
+ const wa=normalizeMobile(val('ld_wa'))||mobile;
+ if(!mobile){toast('Mobile is required');return}
+ if(!/^\d{10}$/.test(mobile)){toast('Enter a valid 10-digit mobile number');return}
  let l=id?(db.leads||[]).find(x=>x.id===id):null;
  if(!l){l={id:'LD'+Date.now()};db.leads.push(l)}
  Object.assign(l,{
-  code:val('ld_code'),name:caps(val('ld_name')),isdCode:val('ld_isd'),mobile:val('ld_mobile'),wa:val('ld_wa'),
+  code:val('ld_code'),name:caps(val('ld_name')),isdCode:'91',mobile,wa,
   email:val('ld_email'),gender:val('ld_gender'),date:val('ld_date'),dob:val('ld_dob'),follow:val('ld_follow'),
   status:val('ld_status'),conversion:val('ld_conv'),leadType:val('ld_type'),source:val('ld_src'),
   handledBy:caps(val('ld_handled')),assignedTo:caps(val('ld_assign')),employment:val('ld_emp'),
@@ -3243,7 +3417,7 @@ function pgTrainerAnalysis(){
  });
  const pending=(db.trainerRequests||[]).filter(r=>r.status==='Pending');
  $('content').innerHTML=`<div class="row" style="justify-content:space-between;margin-bottom:12px"><div><h2>Trainer Analysis</h2><div class="sub">Admin Panel · ${esc(db.settings.gymName||'FITO6')} · ${m}</div></div>
-  <button class="btn sec" onclick="go('gymperformance')">Gym Performance</button></div>
+  <div class="row" style="gap:8px">${canManageStaff()?`<button class="btn" onclick="trainerForm()">➕ Add New Trainer</button>`:''}<button class="btn sec" onclick="go('trainers')">Trainer List</button><button class="btn sec" onclick="go('gymperformance')">Gym Performance</button></div></div>
  <div class="grid g4" style="margin-bottom:14px">${stat('Trainers',Object.keys(trainerStats).length,'br')}${stat('Total PT Clients',Object.values(ptCounts).reduce((a,b)=>a+b,0),'ok')}${stat('Pending Trainer Changes',pending.length,pending.length?'warn':'')}${stat('PT Revenue (active)',inr(Object.values(trainerStats).reduce((s,t)=>s+t.revenue,0)),'ok')}</div>
  <div class="card" style="margin-bottom:14px"><h3>Trainer-wise PT Client Count</h3>
   <div class="tbl"><table><tr><th>Trainer</th><th>Assigned Members</th><th>Active PT</th><th>Visits (${m})</th><th class="r">PT Revenue</th></tr>
@@ -3313,13 +3487,12 @@ function pgNotifications(){
    </div>
   </div>`}
 function pgTrainers(){
- const list=(db.staff||[]).filter(s=>/train|pt/i.test((s.dept||'')+' '+(s.jobType||'')+' '+(s.role||'')+' '+(s.name||''))||/^26TR/i.test(s.id||''));
- const rows=list.length?list:(db.staff||[]).filter(s=>s.dept==='Trainer'||s.dept==='PT');
- const show=rows.length?rows:(db.staff||[]);
- $('content').innerHTML=`<div class="row" style="justify-content:space-between;margin-bottom:12px"><div><h2>Trainers</h2><div class="sub">${show.length} staff shown</div></div>
-  <div class="row"><button class="btn sec" onclick="go('trainer')">Trainer Portal</button><button class="btn" onclick="go('staff')">All Staff</button></div></div>
-  <div class="tbl"><table><tr><th>ID</th><th>Name</th><th>Dept</th><th>Mobile</th><th>Status</th></tr>
-  ${show.map(s=>`<tr><td>${esc(s.id)}</td><td>${esc(s.name)}</td><td>${esc(s.dept||'')}</td><td>${esc(s.mobile||'')}</td><td>${esc(s.status||'Active')}</td></tr>`).join('')||'<tr><td colspan="5" class="mut">No trainers yet — add staff with Trainer / FOM dept</td></tr>'}
+ const show=listTrainersForPage();
+ const addBtn=canManageStaff()?`<button class="btn" onclick="trainerForm()">➕ Add New Trainer</button>`:'';
+ $('content').innerHTML=`<div class="row" style="justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:10px"><div><h2>Trainers</h2><div class="sub">${show.length} trainer(s) · set shift times & login in Add / Edit</div></div>
+  <div class="row" style="gap:8px">${addBtn}<button class="btn sec" onclick="go('trainer')">Trainer Portal</button><button class="btn sec" onclick="go('staff')">All Staff</button></div></div>
+  <div class="tbl"><table><tr><th>ID</th><th>Name</th><th>Dept</th><th>Shift Times</th><th>Mobile</th><th>Status</th><th></th></tr>
+  ${show.map(s=>`<tr><td>${esc(s.id)}</td><td class="clickable" onclick="trainerForm('${s.id}')">${esc(s.name)}</td><td>${esc(s.dept||'')}</td><td>${formatStaffShift(s)}</td><td>${esc(s.phone||s.mobile||'')}</td><td><span class="badge ${s.status==='Active'?'b-ok':'b-mut'}">${esc(s.status||'Active')}</span></td><td class="r">${canManageStaff()?`<button class="btn sm sec" onclick="trainerForm('${s.id}')">Edit</button>`:''}</td></tr>`).join('')||`<tr><td colspan="7" class="mut">No trainers yet${canManageStaff()?' — click <b>Add New Trainer</b> above':''}</td></tr>`}
   </table></div>`}
 function pgFitness(){
  const s=db.settings||{};
