@@ -2055,6 +2055,83 @@ function savePayment(invId){
  save();audit('Payment Received',c.name+' · '+iv.no+' · '+inr(totalPay));
  toast('Payment saved — cashbook, ledger & dashboard updated');
  closeModal();showInvoice(iv.id)}
+function recalcInvoicePaid(iv){
+ if(!iv)return;
+ iv.paid=+((iv.payments||[]).reduce((s,p)=>s+Number(p.amt||0),0)).toFixed(2);
+ iv.pending=+Math.max(0,Number(iv.grand||0)-iv.paid).toFixed(2);
+}
+function cashbookForReceipt(receipt){
+ return db.cashbook.find(e=>e.no===receipt&&e.type==='in')||null;
+}
+function invoicePaymentsTableHTML(iv,returnClientId){
+ if(!iv.payments||!iv.payments.length)return'<p class="sub mut">No payments recorded</p>';
+ const ret=returnClientId||'';
+ return `<div class="tbl"><table><tr><th>Receipt</th><th>Date</th><th>Mode</th><th class="r">Amount</th><th>Collected By</th><th></th></tr>
+ ${iv.payments.map(p=>`<tr>
+  <td>${esc(p.receipt)}</td><td>${fmtD(p.date)}</td><td>${esc(formatPayMode(p.mode))}</td><td class="r">${inr(p.amt)}</td><td>${esc(p.by||'')}</td>
+  <td><button class="btn sm sec" onclick="openEditPayment('${iv.id}','${p.receipt}','${ret}')">Edit</button></td>
+ </tr>`).join('')}
+ </table></div>`;
+}
+function closeEditPayment(invId,returnClientId){
+ if(returnClientId)openClient(returnClientId);
+ else showInvoice(invId);
+}
+function openEditPayment(invId,receipt,returnClientId){
+ const iv=db.invoices.find(i=>i.id===invId);if(!iv)return;
+ const p=(iv.payments||[]).find(x=>x.receipt===receipt);if(!p){toast('Payment not found');return}
+ const c=client(iv.clientId);
+ const otherPaid=iv.paid-Number(p.amt||0);
+ const maxAmt=Math.max(0,iv.grand-otherPaid);
+ openModal(`<h2>Edit Cash Received</h2>
+ <p class="sub">${esc(iv.no)} · ${esc(c?c.name:'')} · Receipt <b>${esc(p.receipt)}</b></p>
+ <div class="grid g2">
+  ${fld('ep_date','Payment Date',p.date,'date')}
+  ${payModeFieldHtml('ep',p.mode)}
+  ${fld('ep_amt','Amount ₹',p.amt,'number','min="0" step="0.01" max="'+maxAmt+'"')}
+  ${fld('ep_by','Collected By',p.by||'')}
+ </div>
+ <p class="sub" style="margin-top:8px">Invoice total ${inr(iv.grand)} · Other receipts ${inr(otherPaid)} · Max for this entry ${inr(maxAmt)}</p>
+ <div class="row" style="justify-content:space-between;margin-top:14px;flex-wrap:wrap;gap:8px">
+  <button class="btn sm dgr" onclick="deletePayment('${invId}','${p.receipt}','${returnClientId||''}')">Delete</button>
+  <div class="row" style="gap:8px">
+   <button class="btn sec" onclick="closeEditPayment('${invId}','${returnClientId||''}')">Cancel</button>
+   <button class="btn" onclick="saveEditPayment('${invId}','${p.receipt}','${returnClientId||''}')">Save</button>
+  </div>
+ </div>`);
+}
+function saveEditPayment(invId,receipt,returnClientId){
+ const iv=db.invoices.find(i=>i.id===invId);if(!iv)return;
+ const p=(iv.payments||[]).find(x=>x.receipt===receipt);if(!p)return;
+ const amt=posAmount(num('ep_amt'),'Enter a positive amount');if(amt==null)return;
+ const date=val('ep_date')||today();
+ const mode=readPayMode('ep');
+ const by=val('ep_by')||USER.name;
+ const otherPaid=iv.paid-Number(p.amt||0);
+ if(otherPaid+amt>iv.grand+0.01){toast('Total payments cannot exceed invoice amount');return}
+ const oldAmt=p.amt;
+ p.date=date;p.mode=mode;p.amt=amt;p.by=by;
+ recalcInvoicePaid(iv);
+ const cb=cashbookForReceipt(receipt);
+ if(cb&&cb.status!=='Inactive'){cb.date=date;cb.mode=mode;cb.amount=amt;cb.by=by}
+ save();audit('Payment Edited',iv.no+' · '+receipt+' · '+inr(oldAmt)+' → '+inr(amt));
+ toast('Payment updated — cashbook & invoice totals updated');
+ closeEditPayment(invId,returnClientId);
+}
+function deletePayment(invId,receipt,returnClientId){
+ if(!confirm('Delete this payment? The linked cashbook entry will be marked inactive.'))return;
+ const iv=db.invoices.find(i=>i.id===invId);if(!iv)return;
+ const idx=(iv.payments||[]).findIndex(x=>x.receipt===receipt);
+ if(idx<0)return;
+ const p=iv.payments[idx];
+ iv.payments.splice(idx,1);
+ recalcInvoicePaid(iv);
+ const cb=cashbookForReceipt(receipt);
+ if(cb)cb.status='Inactive';
+ save();audit('Payment Deleted',iv.no+' · '+receipt+' · '+inr(p.amt));
+ toast('Payment removed');
+ closeEditPayment(invId,returnClientId);
+}
 
 /* ================= BILLING / INVOICES ================= */
 let BILL_F={status:'',month:'',billRep:'',sales:''};
@@ -2126,7 +2203,7 @@ function invoiceHTML(iv){const c=client(iv.clientId);const st=db.settings;
  <tr><td colspan="3" class="r bold">Grand Total</td><td class="r bold">${inr(iv.grand)}</td></tr>
  <tr><td colspan="3" class="r">Paid</td><td class="r">${inr(iv.paid)}</td></tr>
  <tr><td colspan="3" class="r bold">Balance Due ${iv.pending>0?'(by '+fmtD(iv.dueDate)+')':''}</td><td class="r bold">${inr(iv.pending)}</td></tr></table>
- ${iv.payments&&iv.payments.length?`<b>Payments:</b> ${iv.payments.map(p=>p.receipt+' · '+p.mode+' · '+inr(p.amt)+' ('+fmtD(p.date)+')').join(' | ')}`:''}
+ ${iv.payments&&iv.payments.length?`<h3 style="margin-top:14px">Cash Received</h3>${invoicePaymentsTableHTML(iv,'')}`:''}
  <div class="row" style="justify-content:space-between;align-items:flex-end;margin-top:48px;gap:24px">
   <div style="flex:1"></div>
   <div style="min-width:220px;text-align:center">
@@ -2167,6 +2244,9 @@ function openClient(id){const c=client(id);if(!c)return;
  <td class="r">${subStatus(s)!=='Used'?`<button class="btn sm sec" onclick="openEditSub('${s.id}')">Edit</button>`:''}</td></tr>`).join('')||'<tr><td colspan=7 class="mut">None</td></tr>'}</table></div>
  <h3 style="margin-top:12px">Invoices & Payments</h3><div class="tbl"><table><tr><th>Invoice</th><th>Date</th><th>Bill Rep</th><th class="r">Total</th><th class="r">Paid</th><th class="r">Pending</th><th></th></tr>
  ${invs.map(i=>`<tr><td>${i.no}</td><td>${fmtD(i.date)}</td><td>${esc(i.billRep||i.by||c.billRep||'-')}</td><td class="r">${inr(i.grand)}</td><td class="r">${inr(i.paid)}</td><td class="r">${inr(i.pending)}</td><td><button class="btn sm sec" onclick="showInvoice('${i.id}')">View</button>${i.pending>0?` <button class="btn sm" onclick="openModal('<h2>Collect</h2>'+payFormHTML('${i.id}',false))">Collect</button>`:''}</td></tr>`).join('')||'<tr><td colspan=7 class="mut">None</td></tr>'}</table></div>
+ ${(()=>{const pays=invs.flatMap(i=>(i.payments||[]).map(p=>({p,i})));if(!pays.length)return'';return`<h3 style="margin-top:12px">Cash Received</h3><div class="tbl"><table><tr><th>Receipt</th><th>Invoice</th><th>Date</th><th>Mode</th><th class="r">Amount</th><th>Collected By</th><th></th></tr>
+ ${pays.map(({p,i})=>`<tr><td>${esc(p.receipt)}</td><td>${i.no}</td><td>${fmtD(p.date)}</td><td>${esc(formatPayMode(p.mode))}</td><td class="r">${inr(p.amt)}</td><td>${esc(p.by||'')}</td><td><button class="btn sm sec" onclick="openEditPayment('${i.id}','${p.receipt}','${id}')">Edit</button></td></tr>`).join('')}
+ </table></div>`})()}
  <h3 style="margin-top:12px">Recent Attendance</h3><div class="sub">${att.map(a=>fmtD(a.date)+' '+a.time).join(' · ')||'No check-ins yet'}</div>
  <h3 style="margin-top:12px">Notes</h3>
  <div class="row"><input id="cn_note" placeholder="Add a note (follow-up, measurement, etc.)" style="flex:1"><button class="btn sm" onclick="addNote('${id}')">Add</button></div>
