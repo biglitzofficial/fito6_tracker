@@ -46,7 +46,17 @@ h2{font-size:20px;margin-bottom:4px} h3{font-size:15px;margin-bottom:10px}
 .tb-drop a:hover,.tb-drop button:hover{background:#f4f6fa}
 .stat.clickable{cursor:pointer}.stat.clickable:hover{border-color:var(--brand)}
 .photo-av{width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid var(--line);background:#eef1f6}
+.client-photo-wrap{min-width:160px}
+.client-photo-wrap .field{margin-top:8px;width:160px}
+.client-photo-wrap video{width:100%;max-width:280px;border-radius:8px;background:#111}
 .linechart{width:100%;height:160px}
+.unreg-search{max-width:520px;margin:48px auto 24px;text-align:center;padding:12px 16px}
+.unreg-msg{font-size:15px;line-height:1.65;margin:0 0 28px;color:var(--ink)}
+.unreg-actions{display:flex;flex-direction:column;gap:12px;margin-bottom:24px}
+.unreg-btn{width:100%;padding:14px 20px!important;font-size:15px!important;background:#2563eb!important}
+.unreg-btn:hover{background:#1d4ed8!important}
+.unreg-nav{justify-content:center;gap:10px;margin-bottom:14px}
+.unreg-page{margin-top:4px}
 .flow-chart{width:100%;min-height:200px;background:linear-gradient(180deg,#eef2f7 0%,#e2e8f0 100%);border-radius:8px;padding:8px 6px 4px;border:1px solid #d8e0ea}
 .flow-chart svg{width:100%;height:200px;display:block}
 .flow-chart-bars svg{height:210px}
@@ -404,7 +414,7 @@ function toast(m){const t=$('toast');t.textContent=m;t.style.display='block';cle
 function val(id){return $(id)?$(id).value.trim():''}
 function num(id){return parseFloat(val(id))||0}
 function openModal(html,noHist){const wasOpen=$('modalwrap')&&$('modalwrap').style.display==='flex';$('modal').innerHTML=html;$('modalwrap').style.display='flex';$('modal').querySelectorAll('script').forEach(s=>{try{eval(s.textContent)}catch(e){console.error(e)}});if(!_histBusy&&!noHist&&!wasOpen)pushAppHistory(appHistState(PAGE,true),false)}
-function closeModal(fromPop){$('modalwrap').style.display='none';if(!fromPop&&!_histBusy){const st=history.state;if(st&&st.fito6&&st.modal)history.back()}}
+function closeModal(fromPop){stopWebcam();$('modalwrap').style.display='none';if(!fromPop&&!_histBusy){const st=history.state;if(st&&st.fito6&&st.modal)history.back()}}
 function audit(action,detail,oldV,newV){db.audit.unshift({ts:new Date().toISOString(),user:USER?USER.name:'-',role:USER?USER.role:'-',action,detail:detail||'',oldV:oldV||'',newV:newV||''});if(db.audit.length>3000)db.audit.length=3000;save()}
 function csvExport(rows,name){const csv=rows.map(r=>r.map(c=>'"'+String(c??'').replace(/"/g,'""')+'"').join(',')).join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download=name+'.csv';a.click();toast('Exported '+name+'.csv')}
 /* ---- YDL CSV Import (Members / Enquiries) ---- */
@@ -984,17 +994,76 @@ function bindCaps(ids){ids.forEach(id=>{const el=$(id);if(!el||el.readOnly||el.d
 function readPhoto(inputId,previewId,cb){
  const inp=$(inputId);if(!inp||!inp.files||!inp.files[0]){cb('');return}
  const f=inp.files[0];if(f.size>2.5e6){toast('Photo max 2.5MB');cb('');return}
- const r=new FileReader();r.onload=()=>{
-  const img=new Image();img.onload=()=>{
-   const max=400,scale=Math.min(1,max/Math.max(img.width,img.height));
-   const c=document.createElement('canvas');c.width=Math.round(img.width*scale);c.height=Math.round(img.height*scale);
-   c.getContext('2d').drawImage(img,0,0,c.width,c.height);
-   const data=c.toDataURL('image/jpeg',0.72);
-   if(previewId&&$(previewId)){$(previewId).src=data;$(previewId).style.display='block'}
-   cb(data);
-  };img.src=r.result;
- };r.readAsDataURL(f);
+ const r=new FileReader();r.onload=()=>compressPhotoDataUrl(r.result,previewId,cb);
+ r.readAsDataURL(f);
 }
+function compressPhotoDataUrl(src,previewId,cb){
+ const img=new Image();img.onload=()=>{
+  const max=400,scale=Math.min(1,max/Math.max(img.width,img.height));
+  const c=document.createElement('canvas');c.width=Math.round(img.width*scale);c.height=Math.round(img.height*scale);
+  c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+  const data=c.toDataURL('image/jpeg',0.72);
+  if(previewId)setPhotoPreview(previewId,data);
+  cb(data);
+ };img.onerror=()=>cb('');img.src=src;
+}
+function setPhotoPreview(previewId,data){
+ const prev=$(previewId);
+ if(prev){prev.src=data||'';prev.style.display=data?'block':'none'}
+ const ph=$(previewId+'_ph');if(ph)ph.style.display=data?'none':'flex';
+}
+let _wcStream=null;
+function stopWebcam(){
+ if(_wcStream){_wcStream.getTracks().forEach(t=>t.stop());_wcStream=null}
+ const panel=$('wc_panel');if(panel)panel.style.display='none';
+ const v=$('wc_video');if(v)v.srcObject=null;
+}
+function toggleWebcam(previewId){
+ const panel=$('wc_panel');
+ if(!panel){toast('Webcam not available here');return}
+ if(panel.style.display==='block'){stopWebcam();return}
+ if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){toast('Webcam not supported');return}
+ panel.style.display='block';
+ navigator.mediaDevices.getUserMedia({video:{facingMode:'user'},audio:false}).then(stream=>{
+  _wcStream=stream;const v=$('wc_video');if(v){v.srcObject=stream;v.play().catch(()=>{});}
+ }).catch(()=>{toast('Camera access denied');if(panel)panel.style.display='none';});
+}
+function snapWebcam(previewId){
+ const v=$('wc_video');if(!v||!v.videoWidth){toast('Camera not ready');return}
+ const max=400,scale=Math.min(1,max/Math.max(v.videoWidth,v.videoHeight));
+ const c=document.createElement('canvas');c.width=Math.round(v.videoWidth*scale);c.height=Math.round(v.videoHeight*scale);
+ c.getContext('2d').drawImage(v,0,0,c.width,c.height);
+ const data=c.toDataURL('image/jpeg',0.72);
+ setPhotoPreview(previewId,data);
+ stopWebcam();
+ if(previewId==='w_photo_prev')WIZ._photo=data;
+ if(previewId==='cp_photo_prev')window._clientPhotoData=data;
+ toast('Photo captured');
+}
+function clientPhotoSectionHTML(previewId,fileId,photo){
+ photo=photo||'';
+ return `<div class="client-photo-wrap">
+  <img id="${previewId}" class="photo-av" style="${photo?'':'display:none'}" src="${photo||''}">
+  <div id="${previewId}_ph" class="photo-av" style="${photo?'display:none':'display:flex'};align-items:center;justify-content:center;color:var(--mut)">📷</div>
+  <div class="field"><label>Client Photo</label>
+   <input id="${fileId}" type="file" accept="image/*" capture="environment" onchange="previewPhotoFile('${fileId}','${previewId}')">
+   <div class="row" style="gap:6px;margin-top:6px;flex-wrap:wrap">
+    <button type="button" class="btn sm sec" style="flex:1" onclick="toggleWebcam('${previewId}')">📷 Webcam</button>
+   </div>
+   <div id="wc_panel" style="display:none;margin-top:8px">
+    <video id="wc_video" autoplay playsinline muted></video>
+    <button type="button" class="btn sm" style="margin-top:6px;width:100%" onclick="snapWebcam('${previewId}')">Capture Photo</button>
+   </div>
+  </div>
+ </div>`;
+}
+function previewPhotoFile(fileId,previewId){
+ readPhoto(fileId,previewId,data=>{
+  if(previewId==='w_photo_prev')WIZ._photo=data;
+  if(previewId==='cp_photo_prev')window._clientPhotoData=data;
+ });
+}
+function previewWizPhoto(){previewPhotoFile('w_photo','w_photo_prev')}
 function toggleTbDrop(id){const el=$(id);const open=el&&el.style.display==='block';closeTbDrops();if(el&&!open)el.style.display='block'}
 function closeTbDrops(){['tb_bill_drop','tb_cash_drop'].forEach(id=>{const el=$(id);if(el)el.style.display='none'})}
 function refreshTopbarNotifs(){
@@ -1489,6 +1558,7 @@ function applyClientFilters(){
  CL_F.membership=val('cl_mem')||'';
  CL_F.from=val('cl_from')||'';
  CL_F.to=val('cl_to')||'';
+ if(maybeShowUnregisteredSearch(CL_F.q))return;
  pgClients();
 }
 function resetClientFilters(){
@@ -1549,7 +1619,6 @@ function pgClients(){
   <button class="btn" onclick="openWizard()">Add Member</button>
   <button class="btn sec" onclick="go('memberships')">Manage Subscriptions</button>
   <button class="btn sec" style="border-color:var(--bad);color:var(--bad)" onclick="CL_F.status='Inactive';pgClients()">Deactivated Members</button>
-  ${MENUS[USER.role].includes('meter')?`<button class="btn sec" onclick="go('meter')">⚡ Electricity Meter</button>`:''}
   <button class="btn sec" onclick="document.querySelectorAll('.cl_sel').forEach(c=>c.checked=true)">Select All</button>
   <button class="btn sec" onclick="document.querySelectorAll('.cl_sel').forEach(c=>c.checked=false)">Deselect All</button>
  </div>
@@ -1607,7 +1676,11 @@ function deleteClient(id){deactivateClient(id)}
 
 /* ---- Registration Wizard ---- */
 let WIZ={};
-function openWizard(){WIZ={step:1,c:{},clientId:null,invId:null};renderWizard()}
+function openWizard(mobile){
+ const m=mobile?normalizeMobile(mobile):'';
+ WIZ={step:1,c:m?{mobile:m,wa:m}:{},clientId:null,invId:null};
+ renderWizard();
+}
 function renderWizard(){
  const s=WIZ.step;
  openModal(`<h2>New Client Registration</h2>
@@ -1649,11 +1722,8 @@ function wizStep1(){
  const mobExtra=locked?'readonly class="ro"':'';
  return `
  <div class="row" style="gap:16px;align-items:flex-start;margin-bottom:12px">
-  <div>
-   <img id="w_photo_prev" class="photo-av" style="${c.photo?'':'display:none'}" src="${c.photo||''}">
-   <div class="field" style="margin-top:8px;width:160px"><label>Client Photo</label><input id="w_photo" type="file" accept="image/*" onchange="previewWizPhoto()"></div>
-  </div>
-  <div class="sub" style="flex:1">Personal details are saved in <b>CAPITAL LETTERS</b>. Gender &amp; DOB are mandatory. Name &amp; mobile lock after first save. Mobile is <b>+91</b> with 10 digits.</div>
+  ${clientPhotoSectionHTML('w_photo_prev','w_photo',c.photo)}
+  <div class="sub" style="flex:1">Personal details are saved in <b>CAPITAL LETTERS</b>. Gender &amp; DOB are mandatory. Name &amp; mobile lock after first save. Mobile is <b>+91</b> with 10 digits. Upload a file or use <b>Webcam</b> for profile photo.</div>
  </div>
  <div class="grid g3">
   ${fld('w_name','Name *',c.name,'text',nameExtra)}${sel('w_gender','Gender *',['','Male','Female','Other'],c.gender)}${fld('w_dob','DOB *',c.dob,'date')}
@@ -1677,7 +1747,6 @@ function wizStep1(){
    <button class="btn" onclick="wizSave1(true)">Next ➜</button>
   </div>
  </div>`}
-function previewWizPhoto(){readPhoto('w_photo','w_photo_prev',data=>{WIZ._photo=data})}
 function wizPrev(){
  if(WIZ.step===1){closeModal();return}
  if(WIZ.step===2){WIZ.step=1;WIZ.c=client(WIZ.clientId)||WIZ.c;renderWizard();return}
@@ -2089,7 +2158,7 @@ function openClient(id){const c=client(id);if(!c)return;
  <div class="sub">${formatMobile(c.mobile)} · ${esc(c.email||'')} · Joined ${fmtD(c.joined)}</div>
  <div class="sub" style="margin-top:4px"><b>Referral:</b> ${esc(c.ref||'—')} · <b>DOB:</b> ${fmtD(c.dob)} · <b>Anniversary:</b> ${fmtD(c.anniversary)}</div>
  <div class="sub" style="margin-top:4px"><b>Trainer:</b> ${esc(c.trainer||'—')}${c.trainer&&ptN?` (${ptN} PT clients)`:''} · <b>Bill Rep:</b> ${esc(c.billRep||'—')}${c.billRepFrozen?' <span class="mut">(locked)</span>':''}</div></div></div>
- <div class="row" style="gap:8px">${c.status!=='Inactive'?`<button class="btn" onclick="openSubForm('${id}')">➕ New / Renew Plan</button>`:''}<button class="btn sec" onclick="editClientPersonal('${id}')">Edit Address</button><button class="btn sec" onclick="openTrainerChangeRequest('${id}')">Change Trainer Request</button>${c.status!=='Inactive'?`<button class="btn sec dgr" onclick="deactivateClient('${id}')">Deactivate</button>`:`<button class="btn sec" onclick="activateClient('${id}');openClient('${id}')">Activate</button>`}</div></div>
+ <div class="row" style="gap:8px">${c.status!=='Inactive'?`<button class="btn" onclick="openSubForm('${id}')">➕ New / Renew Plan</button>`:''}<button class="btn sec" onclick="openClientPhotoEdit('${id}')">📷 Update Photo</button><button class="btn sec" onclick="editClientPersonal('${id}')">Edit Address</button><button class="btn sec" onclick="openTrainerChangeRequest('${id}')">Change Trainer Request</button>${c.status!=='Inactive'?`<button class="btn sec dgr" onclick="deactivateClient('${id}')">Deactivate</button>`:`<button class="btn sec" onclick="activateClient('${id}');openClient('${id}')">Activate</button>`}</div></div>
  <div class="grid g4" style="margin:12px 0">${stat('Sub Start',pl?fmtD(pl.start):'-','br')}${stat('Sub End',pl?fmtD(pl.end):'-','br')}${stat('Total Paid',inr(paid),'ok')}${stat('Outstanding',inr(due),due>0?'bad':'')}</div>
  ${canAssignTrainer()?`<div class="row" style="align-items:flex-end;gap:10px;margin-bottom:12px;flex-wrap:wrap">${trainerAssignSelectHTML(c,'cp_trainer')}<button class="btn sm" onclick="saveClientTrainer('${id}')">Save Trainer</button><div class="sub" style="margin:0;padding-bottom:8px">Pick trainer staff · ${ptN||0} PT clients under selected trainer</div></div>`:`<div class="grid g4" style="margin-bottom:12px">${stat('Trainer',esc(c.trainer||'-'),'br')}${stat('Bill Rep',esc(c.billRep||'-'),'br')}${stat('PT Clients',ptN||'-')}${stat('Goal',esc(c.goal||'-'))}</div>`}
  ${canAssignTrainer()?`<div class="grid g3" style="margin-bottom:12px">${stat('Bill Rep',esc(c.billRep||'-'),'br')}${stat('PT Clients',ptN||'-')}${stat('Goal',esc(c.goal||'-'))}</div>`:''}
@@ -2105,6 +2174,25 @@ function openClient(id){const c=client(id);if(!c)return;
  <div class="row" style="justify-content:flex-end;margin-top:14px;gap:8px;flex-wrap:wrap">
   <button class="btn sec" onclick="closeModal()">Close</button>
  </div>`)}
+function openClientPhotoEdit(id){
+ const c=client(id);if(!c)return;
+ window._clientPhotoData=c.photo||'';
+ openModal(`<h2>Update Photo — ${esc(c.name)}</h2>
+ <p class="sub" style="margin-bottom:12px">Upload from file or capture live with webcam. Photo is saved to the member profile.</p>
+ <div class="row" style="gap:16px;align-items:flex-start">
+  ${clientPhotoSectionHTML('cp_photo_prev','cp_photo_file',c.photo)}
+ </div>
+ <div class="row" style="justify-content:flex-end;gap:8px;margin-top:14px">
+  <button class="btn sec" onclick="openClient('${id}')">Cancel</button>
+  <button class="btn" onclick="saveClientPhoto('${id}')">Save Photo</button>
+ </div>`);
+}
+function saveClientPhoto(id){
+ const c=client(id);if(!c)return;
+ const data=window._clientPhotoData;
+ if(!data){toast('Choose a photo or capture from webcam');return}
+ c.photo=data;save();audit('Member Photo Updated',c.id);toast('Photo saved');openClient(id);
+}
 function editClientPersonal(id){
  const c=client(id);if(!c)return;
  openModal(`<h2>Edit Address — ${esc(c.name)} (${esc(c.id)})</h2>
@@ -3186,8 +3274,9 @@ function pgFollowups(){
  <td class="r"><button class="btn sm sec" onclick="leadForm('${l.id}')">Update</button></td></tr>`).join('')||'<tr><td colspan=6 class="mut">No follow-ups scheduled</td></tr>'}
  </table></div>`;
 }
-function leadForm(id){
- const l=id?(db.leads||[]).find(x=>x.id===id):{};
+function leadForm(id,preset){
+ preset=preset||{};
+ const l=id?(db.leads||[]).find(x=>x.id===id):{mobile:preset.mobile||'',wa:preset.mobile||''};
  openModal(`<h2>${id?'Edit':'Add'} Lead / Enquiry</h2>
  <p class="sub" style="margin-bottom:10px">Mobile is <b>+91</b> with 10 digits — same as member page.</p>
  <div class="grid g3">
@@ -3729,15 +3818,70 @@ function backup(){const a=document.createElement('a');a.href=URL.createObjectURL
 function restore(inp){const f=inp.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{db=JSON.parse(r.result);save();toast('Backup restored');location.reload()}catch(e){toast('Invalid backup file')}};r.readAsText(f)}
 
 /* ================= GLOBAL SEARCH ================= */
+function isPhoneQuery(q){
+ const d=String(q||'').replace(/\D/g,'');
+ return d.length>=7&&d.length<=15;
+}
+function findClientByMobile(mobile){
+ mobile=normalizeMobile(mobile);if(!mobile)return null;
+ return (db.clients||[]).find(c=>normalizeMobile(c.mobile)===mobile)||null;
+}
+function findLeadByMobile(mobile){
+ mobile=normalizeMobile(mobile);if(!mobile)return null;
+ return (db.leads||[]).find(l=>normalizeMobile(l.mobile)===mobile)||null;
+}
+function isMobileRegistered(mobile){
+ return !!(findClientByMobile(mobile)||findLeadByMobile(mobile));
+}
+function maybeShowUnregisteredSearch(q){
+ if(!isPhoneQuery(q))return false;
+ const mobile=normalizeMobile(q);
+ if(!mobile||isMobileRegistered(mobile))return false;
+ pgUnregisteredSearch(mobile);
+ return true;
+}
+function pgUnregisteredSearch(mobile){
+ mobile=normalizeMobile(mobile);
+ if(!mobile){toast('Enter a valid mobile number');return}
+ PAGE='search-miss';
+ const gs=$('gsearch');if(gs)gs.value=mobile;
+ const addMem=canPage('clients')?`<button class="btn unreg-btn" onclick="openWizard('${mobile}')">Add Member - ${esc(mobile)}</button>`:'';
+ const addEnq=canPage('leads')?`<button class="btn unreg-btn" onclick="leadForm(null,{mobile:'${mobile}'})">Add Enquiry - ${esc(mobile)}</button>`:'';
+ $('content').innerHTML=`<div class="unreg-search">
+  <p class="unreg-msg">Do you want to add a new enquiry.<br>Click on below button to add new enquiry.</p>
+  <div class="unreg-actions">${addMem}${addEnq}${!addMem&&!addEnq?'<p class="sub">You do not have permission to add members or enquiries.</p>':''}</div>
+  <div class="row unreg-nav">
+   <button class="btn sec" onclick="go('clients')">Back</button>
+   ${canPage('clients')?`<button class="btn sec" onclick="openWizard('${mobile}')">Next</button>`:''}
+  </div>
+  <div class="sub unreg-page">Page 1</div>
+ </div>`;
+ pushAppHistory(appHistState(PAGE,false),false);
+}
 function doSearch(){
- const q=val('gsearch').toLowerCase();if(!q)return;
- const cs=db.clients.filter(c=>[c.name,c.mobile,c.id,c.email].join(' ').toLowerCase().includes(q));
+ const raw=val('gsearch').trim();if(!raw)return;
+ const mobile=normalizeMobile(raw);
+ if(isPhoneQuery(raw)){
+  const c=findClientByMobile(mobile);
+  if(c){openClient(c.id);return}
+  const l=findLeadByMobile(mobile);
+  if(l){leadForm(l.id);return}
+  if(maybeShowUnregisteredSearch(raw))return;
+ }
+ const q=raw.toLowerCase();
+ const cs=db.clients.filter(c=>[c.name,c.mobile,c.id,c.email,c.wa].join(' ').toLowerCase().includes(q));
+ const ls=(db.leads||[]).filter(l=>[l.name,l.mobile,l.code,l.email,l.wa].join(' ').toLowerCase().includes(q));
  const ivs=db.invoices.filter(i=>i.no.toLowerCase().includes(q));
  const sts=db.staff.filter(s=>[s.name,s.phone,s.id].join(' ').toLowerCase().includes(q));
- $('content').innerHTML=`<h2>Search: "${esc(q)}"</h2>
- <h3 style="margin-top:14px">Clients (${cs.length})</h3><div class="tbl"><table>${cs.map(c=>`<tr><td>${c.id}</td><td class="clickable" onclick="openClient('${c.id}')">${esc(c.name)}</td><td>${esc(c.mobile)}</td><td><button class="btn sm sec" onclick="openClient('${c.id}')">Open</button></td></tr>`).join('')||'<tr><td class="mut">None</td></tr>'}</table></div>
+ if(!cs.length&&!ls.length&&!ivs.length&&!sts.length&&isPhoneQuery(raw)){
+  pgUnregisteredSearch(mobile);return;
+ }
+ $('content').innerHTML=`<h2>Search: "${esc(raw)}"</h2>
+ <h3 style="margin-top:14px">Clients (${cs.length})</h3><div class="tbl"><table>${cs.map(c=>`<tr><td>${c.id}</td><td class="clickable" onclick="openClient('${c.id}')">${esc(c.name)}</td><td>${formatMobile(c.mobile)}</td><td><button class="btn sm sec" onclick="openClient('${c.id}')">Open</button></td></tr>`).join('')||'<tr><td class="mut">None</td></tr>'}</table></div>
+ <h3 style="margin-top:14px">Leads (${ls.length})</h3><div class="tbl"><table>${ls.map(l=>`<tr><td>${esc(l.code||l.id||'')}</td><td class="clickable" onclick="leadForm('${l.id}')">${esc(l.name)}</td><td>${formatMobile(l.mobile)}</td><td><button class="btn sm sec" onclick="leadForm('${l.id}')">Open</button></td></tr>`).join('')||'<tr><td class="mut">None</td></tr>'}</table></div>
  <h3 style="margin-top:14px">Invoices (${ivs.length})</h3><div class="tbl"><table>${ivs.map(i=>`<tr><td class="clickable" onclick="showInvoice('${i.id}')">${i.no}</td><td>${fmtD(i.date)}</td><td class="r">${inr(i.grand)}</td></tr>`).join('')||'<tr><td class="mut">None</td></tr>'}</table></div>
- <h3 style="margin-top:14px">Staff (${sts.length})</h3><div class="tbl"><table>${sts.map(s=>`<tr><td>${s.id}</td><td>${esc(s.name)}</td><td>${esc(s.dept)}</td></tr>`).join('')||'<tr><td class="mut">None</td></tr>'}</table></div>`}
+ <h3 style="margin-top:14px">Staff (${sts.length})</h3><div class="tbl"><table>${sts.map(s=>`<tr><td>${s.id}</td><td>${esc(s.name)}</td><td>${esc(s.dept)}</td></tr>`).join('')||'<tr><td class="mut">None</td></tr>'}</table></div>`;
+}
 
 /* ================= DEMO DATA ================= */
 function seedDemo(){
