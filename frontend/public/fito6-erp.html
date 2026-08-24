@@ -157,7 +157,7 @@ hr.sep{border:none;border-top:1px solid var(--line);margin:14px 0}
   <div id="topnav"><nav id="nav"></nav></div>
   <div id="main">
     <div id="topbar">
-      <input id="gsearch" placeholder="🔍 Search name / phone / invoice / member ID…" onkeydown="if(event.key==='Enter')doSearch()">
+      <input id="gsearch" placeholder="🔍 Search name / phone / enquiry / invoice / member ID…" onkeydown="if(event.key==='Enter')doSearch()">
       <div class="sp"></div>
       <div style="position:relative">
         <button type="button" class="tb-ico" title="Bill notifications" onclick="toggleTbDrop('tb_bill_drop')">🔔<span class="dot" id="tb_bill_dot" style="display:none">0</span></button>
@@ -953,14 +953,20 @@ function trainerCell(c,ptCounts){
 function nextStaffId(dept){
  const yy=String(new Date().getFullYear()).slice(2);
  const d=(dept||'').toLowerCase();
- let code='FOM',key='fom';
+ let code='FM',key='fm';
  if(/train/.test(d)){code='TR';key='trainer'}
  else if(/account/.test(d)){code='ACC';key='accountant'}
- else{code='FOM';key='fom'} // Reception, Management, Manager, Cleaner → FOM series
+ else if(/front\s*office|reception|front office|^front$/.test(d)||!d){code='FM';key='fm'} // Front Office / Reception → FM
+ else{code='ST';key='staff'} // Management, Manager, Cleaner, etc.
  if(!db.seq.staffByYear)db.seq.staffByYear={};
  if(!db.seq.staffByYear[yy])db.seq.staffByYear[yy]={};
+ // Continue from older FOM counter so existing Front Office sequence does not restart
+ if(key==='fm'&&db.seq.staffByYear[yy].fm==null&&db.seq.staffByYear[yy].fom!=null){
+  db.seq.staffByYear[yy].fm=db.seq.staffByYear[yy].fom;
+ }
  if(!db.seq.staffByYear[yy][key])db.seq.staffByYear[yy][key]=0;
  db.seq.staffByYear[yy][key]++;
+ if(key==='fm')db.seq.staffByYear[yy].fom=db.seq.staffByYear[yy].fm;
  save();
  return yy+code+String(db.seq.staffByYear[yy][key]).padStart(3,'0');
 }
@@ -3929,13 +3935,45 @@ function backup(){const a=document.createElement('a');a.href=URL.createObjectURL
 function restore(inp){const f=inp.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{db=JSON.parse(r.result);save();toast('Backup restored');location.reload()}catch(e){toast('Invalid backup file')}};r.readAsText(f)}
 
 /* ================= GLOBAL SEARCH ================= */
+function searchPhoneMatch(hay,q){
+ const hq=normalizeMobile(q);
+ if(hq&&hq.length>=7){
+  const hn=normalizeMobile(hay);
+  if(hn&&(hn.includes(hq)||hq.includes(hn)))return true;
+ }
+ return String(hay||'').toLowerCase().includes(String(q||'').toLowerCase());
+}
+function searchTextMatch(fields,q){
+ const ql=String(q||'').toLowerCase().trim();
+ if(!ql)return false;
+ if(fields.some(f=>String(f||'').toLowerCase().includes(ql)))return true;
+ // Phone-style queries: match any field that looks like a number
+ if(/\d{7,}/.test(ql.replace(/\D/g,''))){
+  return fields.some(f=>searchPhoneMatch(f,ql));
+ }
+ return false;
+}
 function doSearch(){
- const q=val('gsearch').toLowerCase();if(!q)return;
- const cs=db.clients.filter(c=>[c.name,c.mobile,c.id,c.email].join(' ').toLowerCase().includes(q));
- const ivs=db.invoices.filter(i=>i.no.toLowerCase().includes(q));
- const sts=db.staff.filter(s=>[s.name,s.phone,s.id].join(' ').toLowerCase().includes(q));
+ const q=val('gsearch').trim();if(!q)return;
+ if(!Array.isArray(db.leads))db.leads=[];
+ const ql=q.toLowerCase();
+ const cs=(db.clients||[]).filter(c=>searchTextMatch([c.name,c.mobile,c.wa,c.id,c.email],q));
+ const leads=(db.leads||[]).filter(l=>searchTextMatch([l.name,l.mobile,l.wa,l.code,l.id,l.email,l.status,l.source,l.handledBy],q));
+ const ivs=(db.invoices||[]).filter(i=>String(i.no||'').toLowerCase().includes(ql)||(i.clientId&&(db.clients||[]).some(c=>c.id===i.clientId&&searchTextMatch([c.name,c.mobile],q))));
+ const sts=(db.staff||[]).filter(s=>searchTextMatch([s.name,s.phone,s.id,s.dept],q));
  $('content').innerHTML=`<h2>Search: "${esc(q)}"</h2>
- <h3 style="margin-top:14px">Clients (${cs.length})</h3><div class="tbl"><table>${cs.map(c=>`<tr><td>${c.id}</td><td class="clickable" onclick="openClient('${c.id}')">${esc(c.name)}</td><td>${esc(c.mobile)}</td><td><button class="btn sm sec" onclick="openClient('${c.id}')">Open</button></td></tr>`).join('')||'<tr><td class="mut">None</td></tr>'}</table></div>
+ <h3 style="margin-top:14px">Enquiries / Leads (${leads.length})</h3>
+ <div class="tbl"><table><tr><th>Code</th><th>Date</th><th>Name</th><th>Mobile</th><th>Status</th><th>Source</th><th></th></tr>
+ ${leads.map(l=>`<tr>
+  <td>${esc(l.code||l.id||'')}</td><td>${fmtD(l.date)}</td>
+  <td class="bold clickable" onclick="leadForm('${l.id}')">${esc(l.name||'')}</td>
+  <td>${formatMobile(l.mobile)||esc(l.mobile||'')}</td>
+  <td><span class="badge ${l.status==='Converted'?'b-ok':l.status==='Hot'?'b-br':l.status==='Lost'?'b-bad':'b-warn'}">${esc(l.status||'New')}</span></td>
+  <td>${esc(l.source||'')}</td>
+  <td class="r"><button class="btn sm sec" onclick="leadForm('${l.id}')">Open</button>
+  ${l.status!=='Converted'?`<button class="btn sm" onclick="convertLead('${l.id}')">→ Client</button>`:''}</td>
+ </tr>`).join('')||'<tr><td colspan="7" class="mut">None</td></tr>'}</table></div>
+ <h3 style="margin-top:14px">Clients (${cs.length})</h3><div class="tbl"><table>${cs.map(c=>`<tr><td>${c.id}</td><td class="clickable" onclick="openClient('${c.id}')">${esc(c.name)}</td><td>${formatMobile(c.mobile)||esc(c.mobile||'')}</td><td><button class="btn sm sec" onclick="openClient('${c.id}')">Open</button></td></tr>`).join('')||'<tr><td class="mut">None</td></tr>'}</table></div>
  <h3 style="margin-top:14px">Invoices (${ivs.length})</h3><div class="tbl"><table>${ivs.map(i=>`<tr><td class="clickable" onclick="showInvoice('${i.id}')">${i.no}</td><td>${fmtD(i.date)}</td><td class="r">${inr(i.grand)}</td></tr>`).join('')||'<tr><td class="mut">None</td></tr>'}</table></div>
  <h3 style="margin-top:14px">Staff (${sts.length})</h3><div class="tbl"><table>${sts.map(s=>`<tr><td>${s.id}</td><td>${esc(s.name)}</td><td>${esc(s.dept)}</td></tr>`).join('')||'<tr><td class="mut">None</td></tr>'}</table></div>`}
 
