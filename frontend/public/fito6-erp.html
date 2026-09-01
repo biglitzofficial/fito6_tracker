@@ -261,6 +261,13 @@ function setupHistoryNav(){
   }
  });
  document.addEventListener('click',e=>{const a=e.target.closest('a[href="#"]');if(a)e.preventDefault()},true);
+ document.addEventListener('keydown',e=>{
+  if(e.key!=='Escape'&&e.key!=='Esc')return;
+  const modalOpen=$('modalwrap')&&$('modalwrap').style.display==='flex';
+  if(!modalOpen)return;
+  e.preventDefault();
+  closeModal();
+ },true);
 }
 async function enterAppFromAuth(opts={}){
  if(!AUTH.token||!AUTH.user)throw new Error('No session');
