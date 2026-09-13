@@ -210,6 +210,11 @@ hr.sep{border:none;border-top:1px solid var(--line);margin:14px 0}
 .franchise-tabs{display:flex;gap:8px;margin:0 0 14px;flex-wrap:wrap}
 .franchise-tabs button{background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px 14px;font-size:12px;font-weight:600;color:var(--mut)}
 .franchise-tabs button.on{background:var(--dark);color:#fff;border-color:var(--dark)}
+.gym-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 16px;padding:4px 0}
+.gym-tabs a,.gym-tabs button{display:inline-flex;align-items:center;padding:10px 18px;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none;border:1px solid var(--line);background:#fff;color:var(--ink);transition:all .15s;cursor:pointer}
+.gym-tabs a:hover,.gym-tabs button:hover{border-color:var(--brand);color:var(--brand)}
+.gym-tabs a.on,.gym-tabs button.on{background:var(--brand);color:#fff;border-color:var(--brand);box-shadow:0 2px 8px rgba(0,153,255,.25)}
+.gym-tabs .all-gyms{font-weight:700}
 @media(max-width:900px){.franchise-kpi{grid-template-columns:repeat(2,1fr)}}
 </style>
 </head>
@@ -420,6 +425,7 @@ async function enterAppFromAuth(opts={}){
  }
  const isSuper=AUTH.user.role==='SUPERADMIN';
  if(isSuper&&!opts.keepGymContext){
+  _superGymMode=false;
   AUTH.businessId=null;
   persistAuth();
   db=defaults();ensurePkgSettings();_cloudReady=false;
@@ -1380,7 +1386,7 @@ function isGroupClassType(t){return/group\s*class|dance|boxing|zumba|yoga/i.test
 /* ================= AUTH & NAV ================= */
 let USER=null,PAGE='dashboard';
 const ALL_PAGES=['platform','franchise-analytics','franchise-performance','franchise-gym','gymadmins','gymperformance','traineranalysis','clientanalysis','dashboard','leads','followups','clients','analysis','memberships','billing','batches','accounts','cashbook','expenses','notifications','trainers','trainer','fitness','staff','attendance','attreports','settings','help','appointments','payroll','todos','reports','audit','interviews','more'];
-const SUPERADMIN_PAGES=['platform','franchise-analytics','franchise-performance','franchise-gym','gymadmins'];
+const SUPERADMIN_PAGES=['platform','franchise-gym','gymadmins'];
 const GYM_ADMIN_PAGES=ALL_PAGES.filter(p=>!['platform','gymadmins','franchise-analytics','franchise-performance','franchise-gym'].includes(p));
 const MENUS={
  superadmin:SUPERADMIN_PAGES,
@@ -1397,10 +1403,8 @@ const PAGES={
  settings:'Settings',help:'Help',appointments:'Appointments',payroll:'Payroll',
  todos:'To-do List',reports:'Reports',meter:'EB Meter',audit:'Audit Log',interviews:'Interview Candidates',more:'More'};
 const SUPER_NAV=[
- {id:'platform',label:'Dashboard',page:'platform'},
- {id:'franchise-analytics',label:'Gym Analytics',page:'franchise-analytics'},
- {id:'franchise-performance',label:'Performance',page:'franchise-performance'},
- {id:'gymadmins',label:'Gyms & Admins',page:'gymadmins'}
+ {id:'platform',label:'Platform Dashboard',page:'platform'},
+ {id:'gymadmins',label:'Add Gym',page:'gymadmins'}
 ];
 const NAV_TREE=[
  {id:'platform',label:'Platform',page:'platform'},
@@ -1496,12 +1500,23 @@ function setTopUser(){
 function populateBizSwitcher(businesses){
  const sel=$('biz_switch');if(!sel)return;
  const list=businesses||[];
+ if(isSuperAdmin()&&!_superGymMode){sel.style.display='none';return}
  if(list.length<=1&&USER&&USER.role!=='superadmin'){sel.style.display='none';return}
  sel.style.display='block';
  const platformOpt=USER&&USER.role==='superadmin'?'<option value="">— Platform —</option>':'';
  sel.innerHTML=platformOpt+list.map(b=>`<option value="${b.id}" ${b.id===AUTH.businessId?'selected':''}>${esc(b.name||b.gymName||b.id)}</option>`).join('');
 }
 function isSuperAdmin(){return USER&&USER.role==='superadmin'}
+var _superGymMode=false;
+function menuRole(){if(isSuperAdmin()&&_superGymMode)return'gymadmin';return USER?USER.role:''}
+function exitSuperGymMode(){
+ _superGymMode=false;
+ AUTH.businessId=null;persistAuth();_cloudReady=false;
+ db=defaults();ensurePkgSettings();cacheLocal();
+ $('sb_role').textContent='FITO6 Franchise Network';
+ populateBizSwitcher(AUTH.businesses||[]);
+ buildNav();go('platform');
+}
 function gymDisplayName(id){
  const fromBiz=(AUTH.businesses||[]).find(b=>b.id===id);
  if(fromBiz&&fromBiz.name)return fromBiz.name;
@@ -1518,27 +1533,32 @@ function syncGymNameLocal(id,name){
  if(window._platformGyms)window._platformGyms=window._platformGyms.map(g=>g.id===id?{...g,name,gymName:name}:g);
 }
 function superPlatformBar(){
- if(!isSuperAdmin()||!AUTH.businessId)return'';
+ if(!isSuperAdmin()||!_superGymMode||!AUTH.businessId)return'';
  const name=(db.settings&&db.settings.gymName)||gymDisplayName(AUTH.businessId)||'Gym';
  return `<div class="row" style="gap:8px;margin-bottom:12px;padding:10px 12px;background:#eef6ff;border:1px solid #c5daf5;border-radius:8px;flex-wrap:wrap;align-items:center">
-  <span class="sub" style="margin:0">Viewing gym: <b>${esc(name)}</b></span>
-  <button class="btn sm sec" onclick="switchBusiness('')">← Platform</button>
-  <button class="btn sm sec" onclick="go('gymperformance')">Gym Performance</button>
-  <button class="btn sm sec" onclick="go('dashboard')">Dashboard</button>
-  <button class="btn sm sec" onclick="openEditGym('${AUTH.businessId}')">Edit Name</button>
+  <span class="sub" style="margin:0">Managing gym: <b>${esc(name)}</b></span>
+  <button class="btn sm sec" onclick="exitSuperGymMode()">← Back to Platform</button>
+ </div>`;
+}
+function platformGymTabs(gyms,activeId){
+ const list=gyms||window._platformGyms||[];
+ return `<div class="gym-tabs">
+  <button type="button" class="all-gyms ${!activeId?'on':''}" onclick="go('platform')">All Gyms</button>
+  ${list.map(g=>`<button type="button" class="${activeId===g.id?'on':''}" onclick="openGymAnalytics('${g.id}')">${esc(g.gymName||g.name)}</button>`).join('')}
  </div>`;
 }
 async function switchBusiness(id,afterPage){
  if(id===AUTH.businessId||(id===''&&!AUTH.businessId))return;
  if(!id){
+  _superGymMode=false;
   AUTH.businessId=null;persistAuth();_cloudReady=false;
   db=defaults();ensurePkgSettings();cacheLocal();
-  $('sb_role').textContent='FITO6 Franchise';
+  $('sb_role').textContent='FITO6 Franchise Network';
   populateBizSwitcher(AUTH.businesses||[]);
   buildNav();go('platform');
   return;
  }
- if(isSuperAdmin()&&!afterPage){
+ if(isSuperAdmin()&&!afterPage&&!_superGymMode){
   openGymAnalytics(id);
   const sel=$('biz_switch');if(sel)sel.value='';
   return;
@@ -1570,6 +1590,7 @@ function openGymAnalytics(id){
 }
 async function openGymWorkspace(id){
  if(!id)return;
+ _superGymMode=true;
  await switchBusiness(id,'dashboard');
 }
 function rankBadge(n){
@@ -1664,15 +1685,17 @@ async function doLogin(){
 }
 function logout(){
  try{if(db&&USER)audit('Logout','User logged out')}catch(e){}
- USER=null;PAGE='dashboard';_navSubId=null;_restoreBusy=false;_cloudReady=false;clearAuth();
+ USER=null;PAGE='dashboard';_navSubId=null;_restoreBusy=false;_superGymMode=false;_cloudReady=false;clearAuth();
  try{history.replaceState(null,'',location.pathname+location.search)}catch(e){}
  showLoginScreen();
 }
 function canPage(p){
- if(!USER||!MENUS[USER.role])return false;
- if(p==='franchise-gym')return USER.role==='superadmin';
- if(p==='meter')return MENUS[USER.role].includes('fitness');
- return MENUS[USER.role].includes(p);
+ if(!USER)return false;
+ const role=menuRole();
+ if(!MENUS[role])return false;
+ if(p==='franchise-gym')return isSuperAdmin()&&!_superGymMode;
+ if(p==='meter')return MENUS[role].includes('fitness');
+ return MENUS[role].includes(p);
 }
 function navVisible(item){
  if(item.page)return canPage(item.page);
@@ -1684,10 +1707,32 @@ function toggleNavGroup(id,ev){if(ev)ev.stopPropagation();const el=$(id);if(!el)
 function toggleSidebar(){const sb=$('sidebar'),ov=$('sidebar-overlay');if(!sb)return;sb.classList.toggle('open');if(ov)ov.classList.toggle('open')}
 function closeSidebar(){const sb=$('sidebar'),ov=$('sidebar-overlay');if(sb)sb.classList.remove('open');if(ov)ov.classList.remove('open')}
 function buildNav(){
- if(isSuperAdmin()){
+ if(isSuperAdmin()&&!_superGymMode){
   $('nav').innerHTML=SUPER_NAV.filter(navVisible).map(item=>
    `<div class="nav-group nav-single"><button type="button" class="nav-head" id="navbtn_${item.id}" onclick="closeSidebar();go('${item.page}')"><span class="nav-label">${item.label}</span></button></div>`
   ).join('');
+  markNavOn(PAGE);
+  return;
+ }
+ if(isSuperAdmin()&&_superGymMode){
+  const savedRole=USER.role;
+  USER.role='gymadmin';
+  const allowed=NAV_TREE.filter(navVisible);
+  USER.role=savedRole;
+  $('nav').innerHTML=allowed.map(item=>{
+   if(item.kids){
+    const kids=item.kids.filter(k=>{USER.role='gymadmin';const ok=canPage(k.page);USER.role=savedRole;return ok});
+    if(!kids.length)return'';
+    const nid='navg_'+item.id;
+    return `<div class="nav-group" id="${nid}"><button type="button" class="nav-head" id="navbtn_${item.id}" onclick="toggleNavGroup('${nid}',event)"><span class="nav-label">${item.label}</span><span class="nav-chevron"></span></button>
+     <div class="nav-sub">${kids.map((k,i)=>`<a href="#" class="nav-sub-item" id="navsub_${item.id}_${i}" data-page="${k.page}" onclick="closeSidebar();_navSubId='navsub_${item.id}_${i}';${k.fn?("go('"+k.page+"');"+k.fn):("go('"+k.page+"')")};return false">${k.label}</a>`).join('')}</div></div>`;
+   }
+   USER.role='gymadmin';
+   const ok=canPage(item.page);
+   USER.role=savedRole;
+   if(!ok)return'';
+   return `<div class="nav-group nav-single"><button type="button" class="nav-head" id="navbtn_${item.id}" onclick="closeSidebar();go('${item.page}')"><span class="nav-label">${item.label}</span></button></div>`;
+  }).join('');
   markNavOn(PAGE);
   return;
  }
@@ -3874,134 +3919,119 @@ function toggleTodo(id){const t=db.todos.find(x=>x.id===id);if(!t)return;t.done=
 function removeTodo(id){db.todos=db.todos.filter(t=>t.id!==id);save();go('todos')}
 
 /* ================= PLATFORM / FRANCHISE ================= */
+function renderActivityRows(rows,limit,hideGym){
+ const cols=hideGym?4:5;
+ return (rows||[]).slice(0,limit||15).map(a=>`<tr>
+  <td class="mut" style="white-space:nowrap">${a.time?new Date(a.time).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}):'—'}</td>
+  ${hideGym?'':'<td class="bold clickable" onclick="openGymAnalytics(\''+a.gymId+'\')">'+esc(a.gymName)+'</td>'}
+  <td>${esc(a.user)}</td><td class="bold">${esc(a.action)}</td><td class="mut">${esc(a.detail)}</td>
+ </tr>`).join('')||('<tr><td colspan='+cols+' class="mut">No recent activity</td></tr>');
+}
 async function pgPlatform(){
- $('content').innerHTML=`<div id="plat_body"><p class="sub">Loading franchise dashboard…</p></div>`;
+ _superGymMode=false;
+ $('content').innerHTML=`<div id="plat_body"><p class="sub">Loading platform dashboard…</p></div>`;
  try{
-  const data=await platformApi('/platform/analytics');
-  const gyms=data.gyms||[];
+  const [analytics,perf]=await Promise.all([
+   platformApi('/platform/analytics'),
+   platformApi('/platform/franchise-performance')
+  ]);
+  const gyms=analytics.gyms||[];
   window._platformGyms=gyms;
-  const top=gyms[0];
+  window._franchisePerf=perf;
   const maxColl=Math.max(...gyms.map(g=>g.stats.collectionMonth||0),1);
+  const maxMem=Math.max(...gyms.map(g=>g.stats.members||0),1);
+  const chart=gyms.slice(0,8).map(g=>({x:(g.gymName||g.name||'').slice(0,14),y:g.stats.collectionMonth||0}));
+  const staff=perf.staffLeaderboard||[];
+  const trainers=perf.trainerLeaderboard||[];
+  const acts=perf.recentActivities||[];
+  const top=gyms[0];
   $('plat_body').innerHTML=`
+   ${platformGymTabs(gyms,null)}
    <div class="franchise-hero">
     <div class="row" style="justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px">
-     <div><h2>Franchise Command Center</h2><div class="sub">Network overview · ${franchiseMonthLabel(data.month)} · compare gym performance across your chain</div></div>
-     <div class="row" style="gap:8px"><button class="btn sec" style="background:rgba(255,255,255,.08);color:#fff;border-color:rgba(255,255,255,.15)" onclick="go('franchise-analytics')">Gym Analytics</button><button class="btn" onclick="go('franchise-performance')">Performance Rankings</button><button class="btn sec" style="background:rgba(255,255,255,.08);color:#fff;border-color:rgba(255,255,255,.15)" onclick="go('gymadmins')">+ Add Gym</button></div>
+     <div><h2>Platform Dashboard</h2><div class="sub">Franchise owner view · ${franchiseMonthLabel(analytics.month)} · all gyms in one place</div></div>
+     <button class="btn sec" style="background:rgba(255,255,255,.08);color:#fff;border-color:rgba(255,255,255,.15)" onclick="go('gymadmins')">+ Add Gym</button>
     </div>
    </div>
    <div class="franchise-kpi">
-    <div class="card"><div class="l">Total Gyms</div><div class="v" style="color:var(--brand)">${data.totals.gyms}</div></div>
-    <div class="card"><div class="l">Network Members</div><div class="v" style="color:var(--ok)">${data.totals.members}</div></div>
-    <div class="card"><div class="l">Collection (${franchiseMonthLabel(data.month)})</div><div class="v" style="color:var(--ok)">${inr(data.totals.collectionMonth)}</div></div>
-    <div class="card"><div class="l">Network Net</div><div class="v" style="color:${data.profitMonth>=0?'var(--ok)':'var(--bad)'}">${inr(data.profitMonth)}</div></div>
+    <div class="card"><div class="l">Total Gyms</div><div class="v" style="color:var(--brand)">${analytics.totals.gyms}</div></div>
+    <div class="card"><div class="l">Network Members</div><div class="v" style="color:var(--ok)">${analytics.totals.members}</div></div>
+    <div class="card"><div class="l">Collection</div><div class="v" style="color:var(--ok)">${inr(analytics.totals.collectionMonth)}</div></div>
+    <div class="card"><div class="l">Network Net</div><div class="v" style="color:${analytics.profitMonth>=0?'var(--ok)':'var(--bad)'}">${inr(analytics.profitMonth)}</div></div>
    </div>
-   ${top?`<div class="card" style="margin-bottom:14px;border-color:#c5daf5;background:linear-gradient(90deg,#f8fbff,#fff)"><div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px"><div><h3 style="color:var(--ink);text-transform:none;font-size:14px;margin:0">Top Performing Gym</h3><p class="big bold" style="margin-top:6px">${esc(top.gymName||top.name)}</p><p class="sub">Score ${top.score||0} · ${inr(top.net||0)} net · ${top.stats.members} members</p></div>${rankBadge(1)}</div></div>`:''}
-   <div class="card"><h3>Gym Leaderboard</h3><p class="sub" style="margin-bottom:12px">Ranked by composite score (net profit, members, collection efficiency). Click a gym for detailed performance.</p>
-    <div class="tbl franchise-table"><table><tr><th>#</th><th>Gym</th><th>Admin</th><th>Members</th><th class="r">Collection</th><th class="r">Net</th><th>Score</th><th></th></tr>
-    ${gyms.map(g=>`<tr class="${g.rank<=3?'top-row':''}">
-     <td>${rankBadge(g.rank||0)}</td>
-     <td><div class="bold clickable" onclick="openGymAnalytics('${g.id}')">${esc(g.gymName||g.name)}</div>${perfBar(g.stats.collectionMonth||0,maxColl)}</td>
-     <td>${esc(g.admin?g.admin.name:'—')}<div class="sub">${esc(g.admin?g.admin.email:'')}</div></td>
-     <td>${g.stats.members}</td>
-     <td class="r">${inr(g.stats.collectionMonth)}</td>
-     <td class="r bold" style="color:${(g.net||0)>=0?'var(--ok)':'var(--bad)'}">${inr(g.net||0)}</td>
-     <td><b>${g.score||0}</b></td>
-     <td style="white-space:nowrap"><button class="btn sm" onclick="openGymAnalytics('${g.id}')">View</button> <button class="btn sm sec" onclick="openEditGym('${g.id}')">Edit</button></td>
-    </tr>`).join('')||'<tr><td colspan=8 class="mut">No gyms yet — add your first franchise location</td></tr>'}
-    </table></div></div>`;
- }catch(e){
-  $('plat_body').innerHTML=`<div class="card"><p class="sub" style="color:var(--bad)">${esc(e.message||'Failed to load franchise dashboard')}</p><button class="btn" style="margin-top:10px" onclick="go('gymadmins')">Create Gym</button></div>`;
- }
-}
-async function pgFranchiseAnalytics(){
- $('content').innerHTML=`<div id="fa_body"><p class="sub">Loading gym analytics…</p></div>`;
- try{
-  const data=await platformApi('/platform/analytics');
-  const gyms=data.gyms||[];
-  window._platformGyms=gyms;
-  const maxColl=Math.max(...gyms.map(g=>g.stats.collectionMonth||0),1);
-  const maxMem=Math.max(...gyms.map(g=>g.stats.members||0),1);
-  const chart=gyms.slice(0,8).map(g=>({x:(g.gymName||g.name||'').slice(0,12),y:g.stats.collectionMonth||0}));
-  $('fa_body').innerHTML=`
-   <div class="franchise-hero"><h2>Gym Analytics</h2><div class="sub">Side-by-side comparison · ${franchiseMonthLabel(data.month)}</div></div>
+   ${top?`<div class="card" style="margin-bottom:14px;border-color:#c5daf5;background:linear-gradient(90deg,#f8fbff,#fff)"><div class="row" style="justify-content:space-between;align-items:center"><div><h3 style="color:var(--ink);text-transform:none;font-size:14px;margin:0">Top Gym This Month</h3><p class="big bold" style="margin-top:6px">${esc(top.gymName||top.name)}</p><p class="sub">Score ${top.score||0} · ${inr(top.net||0)} net</p></div>${rankBadge(1)}</div></div>`:''}
    <div class="grid g2" style="margin-bottom:14px">
-    <div class="card"><h3>Collection Comparison</h3><div class="bars">${chart.map(c=>`<div class="b"><div class="y">${inr(c.y)}</div><div class="bar" style="height:${Math.max(4,Math.round((c.y/maxColl)*100))}%"></div><div class="x">${esc(c.x)}</div></div>`).join('')||'<p class="mut">No data</p>'}</div></div>
-    <div class="card"><h3>Key Metrics</h3><div class="tbl"><table>
-     <tr><th>Gym</th><th class="r">Members</th><th class="r">Leads</th><th class="r">Collection</th><th class="r">Expense</th><th class="r">Net</th><th class="r">Per Member</th></tr>
-     ${gyms.map(g=>`<tr class="${g.rank<=3?'top-row':''}"><td class="bold clickable" onclick="openGymAnalytics('${g.id}')">${rankBadge(g.rank||0)} ${esc(g.gymName||g.name)}</td><td class="r">${g.stats.members}${perfBar(g.stats.members,maxMem)}</td><td class="r">${g.stats.leads}</td><td class="r">${inr(g.stats.collectionMonth)}</td><td class="r">${inr(g.stats.expenseMonth)}</td><td class="r bold">${inr(g.net||0)}</td><td class="r">${inr(g.perMember||0)}</td></tr>`).join('')}
+    <div class="card"><h3>Gym Comparison</h3><div class="bars">${chart.map(c=>`<div class="b"><div class="y">${inr(c.y)}</div><div class="bar" style="height:${Math.max(4,Math.round((c.y/maxColl)*100))}%"></div><div class="x">${esc(c.x)}</div></div>`).join('')||'<p class="mut">No data</p>'}</div></div>
+    <div class="card"><h3>Gym Leaderboard</h3><div class="tbl franchise-table"><table><tr><th>#</th><th>Gym</th><th>Members</th><th class="r">Collection</th><th class="r">Net</th></tr>
+     ${gyms.map(g=>`<tr class="${g.rank<=3?'top-row':''}"><td>${rankBadge(g.rank||0)}</td><td class="bold clickable" onclick="openGymAnalytics('${g.id}')">${esc(g.gymName||g.name)}</td><td>${g.stats.members}${perfBar(g.stats.members,maxMem)}</td><td class="r">${inr(g.stats.collectionMonth)}</td><td class="r bold">${inr(g.net||0)}</td></tr>`).join('')}
     </table></div></div>
    </div>
-   <div class="card"><h3>Efficiency Matrix</h3><p class="sub" style="margin-bottom:10px">Higher net and per-member collection indicate stronger franchise unit economics.</p>
-    <div class="tbl franchise-table"><table><tr><th>Rank</th><th>Gym</th><th class="r">Net Profit</th><th class="r">Collection / Member</th><th class="r">Lead Pipeline</th><th></th></tr>
-    ${gyms.map(g=>`<tr><td>${rankBadge(g.rank||0)}</td><td class="bold">${esc(g.gymName||g.name)}</td><td class="r" style="color:${(g.net||0)>=0?'var(--ok)':'var(--bad)'}">${inr(g.net||0)}</td><td class="r">${inr(g.perMember||0)}</td><td class="r">${g.stats.leads}</td><td><button class="btn sm sec" onclick="openGymAnalytics('${g.id}')">Drill Down</button></td></tr>`).join('')}
-    </table></div></div>`;
- }catch(e){$('fa_body').innerHTML=`<div class="card"><p class="sub" style="color:var(--bad)">${esc(e.message||'Failed to load analytics')}</p></div>`}
-}
-async function pgFranchisePerformance(){
- $('content').innerHTML=`<div id="fp_body"><p class="sub">Loading network performance…</p></div>`;
- try{
-  const data=await platformApi('/platform/franchise-performance');
-  window._franchisePerf=data;
-  const staff=data.staffLeaderboard||[];
-  const trainers=data.trainerLeaderboard||[];
-  $('fp_body').innerHTML=`
-   <div class="franchise-hero"><h2>Network Performance</h2><div class="sub">Cross-gym staff & trainer rankings · ${franchiseMonthLabel(data.month)}</div></div>
-   <div class="grid g2">
-    <div class="card"><h3>Top Staff / Sales (Network-wide)</h3><p class="sub" style="margin-bottom:10px">Ranked by collections this month across all franchise locations.</p>
-     <div class="tbl franchise-table"><table><tr><th>#</th><th>Staff</th><th>Gym</th><th>Invoices</th><th class="r">Collected</th></tr>
-     ${staff.slice(0,15).map((s,i)=>`<tr class="${i<3?'top-row':''}"><td>${rankBadge(i+1)}</td><td class="bold">${esc(s.name)}</td><td class="clickable" onclick="openGymAnalytics('${s.gymId}')">${esc(s.gymName)}</td><td>${s.invoices}</td><td class="r bold">${inr(s.collected)}</td></tr>`).join('')||'<tr><td colspan=5 class="mut">No staff billing data this month</td></tr>'}
-     </table></div></div>
-    <div class="card"><h3>Top Trainers (Network-wide)</h3><p class="sub" style="margin-bottom:10px">Ranked by PT revenue and active PT clients.</p>
-     <div class="tbl franchise-table"><table><tr><th>#</th><th>Trainer</th><th>Gym</th><th>Members</th><th>Active PT</th><th class="r">PT Revenue</th></tr>
-     ${trainers.slice(0,15).map((t,i)=>`<tr class="${i<3?'top-row':''}"><td>${rankBadge(i+1)}</td><td class="bold">${esc(t.name)}</td><td class="clickable" onclick="openGymAnalytics('${t.gymId}')">${esc(t.gymName)}</td><td>${t.clients}</td><td>${t.ptSubs}</td><td class="r bold">${inr(t.revenue)}</td></tr>`).join('')||'<tr><td colspan=6 class="mut">No trainer data this month</td></tr>'}
-     </table></div></div>
+   <div class="grid g2" style="margin-bottom:14px">
+    <div class="card"><h3>Best Staff (All Gyms)</h3><div class="tbl franchise-table"><table><tr><th>#</th><th>Staff</th><th>Gym</th><th class="r">Collected</th></tr>
+     ${staff.slice(0,8).map((s,i)=>`<tr class="${i<3?'top-row':''}"><td>${rankBadge(i+1)}</td><td class="bold">${esc(s.name)}</td><td class="clickable" onclick="openGymAnalytics('${s.gymId}')">${esc(s.gymName)}</td><td class="r bold">${inr(s.collected)}</td></tr>`).join('')||'<tr><td colspan=4 class="mut">No data</td></tr>'}
+    </table></div></div>
+    <div class="card"><h3>Best Trainers (All Gyms)</h3><div class="tbl franchise-table"><table><tr><th>#</th><th>Trainer</th><th>Gym</th><th class="r">PT Revenue</th></tr>
+     ${trainers.slice(0,8).map((t,i)=>`<tr class="${i<3?'top-row':''}"><td>${rankBadge(i+1)}</td><td class="bold">${esc(t.name)}</td><td class="clickable" onclick="openGymAnalytics('${t.gymId}')">${esc(t.gymName)}</td><td class="r bold">${inr(t.revenue)}</td></tr>`).join('')||'<tr><td colspan=4 class="mut">No data</td></tr>'}
+    </table></div></div>
    </div>
-   <div class="card" style="margin-top:14px"><h3>Gym Performance Index</h3>
-    <div class="tbl franchise-table"><table><tr><th>Rank</th><th>Gym</th><th class="r">Score</th><th class="r">Net</th><th>Top Staff</th><th>Top Trainer</th><th></th></tr>
-    ${(data.gyms||[]).map(g=>{
-     const topS=(g.performance&&g.performance.staffSales&&g.performance.staffSales[0])||null;
-     const topT=(g.performance&&g.performance.trainers&&g.performance.trainers[0])||null;
-     return`<tr class="${g.rank<=3?'top-row':''}"><td>${rankBadge(g.rank||0)}</td><td class="bold">${esc(g.gymName||g.name)}</td><td class="r"><b>${g.score||0}</b></td><td class="r">${inr(g.net||0)}</td><td>${topS?esc(topS.name)+' · '+inr(topS.collected):'—'}</td><td>${topT?esc(topT.name)+' · '+topT.ptSubs+' PT': '—'}</td><td><button class="btn sm" onclick="openGymAnalytics('${g.id}')">View Gym</button></td></tr>`}).join('')}
+   <div class="card"><h3>Recent Activity (All Gyms)</h3><p class="sub" style="margin-bottom:10px">Latest entries and actions across your franchise network.</p>
+    <div class="tbl franchise-table"><table><tr><th>Time</th><th>Gym</th><th>User</th><th>Action</th><th>Detail</th></tr>
+     ${renderActivityRows(acts,15)}
     </table></div></div>`;
- }catch(e){$('fp_body').innerHTML=`<div class="card"><p class="sub" style="color:var(--bad)">${esc(e.message||'Failed to load performance data')}</p></div>`}
+  buildNav();
+ }catch(e){
+  $('plat_body').innerHTML=`<div class="card"><p class="sub" style="color:var(--bad)">${esc(e.message||'Failed to load platform dashboard')}</p><button class="btn" style="margin-top:10px" onclick="go('gymadmins')">Create Gym</button></div>`;
+ }
 }
+function pgFranchiseAnalytics(){go('platform')}
+function pgFranchisePerformance(){go('platform')}
 async function pgFranchiseGym(gymId){
+ _superGymMode=false;
  gymId=gymId||window._franchiseGymId;
  if(!gymId){toast('Select a gym');go('platform');return}
  window._franchiseGymId=gymId;
- $('content').innerHTML=`<div id="fg_body"><p class="sub">Loading gym performance…</p></div>`;
+ $('content').innerHTML=`<div id="fg_body"><p class="sub">Loading gym…</p></div>`;
  try{
   const data=await platformApi('/platform/gyms/'+gymId+'/performance');
   const g=data.gym;
   const perf=data.performance||{staffSales:[],trainers:[],staffAttendance:[]};
   const trends=data.trends||[];
   const maxTrend=Math.max(...trends.map(t=>t.collection||0),1);
+  const gyms=window._platformGyms||[];
   $('fg_body').innerHTML=`
+   ${platformGymTabs(gyms,gymId)}
    <div class="row" style="justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:14px">
-    <div><button class="btn sm sec" onclick="go('platform')">← Franchise Dashboard</button>
-     <h2 style="margin-top:10px">${esc(g.gymName||g.name)}</h2>
-     <div class="sub">${franchiseMonthLabel(data.month)} · Admin: ${esc(g.admin?g.admin.name:'—')} · Score <b>${g.score||0}</b></div></div>
-    <div class="row" style="gap:8px"><button class="btn sec" onclick="go('franchise-performance')">Network Rankings</button><button class="btn sec" onclick="openEditGym('${gymId}')">Edit Gym</button></div>
+    <div>
+     <h2>${esc(g.gymName||g.name)}</h2>
+     <div class="sub">${franchiseMonthLabel(data.month)} · Admin: ${esc(g.admin?g.admin.name:'—')} (${esc(g.admin?g.admin.email:'')}) · Score <b>${g.score||0}</b></div>
+    </div>
+    <div class="row" style="gap:8px;flex-wrap:wrap">
+     <button class="btn" onclick="openGymWorkspace('${gymId}')">Enter Gym →</button>
+     <button class="btn sec" onclick="openEditGym('${gymId}')">Edit Name</button>
+    </div>
    </div>
    <div class="franchise-kpi">
     <div class="card"><div class="l">Members</div><div class="v">${g.stats.members}</div></div>
+    <div class="card"><div class="l">Leads</div><div class="v">${g.stats.leads}</div></div>
     <div class="card"><div class="l">Collection</div><div class="v" style="color:var(--ok)">${inr(g.stats.collectionMonth)}</div></div>
-    <div class="card"><div class="l">Expense</div><div class="v" style="color:var(--bad)">${inr(g.stats.expenseMonth)}</div></div>
-    <div class="card"><div class="l">Net / Member</div><div class="v">${inr(g.net||0)} · ${inr(g.perMember||0)}</div></div>
+    <div class="card"><div class="l">Net Profit</div><div class="v" style="color:${(g.net||0)>=0?'var(--ok)':'var(--bad)'}">${inr(g.net||0)}</div></div>
    </div>
-   <div class="card" style="margin-bottom:14px"><h3>6-Month Trend</h3><div class="bars">${trends.map(t=>`<div class="b"><div class="y">${inr(t.collection)}</div><div class="bar g" style="height:${Math.max(4,Math.round(((t.collection||0)/maxTrend)*100))}%"></div><div class="x">${esc(String(t.month).slice(5))}</div></div>`).join('')}</div></div>
-   <div class="grid g2">
-    <div class="card"><h3>Staff Sales Performance</h3><div class="tbl"><table><tr><th>Staff</th><th>Invoices</th><th class="r">Billed</th><th class="r">Collected</th></tr>
-     ${(perf.staffSales||[]).map(s=>`<tr><td class="bold">${esc(s.name)}</td><td>${s.invoices}</td><td class="r">${inr(s.billed)}</td><td class="r bold">${inr(s.collected)}</td></tr>`).join('')||'<tr><td colspan=4 class="mut">No billing this month</td></tr>'}
-     </table></div></div>
-    <div class="card"><h3>Trainer Performance</h3><div class="tbl"><table><tr><th>Trainer</th><th>Members</th><th>Active PT</th><th>Visits</th><th class="r">Revenue</th></tr>
-     ${(perf.trainers||[]).map(t=>`<tr><td class="bold">${esc(t.name)}</td><td>${t.clients}</td><td>${t.ptSubs}</td><td>${t.visits}</td><td class="r bold">${inr(t.revenue)}</td></tr>`).join('')||'<tr><td colspan=5 class="mut">No trainer data</td></tr>'}
-     </table></div></div>
+   <div class="card" style="margin-bottom:14px"><h3>6-Month Collection Trend</h3><div class="bars">${trends.map(t=>`<div class="b"><div class="y">${inr(t.collection)}</div><div class="bar g" style="height:${Math.max(4,Math.round(((t.collection||0)/maxTrend)*100))}%"></div><div class="x">${esc(String(t.month).slice(5))}</div></div>`).join('')}</div></div>
+   <div class="grid g2" style="margin-bottom:14px">
+    <div class="card"><h3>Staff Performance</h3><div class="tbl"><table><tr><th>Staff</th><th>Invoices</th><th class="r">Collected</th></tr>
+     ${(perf.staffSales||[]).map(s=>`<tr><td class="bold">${esc(s.name)}</td><td>${s.invoices}</td><td class="r bold">${inr(s.collected)}</td></tr>`).join('')||'<tr><td colspan=3 class="mut">No billing this month</td></tr>'}
+    </table></div></div>
+    <div class="card"><h3>Trainer Performance</h3><div class="tbl"><table><tr><th>Trainer</th><th>Members</th><th>PT</th><th class="r">Revenue</th></tr>
+     ${(perf.trainers||[]).map(t=>`<tr><td class="bold">${esc(t.name)}</td><td>${t.clients}</td><td>${t.ptSubs}</td><td class="r bold">${inr(t.revenue)}</td></tr>`).join('')||'<tr><td colspan=4 class="mut">No trainer data</td></tr>'}
+    </table></div></div>
    </div>
-   <div class="card" style="margin-top:14px"><h3>Staff Attendance</h3><div class="tbl"><table><tr><th>Staff</th><th>Present</th><th>Absent</th><th>Late</th><th>Half Day</th></tr>
-    ${(perf.staffAttendance||[]).map(a=>`<tr><td>${esc(a.name)}</td><td>${a.present}</td><td>${a.absent}</td><td>${a.late}</td><td>${a.halfDay}</td></tr>`).join('')||'<tr><td colspan=5 class="mut">No attendance logged</td></tr>'}
-   </table></div></div>`;
- }catch(e){$('fg_body').innerHTML=`<div class="card"><p class="sub" style="color:var(--bad)">${esc(e.message||'Failed to load gym detail')}</p><button class="btn sm sec" style="margin-top:10px" onclick="go('platform')">Back</button></div>`}
+   <div class="card"><h3>Recent Activity (This Gym)</h3><p class="sub" style="margin-bottom:10px">Who did what — latest entries in this gym.</p>
+    <div class="tbl"><table><tr><th>Time</th><th>User</th><th>Action</th><th>Detail</th></tr>
+     ${renderActivityRows(data.recentActivities||[],20,true)}
+    </table></div></div>
+   <p class="sub" style="margin-top:14px">Need to add members, billing, or cashbook entries? Click <b>Enter Gym →</b> above.</p>`;
+  buildNav();
+ }catch(e){$('fg_body').innerHTML=`<div class="card"><p class="sub" style="color:var(--bad)">${esc(e.message||'Failed to load gym')}</p><button class="btn sm sec" style="margin-top:10px" onclick="go('platform')">← All Gyms</button></div>`}
 }
 async function pgGymAdmins(){
  $('content').innerHTML=`<div class="franchise-hero" style="margin-bottom:14px"><div class="row" style="justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px"><div><h2>Gyms & Admins</h2><div class="sub">Onboard franchise locations · each gym gets its own admin login and ERP database</div></div><button class="btn" onclick="openCreateGymAdmin()">+ Create Gym</button></div></div><div id="ga_body"><p class="sub">Loading…</p></div>`;

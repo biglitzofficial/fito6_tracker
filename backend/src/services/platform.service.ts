@@ -15,8 +15,36 @@ type ErpSnapshot = {
   staffAtt?: unknown[];
   memberAtt?: unknown[];
   leads?: unknown[];
+  audit?: unknown[];
   settings?: { gymName?: string; branch?: string };
 };
+
+type ActivityRow = {
+  gymId: string;
+  gymName: string;
+  time: string;
+  user: string;
+  action: string;
+  detail: string;
+};
+
+function recentActivities(
+  erp: ErpSnapshot | null,
+  gymId: string,
+  gymName: string,
+  limit = 12
+): ActivityRow[] {
+  return ((erp?.audit || []) as Array<{ ts?: string; user?: string; action?: string; detail?: string }>)
+    .slice(0, limit)
+    .map((a) => ({
+      gymId,
+      gymName,
+      time: a.ts || '',
+      user: a.user || '—',
+      action: a.action || 'Activity',
+      detail: a.detail || '',
+    }));
+}
 
 type StaffSaleRow = { name: string; billed: number; collected: number; invoices: number };
 type TrainerRow = { name: string; clients: number; ptSubs: number; visits: number; revenue: number };
@@ -364,11 +392,16 @@ export const platformService = {
           score: franchiseScore(gym.stats),
           perMember: gym.stats.members > 0 ? gym.stats.collectionMonth / gym.stats.members : 0,
           performance,
+          recentActivities: recentActivities(erp, gym.id, gym.gymName || gym.name, 8),
         };
       })
     );
 
     const ranked = gymRows.sort((a, b) => b.score - a.score).map((g, i) => ({ ...g, rank: i + 1 }));
+    const networkActivities = ranked
+      .flatMap((g) => g.recentActivities)
+      .sort((a, b) => String(b.time).localeCompare(String(a.time)))
+      .slice(0, 30);
 
     const staffLeaderboard = ranked
       .flatMap((g) =>
@@ -416,6 +449,7 @@ export const platformService = {
       gyms: ranked,
       staffLeaderboard: staffLeaderboard.slice(0, 50),
       trainerLeaderboard: trainerLeaderboard.slice(0, 50),
+      recentActivities: networkActivities,
     };
   },
 
@@ -448,6 +482,12 @@ export const platformService = {
       },
       performance,
       trends,
+      recentActivities: recentActivities(
+        erp,
+        businessId,
+        gym.gymName || gym.name,
+        25
+      ),
     };
   },
 
