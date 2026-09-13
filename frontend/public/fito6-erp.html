@@ -215,7 +215,13 @@ hr.sep{border:none;border-top:1px solid var(--line);margin:14px 0}
 .gym-tabs a:hover,.gym-tabs button:hover{border-color:var(--brand);color:var(--brand)}
 .gym-tabs a.on,.gym-tabs button.on{background:var(--brand);color:#fff;border-color:var(--brand);box-shadow:0 2px 8px rgba(0,153,255,.25)}
 .gym-tabs .all-gyms{font-weight:700}
-@media(max-width:900px){.franchise-kpi{grid-template-columns:repeat(2,1fr)}}
+.req-tag{display:inline-block;font-size:9px;color:#fff;background:var(--bad);padding:2px 7px;border-radius:4px;margin-left:6px;text-transform:uppercase;vertical-align:middle;font-weight:700;letter-spacing:.04em}
+.opt-tag{display:inline-block;font-size:9px;color:var(--mut);background:#f1f5f9;padding:2px 7px;border-radius:4px;margin-left:6px;text-transform:uppercase;font-weight:700}
+.agreement-box{border:2px dashed #cbd5e1;border-radius:12px;padding:28px 20px;text-align:center;background:#f8fafc;margin-top:8px}
+.agreement-box.has-file{border-color:var(--ok);background:#ecfdf5}
+.review-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px 18px;font-size:13px}
+.review-grid .k{color:var(--mut);font-size:11px;text-transform:uppercase;font-weight:600}
+@media(max-width:900px){.franchise-kpi{grid-template-columns:repeat(2,1fr)}.review-grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -309,6 +315,14 @@ async function platformApi(path,opts={}){
  const headers={'Content-Type':'application/json',...(opts.headers||{})};
  if(AUTH.token)headers.Authorization='Bearer '+AUTH.token;
  const res=await fetch(API_URL+path,{...opts,headers,body:opts.body!==undefined?JSON.stringify(opts.body):undefined});
+ let json=null;try{json=await res.json()}catch(e){}
+ if(!res.ok)throw new Error((json&&json.error)||('Request failed '+res.status));
+ return json&&json.data!==undefined?json.data:json;
+}
+async function platformForm(path,formData,method='POST'){
+ const headers={};
+ if(AUTH.token)headers.Authorization='Bearer '+AUTH.token;
+ const res=await fetch(API_URL+path,{method,headers,body:formData});
  let json=null;try{json=await res.json()}catch(e){}
  if(!res.ok)throw new Error((json&&json.error)||('Request failed '+res.status));
  return json&&json.data!==undefined?json.data:json;
@@ -1386,7 +1400,7 @@ function isGroupClassType(t){return/group\s*class|dance|boxing|zumba|yoga/i.test
 /* ================= AUTH & NAV ================= */
 let USER=null,PAGE='dashboard';
 const ALL_PAGES=['platform','franchise-analytics','franchise-performance','franchise-gym','gymadmins','gymperformance','traineranalysis','clientanalysis','dashboard','leads','followups','clients','analysis','memberships','billing','batches','accounts','cashbook','expenses','notifications','trainers','trainer','fitness','staff','attendance','attreports','settings','help','appointments','payroll','todos','reports','audit','interviews','more'];
-const SUPERADMIN_PAGES=['platform','franchise-gym','gymadmins'];
+const SUPERADMIN_PAGES=['platform','franchise-gym','gymadmins','add-gym'];
 const GYM_ADMIN_PAGES=ALL_PAGES.filter(p=>!['platform','gymadmins','franchise-analytics','franchise-performance','franchise-gym'].includes(p));
 const MENUS={
  superadmin:SUPERADMIN_PAGES,
@@ -1783,7 +1797,7 @@ function go(p,arg,opts){if(!canPage(p)){toast('No permission');return} PAGE=p;
  if(p&&p!=='search-miss'&&p!=='search'){try{localStorage.setItem(LASTPAGEKEY,p)}catch(e){}}
  if(!opts||!opts.keepNavSub)_navSubId=null;
  closeTbDrops();markNavOn(p);
- const pages={platform:pgPlatform,gymadmins:pgGymAdmins,'franchise-analytics':pgFranchiseAnalytics,'franchise-performance':pgFranchisePerformance,'franchise-gym':pgFranchiseGym,gymperformance:pgGymPerformance,traineranalysis:pgTrainerAnalysis,clientanalysis:pgClientAnalysis,dashboard:pgDashboard,trainer:pgTrainerPortal,clients:pgClients,leads:pgLeads,followups:pgFollowups,memberships:pgMemberships,billing:pgBilling,cashbook:pgCashbook,expenses:pgExpenses,meter:pgMeter,staff:pgStaff,attendance:pgAttendance,payroll:pgPayroll,batches:pgBatches,todos:pgTodos,reports:pgReports,accounts:pgAccounts,audit:pgAudit,settings:pgSettings,analysis:pgAnalysis,notifications:pgNotifications,trainers:pgTrainers,fitness:pgFitness,attreports:pgAttReports,help:pgHelp,appointments:pgAppointments,interviews:pgInterviews,more:pgMore};
+ const pages={platform:pgPlatform,gymadmins:pgGymAdmins,'add-gym':pgAddGym,'franchise-analytics':pgFranchiseAnalytics,'franchise-performance':pgFranchisePerformance,'franchise-gym':pgFranchiseGym,gymperformance:pgGymPerformance,traineranalysis:pgTrainerAnalysis,clientanalysis:pgClientAnalysis,dashboard:pgDashboard,trainer:pgTrainerPortal,clients:pgClients,leads:pgLeads,followups:pgFollowups,memberships:pgMemberships,billing:pgBilling,cashbook:pgCashbook,expenses:pgExpenses,meter:pgMeter,staff:pgStaff,attendance:pgAttendance,payroll:pgPayroll,batches:pgBatches,todos:pgTodos,reports:pgReports,accounts:pgAccounts,audit:pgAudit,settings:pgSettings,analysis:pgAnalysis,notifications:pgNotifications,trainers:pgTrainers,fitness:pgFitness,attreports:pgAttReports,help:pgHelp,appointments:pgAppointments,interviews:pgInterviews,more:pgMore};
  if(pages[p])pages[p](arg);else pgStub(PAGES[p]||p);
  refreshTopbarNotifs();
  if(!opts||(!opts.hist&&!opts.silent))pushAppHistory(appHistState(p,$('modalwrap')&&$('modalwrap').style.display==='flex'),false)}
@@ -2095,6 +2109,9 @@ function renderWizard(){
  <div id="wizbody">${s===1?wizStep1():s===2?subFormHTML(WIZ.clientId,'New Membership',true):payFormHTML(WIZ.invId,true)}</div>
  <script>if(${s}===1){bindCaps(['w_name','w_addr','w_city','w_state','w_occ','w_med','w_idn','w_emg']);}<\/script>`)}
 function fld(id,l,v,t,extra){return`<div class="field"><label>${l}</label><input id="${id}" type="${t||'text'}" value="${esc(v||'')}" ${extra||''}></div>`}
+function reqFld(id,l,v,t,extra){return`<div class="field"><label>${esc(l)} <span class="req-tag">Required</span></label><input id="${id}" type="${t||'text'}" value="${esc(v||'')}" ${extra||''}></div>`}
+function optFld(id,l,v,t,extra){return`<div class="field"><label>${esc(l)} <span class="opt-tag">Optional</span></label><input id="${id}" type="${t||'text'}" value="${esc(v||'')}" ${extra||''}></div>`}
+function reqArea(id,l,v,extra){return`<div class="field"><label>${esc(l)} <span class="req-tag">Required</span></label><textarea id="${id}" rows="3" ${extra||''}>${esc(v||'')}</textarea></div>`}
 function sel(id,l,opts,v,extra){return`<div class="field"><label>${l}</label><select id="${id}" ${extra||''}>${opts.map(o=>`<option ${o===v?'selected':''}>${o}</option>`).join('')}</select></div>`}
 function staffBillRepList(){
  const list=(db.staff||[]).filter(s=>s.status!=='Inactive'&&(s.billRep!==false));
@@ -3950,7 +3967,7 @@ async function pgPlatform(){
    <div class="franchise-hero">
     <div class="row" style="justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px">
      <div><h2>Platform Dashboard</h2><div class="sub">Franchise owner view · ${franchiseMonthLabel(analytics.month)} · all gyms in one place</div></div>
-     <button class="btn sec" style="background:rgba(255,255,255,.08);color:#fff;border-color:rgba(255,255,255,.15)" onclick="go('gymadmins')">+ Add Gym</button>
+     <button class="btn sec" style="background:rgba(255,255,255,.08);color:#fff;border-color:rgba(255,255,255,.15)" onclick="go('add-gym')">+ Add Gym</button>
     </div>
    </div>
    <div class="franchise-kpi">
@@ -3998,6 +4015,15 @@ async function pgFranchiseGym(gymId){
   const trends=data.trends||[];
   const maxTrend=Math.max(...trends.map(t=>t.collection||0),1);
   const gyms=window._platformGyms||[];
+  const f=g.franchise||null;
+  const franchiseBlock=f?`<div class="card" style="margin-bottom:14px"><div class="row" style="justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px"><div><h3 style="text-transform:none;color:var(--ink);font-size:14px">Franchise Details</h3><div class="review-grid" style="margin-top:12px">
+   <div><div class="k">Location</div><div>${esc(f.branch||'—')}</div></div>
+   <div><div class="k">Address</div><div>${esc([f.address,f.city,f.state,f.pincode].filter(Boolean).join(', ')||'—')}</div></div>
+   <div><div class="k">Owner Phone</div><div>${esc(f.ownerPhone||'—')}</div></div>
+   <div><div class="k">Agreement</div><div>${f.agreementStartDate?esc(f.agreementStartDate+(f.agreementEndDate?' → '+f.agreementEndDate:'')):'—'}</div></div>
+   <div><div class="k">Franchise Fee</div><div>${f.franchiseFee!=null?inr(f.franchiseFee):'—'}</div></div>
+   <div><div class="k">Royalty</div><div>${f.royaltyPct!=null?f.royaltyPct+'%':'—'}</div></div>
+  </div></div>${f.agreementFilePath?`<button class="btn sm sec" onclick="viewFranchiseAgreement('${gymId}')">View Signed Agreement</button>`:''}</div></div>`:'';
   $('fg_body').innerHTML=`
    ${platformGymTabs(gyms,gymId)}
    <div class="row" style="justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:14px">
@@ -4010,6 +4036,7 @@ async function pgFranchiseGym(gymId){
      <button class="btn sec" onclick="openEditGym('${gymId}')">Edit Name</button>
     </div>
    </div>
+   ${franchiseBlock}
    <div class="franchise-kpi">
     <div class="card"><div class="l">Members</div><div class="v">${g.stats.members}</div></div>
     <div class="card"><div class="l">Leads</div><div class="v">${g.stats.leads}</div></div>
@@ -4034,40 +4061,172 @@ async function pgFranchiseGym(gymId){
  }catch(e){$('fg_body').innerHTML=`<div class="card"><p class="sub" style="color:var(--bad)">${esc(e.message||'Failed to load gym')}</p><button class="btn sm sec" style="margin-top:10px" onclick="go('platform')">← All Gyms</button></div>`}
 }
 async function pgGymAdmins(){
- $('content').innerHTML=`<div class="franchise-hero" style="margin-bottom:14px"><div class="row" style="justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px"><div><h2>Gyms & Admins</h2><div class="sub">Onboard franchise locations · each gym gets its own admin login and ERP database</div></div><button class="btn" onclick="openCreateGymAdmin()">+ Create Gym</button></div></div><div id="ga_body"><p class="sub">Loading…</p></div>`;
+ $('content').innerHTML=`<div class="franchise-hero" style="margin-bottom:14px"><div class="row" style="justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px"><div><h2>Gyms & Franchisees</h2><div class="sub">Onboard franchise locations · collect details, signed agreement, and create gym admin login</div></div><button class="btn" onclick="go('add-gym')">+ Add Gym</button></div></div><div id="ga_body"><p class="sub">Loading…</p></div>`;
  try{
   const admins=await platformApi('/platform/gym-admins');
-  $('ga_body').innerHTML=`<div class="tbl"><table><tr><th>Admin</th><th>Email</th><th>Gym</th><th>Status</th><th></th></tr>
-   ${admins.map(a=>`<tr><td class="bold">${esc(a.name)}</td><td>${esc(a.email)}</td><td>${esc(a.business?a.business.name:'—')}${a.business?` <button class="btn sm sec" style="margin-left:6px" onclick="openEditGym('${a.business.id}')">Edit</button>`:''}</td>
-   <td><span class="badge ${a.isActive?'b-ok':'b-bad'}">${a.isActive?'Active':'Inactive'}</span></td>
-   <td style="white-space:nowrap">${a.business?`<button class="btn sm" onclick="openGymAnalytics('${a.business.id}')">Performance</button>`:''}</td></tr>`).join('')||'<tr><td colspan=5 class="mut">No gym admins yet</td></tr>'}
+  $('ga_body').innerHTML=`<div class="tbl"><table><tr><th>Franchisee</th><th>Email</th><th>Gym / Location</th><th>Agreement</th><th>Status</th><th></th></tr>
+   ${admins.map(a=>{
+    const f=a.business&&a.business.franchise;
+    const loc=f?[f.city,f.state].filter(Boolean).join(', '):'';
+    return `<tr><td class="bold">${esc(a.name)}</td><td>${esc(a.email)}</td>
+    <td><span class="bold">${esc(a.business?a.business.name:'—')}</span>${loc?`<div class="mut" style="font-size:11px">${esc(loc)}</div>`:''}${a.business?` <button class="btn sm sec" style="margin-left:4px" onclick="openEditGym('${a.business.id}')">Edit</button>`:''}</td>
+    <td>${f&&f.agreementFilePath?`<button class="btn sm sec" onclick="viewFranchiseAgreement('${a.business.id}')">View Agreement</button>`:'<span class="mut">—</span>'}</td>
+    <td><span class="badge ${a.isActive?'b-ok':'b-bad'}">${a.isActive?'Active':'Inactive'}</span></td>
+    <td style="white-space:nowrap">${a.business?`<button class="btn sm" onclick="openGymAnalytics('${a.business.id}')">Performance</button>`:''}</td></tr>`}).join('')||'<tr><td colspan=6 class="mut">No franchise gyms yet · click Add Gym to onboard</td></tr>'}
    </table></div>`;
  }catch(e){$('ga_body').innerHTML=`<div class="card"><p class="sub" style="color:var(--bad)">${esc(e.message||'Failed to load gym admins')}</p></div>`}
 }
-function openCreateGymAdmin(){
- openModal(`<h2>Create Gym Admin</h2><p class="sub" style="margin-bottom:12px">Creates a new gym, ERP database, and admin login.</p>
- <div class="grid g2">
-  ${fld('ga_gym','Gym Name *','')}
-  ${fld('ga_name','Admin Name *','')}
-  ${fld('ga_email','Admin Email *','','email')}
-  ${fld('ga_pass','Temporary Password *','','password')}
- </div>
- <div class="row" style="justify-content:flex-end;gap:8px;margin-top:14px">
-  <button class="btn sec" onclick="closeModal()">Cancel</button>
-  <button class="btn" onclick="saveGymAdmin()">Create</button>
- </div>`);
+var ADD_GYM_WIZ={step:1,data:{},agreementFile:null};
+function openCreateGymAdmin(){ADD_GYM_WIZ={step:1,data:{},agreementFile:null};go('add-gym')}
+function addGymCollectStep(){
+ const d=ADD_GYM_WIZ.data;
+ if(ADD_GYM_WIZ.step===1){
+  d.gymName=val('ag_gym');d.branch=val('ag_branch');d.address=val('ag_addr');d.city=val('ag_city');d.state=val('ag_state');d.pincode=val('ag_pin');
+ }else if(ADD_GYM_WIZ.step===2){
+  d.adminName=val('ag_owner');d.adminPhone=val('ag_mobile');d.adminEmail=val('ag_email');d.altPhone=val('ag_alt');d.pan=val('ag_pan');d.gstNo=val('ag_gst');
+ }else if(ADD_GYM_WIZ.step===3){
+  d.adminPassword=val('ag_pass');d.franchiseFee=val('ag_fee');d.royaltyPct=val('ag_roy');d.agreementStartDate=val('ag_start');d.agreementEndDate=val('ag_end');d.notes=val('ag_notes');
+ }
 }
-async function saveGymAdmin(){
- const gymName=val('ga_gym'),adminName=val('ga_name'),adminEmail=val('ga_email'),adminPassword=val('ga_pass');
- if(!gymName||!adminName||!adminEmail||!adminPassword){toast('Fill all fields');return}
+function addGymValidateStep(step){
+ addGymCollectStep();
+ const d=ADD_GYM_WIZ.data;
+ if(step===1){
+  if(!d.gymName||d.gymName.trim().length<2){toast('Gym name is required');return false}
+  if(!d.branch||d.branch.trim().length<2){toast('Branch / location name is required');return false}
+  if(!d.address||d.address.trim().length<5){toast('Full address is required');return false}
+  if(!d.city||!d.state){toast('City and state are required');return false}
+  if(!/^\d{6}$/.test(String(d.pincode||'').trim())){toast('Valid 6-digit pincode is required');return false}
+ }
+ if(step===2){
+  if(!d.adminName||d.adminName.trim().length<2){toast('Franchisee name is required');return false}
+  if(String(d.adminPhone||'').replace(/\D/g,'').length<10){toast('Valid mobile number is required');return false}
+  if(!d.adminEmail||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.adminEmail)){toast('Valid email is required');return false}
+ }
+ if(step===3){
+  if(!d.adminPassword||d.adminPassword.length<8){toast('Temporary password (min 8 chars) is required');return false}
+  if(!d.agreementStartDate){toast('Agreement start date is required');return false}
+  if(d.royaltyPct&&Number(d.royaltyPct)>100){toast('Royalty cannot exceed 100%');return false}
+ }
+ if(step===4){
+  if(!$('ag_confirm')||!$('ag_confirm').checked){toast('Confirm that the franchise agreement is signed');return false}
+  const inp=$('ag_file');if(!ADD_GYM_WIZ.agreementFile&&(!inp||!inp.files||!inp.files[0])){toast('Upload the signed franchise agreement');return false}
+  if(inp&&inp.files&&inp.files[0])ADD_GYM_WIZ.agreementFile=inp.files[0];
+  const ok=['application/pdf','image/jpeg','image/png','image/webp'];
+  if(ADD_GYM_WIZ.agreementFile&&!ok.includes(ADD_GYM_WIZ.agreementFile.type)){toast('Agreement must be PDF or image (JPG/PNG)');return false}
+ }
+ return true;
+}
+function addGymNext(){
+ if(!addGymValidateStep(ADD_GYM_WIZ.step))return;
+ if(ADD_GYM_WIZ.step<4){ADD_GYM_WIZ.step++;renderAddGymWizard()}
+}
+function addGymPrev(){
+ addGymCollectStep();
+ if(ADD_GYM_WIZ.step>1){ADD_GYM_WIZ.step--;renderAddGymWizard()}
+}
+function onAddGymFile(inp){
+ ADD_GYM_WIZ.agreementFile=inp.files&&inp.files[0]?inp.files[0]:null;
+ const el=$('ag_file_label');if(el)el.textContent=ADD_GYM_WIZ.agreementFile?ADD_GYM_WIZ.agreementFile.name:'Choose signed agreement (PDF or image)';
+ const box=$('ag_file_box');if(box)box.classList.toggle('has-file',!!ADD_GYM_WIZ.agreementFile);
+}
+function addGymReviewRows(){
+ const d=ADD_GYM_WIZ.data;
+ return [
+  ['Gym Name',d.gymName],['Branch',d.branch],['Address',d.address],['City',d.city],['State',d.state],['Pincode',d.pincode],
+  ['Franchisee',d.adminName],['Mobile',d.adminPhone],['Email',d.adminEmail],['Alt Phone',d.altPhone||'—'],['PAN',d.pan||'—'],['GST',d.gstNo||'—'],
+  ['Franchise Fee',d.franchiseFee?inr(Number(d.franchiseFee)):'—'],['Royalty %',d.royaltyPct?d.royaltyPct+'%':'—'],
+  ['Agreement Start',d.agreementStartDate||'—'],['Agreement End',d.agreementEndDate||'—'],['Notes',d.notes||'—']
+ ].map(([k,v])=>`<div><div class="k">${esc(k)}</div><div class="bold">${esc(String(v))}</div></div>`).join('');
+}
+function renderAddGymWizard(){
+ const s=ADD_GYM_WIZ.step,d=ADD_GYM_WIZ.data;
+ let body='';
+ if(s===1){
+  body=`<div class="grid g2">
+   ${reqFld('ag_gym','Gym Name',d.gymName)}
+   ${reqFld('ag_branch','Branch / Location Name',d.branch)}
+   ${reqArea('ag_addr','Full Address',d.address,'class="caps"')}
+   ${reqFld('ag_city','City',d.city,'text','class="caps"')}
+   ${reqFld('ag_state','State',d.state,'text','class="caps"')}
+   ${reqFld('ag_pin','Pincode',d.pincode,'text','inputmode="numeric" maxlength="6"')}
+  </div>`;
+ }else if(s===2){
+  body=`<div class="grid g2">
+   ${reqFld('ag_owner','Franchisee / Owner Name',d.adminName)}
+   ${reqFld('ag_mobile','Mobile (+91)',d.adminPhone,'tel','inputmode="numeric" maxlength="10"')}
+   ${reqFld('ag_email','Login Email',d.adminEmail,'email')}
+   ${optFld('ag_alt','Alternate Phone',d.altPhone,'tel')}
+   ${optFld('ag_pan','PAN',d.pan,'text','class="caps" maxlength="10"')}
+   ${optFld('ag_gst','GST Number',d.gstNo,'text','class="caps"')}
+  </div>
+  <p class="sub" style="margin-top:10px">Login email becomes the gym admin account for this franchise location.</p>`;
+ }else if(s===3){
+  body=`<div class="grid g2">
+   ${reqFld('ag_pass','Temporary Password',d.adminPassword,'password')}
+   ${reqFld('ag_start','Agreement Start Date',d.agreementStartDate,'date')}
+   ${optFld('ag_end','Agreement End Date',d.agreementEndDate,'date')}
+   ${optFld('ag_fee','Franchise Fee (₹)',d.franchiseFee,'number','min="0" step="1"')}
+   ${optFld('ag_roy','Royalty %',d.royaltyPct,'number','min="0" max="100" step="0.1"')}
+  </div>
+  ${optFld('ag_notes','Internal Notes',d.notes)}
+  <p class="sub" style="margin-top:10px">Share the temporary password securely with the franchisee. They can change it after first login.</p>`;
+ }else{
+  body=`<div class="card" style="margin-bottom:14px;background:#f8fbff;border-color:#c5daf5"><h3 style="text-transform:none;color:var(--ink);font-size:14px">Review Franchise Details</h3><div class="review-grid" style="margin-top:12px">${addGymReviewRows()}</div></div>
+  <div class="field"><label style="text-transform:none;font-size:13px;color:var(--ink)">Franchise Agreement <span class="req-tag">Required</span></label>
+   <p class="sub" style="margin:6px 0 10px">Upload the signed franchise agreement (PDF or photo). Best practice: collect and store this on the platform owner (Super Admin) side during onboarding.</p>
+   <div class="agreement-box ${ADD_GYM_WIZ.agreementFile?'has-file':''}" id="ag_file_box">
+    <input type="file" id="ag_file" accept=".pdf,application/pdf,image/jpeg,image/png,image/webp" style="display:none" onchange="onAddGymFile(this)">
+    <div id="ag_file_label" class="mut" style="margin-bottom:10px">${ADD_GYM_WIZ.agreementFile?esc(ADD_GYM_WIZ.agreementFile.name):'Choose signed agreement (PDF or image)'}</div>
+    <button type="button" class="btn sec" onclick="$('ag_file').click()">Upload Agreement</button>
+   </div>
+  </div>
+  <label style="display:flex;align-items:flex-start;gap:10px;margin-top:14px;cursor:pointer;font-size:13px;color:var(--ink);text-transform:none;font-weight:500">
+   <input type="checkbox" id="ag_confirm" style="width:auto;margin-top:3px">
+   <span>I confirm the franchisee has signed the FITO6 franchise agreement and the uploaded document is the signed copy. <span class="req-tag">Required</span></span>
+  </label>`;
+ }
+ $('content').innerHTML=`<div class="franchise-hero" style="margin-bottom:14px"><div class="row" style="justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px"><div><h2>Add Franchise Gym</h2><div class="sub">Complete onboarding · details → agreement → create gym & admin login</div></div><button class="btn sec" onclick="go('gymadmins')">← Back to List</button></div></div>
+ <div class="card"><div class="steps"><div class="${s===1?'on':s>1?'done':''}">1 · Gym Details</div><div class="${s===2?'on':s>2?'done':''}">2 · Franchisee</div><div class="${s===3?'on':s>3?'done':''}">3 · Terms & Login</div><div class="${s===4?'on':''}">4 · Agreement</div></div>
+ ${body}
+ <div class="row" style="justify-content:space-between;margin-top:18px;gap:8px;flex-wrap:wrap">
+  <button class="btn sec" onclick="addGymPrev()" ${s<=1?'disabled':''}>← Previous</button>
+  <div class="row" style="gap:8px">${s<4?`<button class="btn" onclick="addGymNext()">Next →</button>`:`<button class="btn" id="ag_submit_btn" onclick="submitAddGym()">Submit & Create Gym</button>`}</div>
+ </div></div>`;
+}
+function pgAddGym(){renderAddGymWizard()}
+async function submitAddGym(){
+ if(!addGymValidateStep(4))return;
+ addGymCollectStep();
+ const d=ADD_GYM_WIZ.data;
+ const btn=$('ag_submit_btn');if(btn){btn.disabled=true;btn.textContent='Creating…'}
  try{
-  const result=await platformApi('/platform/gym-admins',{method:'POST',body:{gymName,adminName,adminEmail,adminPassword}});
-  toast('Gym admin created · '+result.admin.email);
-  closeModal();
+  const fd=new FormData();
+  ['gymName','branch','address','city','state','pincode','adminName','adminPhone','adminEmail','adminPassword','agreementStartDate'].forEach(k=>fd.append(k,d[k]||''));
+  if(d.altPhone)fd.append('altPhone',d.altPhone);
+  if(d.pan)fd.append('pan',d.pan);
+  if(d.gstNo)fd.append('gstNo',d.gstNo);
+  if(d.franchiseFee)fd.append('franchiseFee',d.franchiseFee);
+  if(d.royaltyPct)fd.append('royaltyPct',d.royaltyPct);
+  if(d.agreementEndDate)fd.append('agreementEndDate',d.agreementEndDate);
+  if(d.notes)fd.append('notes',d.notes);
+  fd.append('agreementConfirmed','true');
+  fd.append('agreement',ADD_GYM_WIZ.agreementFile);
+  const result=await platformForm('/platform/gym-admins',fd);
+  toast('Franchise gym created · '+result.admin.email);
+  ADD_GYM_WIZ={step:1,data:{},agreementFile:null};
   AUTH.businesses=await api('/businesses');
   populateBizSwitcher(AUTH.businesses);
   go('gymadmins');
  }catch(e){toast(e.message||'Create failed')}
+ finally{if(btn){btn.disabled=false;btn.textContent='Submit & Create Gym'}}
+}
+async function viewFranchiseAgreement(businessId){
+ try{
+  const data=await platformApi('/platform/gyms/'+businessId+'/agreement');
+  if(data&&data.url)window.open(data.url,'_blank');
+  else toast('Agreement not available');
+ }catch(e){toast(e.message||'Could not open agreement')}
 }
 function pgGymPerformance(){
  const m=thisMonth(),t=today();

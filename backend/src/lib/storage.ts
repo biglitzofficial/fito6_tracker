@@ -1,6 +1,25 @@
 import { v4 as uuidv4 } from 'uuid';
 import { bucket } from './firebase';
 
+export async function uploadFranchiseAgreement(
+  businessId: string,
+  buffer: Buffer,
+  originalName: string,
+  mimeType: string
+): Promise<{ path: string; size: number }> {
+  const ext = originalName.includes('.') ? originalName.slice(originalName.lastIndexOf('.')) : '';
+  const safeName = originalName.replace(/[^\w.\-]+/g, '_').slice(0, 80);
+  const path = `franchise-agreements/${businessId}/${uuidv4()}_${safeName}${ext && !safeName.endsWith(ext) ? ext : ''}`;
+  const file = bucket.file(path);
+
+  await file.save(buffer, {
+    metadata: { contentType: mimeType },
+    resumable: false,
+  });
+
+  return { path, size: buffer.length };
+}
+
 export async function uploadFile(
   buffer: Buffer,
   originalName: string,

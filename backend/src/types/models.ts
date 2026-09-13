@@ -274,10 +274,34 @@ export interface Setting {
   updatedAt: Date;
 }
 
+export interface FranchiseProfile {
+  branch: string;
+  address: string;
+  city: string;
+  state: string;
+  pincode: string;
+  ownerPhone: string;
+  altPhone?: string | null;
+  pan?: string | null;
+  gstNo?: string | null;
+  franchiseFee?: number | null;
+  royaltyPct?: number | null;
+  agreementStartDate: string;
+  agreementEndDate?: string | null;
+  agreementFilePath: string;
+  agreementFileName: string;
+  agreementMimeType: string;
+  agreementUploadedAt: string;
+  agreementConfirmed: boolean;
+  onboardedById: string;
+  notes?: string | null;
+}
+
 export interface Business {
   id: string;
   name: string;
   createdById: string;
+  franchise?: FranchiseProfile | null;
   createdAt: Date;
   updatedAt: Date;
 }

@@ -1,5 +1,6 @@
 import { Role } from '../types/enums';
-import { Business, BusinessMember, User } from '../types/models';
+import { Business, BusinessMember, FranchiseProfile, User } from '../types/models';
+import { uploadFranchiseAgreement, getSignedDownloadUrl } from '../lib/storage';
 import { COL, create, findMany, findOne, getById, sortBy, update } from '../lib/firestore';
 import { seedBusinessDefaults } from '../lib/business-seed';
 import { erpStoreService } from './erp-store.service';
@@ -153,14 +154,22 @@ function franchiseScore(stats: GymStats) {
   return Math.round(net + perMember * 10 + stats.members * 2 + stats.leads * 0.5);
 }
 
-function defaultErpData(gymName: string) {
+function defaultErpData(
+  gymName: string,
+  opts?: { branch?: string; gstNo?: string; address?: string; city?: string; state?: string; pincode?: string }
+) {
+  const branch = opts?.branch?.trim() || 'Main Branch';
   return {
     settings: {
       gymName,
-      branch: 'Main Branch',
-      branches: ['Main Branch'],
+      branch,
+      branches: [branch],
       branchCode: 'BR01',
-      gstNo: '',
+      address: opts?.address || '',
+      city: opts?.city || '',
+      state: opts?.state || '',
+      pincode: opts?.pincode || '',
+      gstNo: opts?.gstNo || '',
       gstPct: 18,
       packages: [
         { name: '1 Month', months: 1, price: 1500 },
@@ -261,6 +270,7 @@ export const platformService = {
           id: business.id,
           name: business.name,
           gymName: erp?.settings?.gymName || business.name,
+          franchise: business.franchise || null,
           admin: admin
             ? { id: admin.id, name: admin.name, email: admin.email, isActive: admin.isActive }
             : null,
@@ -293,18 +303,51 @@ export const platformService = {
     return gym;
   },
 
-  async createGymAdmin(data: {
-    gymName: string;
-    adminName: string;
-    adminEmail: string;
-    adminPassword: string;
-  }) {
+  async createGymAdmin(
+    data: {
+      gymName: string;
+      branch: string;
+      address: string;
+      city: string;
+      state: string;
+      pincode: string;
+      adminName: string;
+      adminPhone: string;
+      adminEmail: string;
+      adminPassword: string;
+      altPhone?: string;
+      pan?: string;
+      gstNo?: string;
+      franchiseFee?: number;
+      royaltyPct?: number;
+      agreementStartDate: string;
+      agreementEndDate?: string;
+      agreementConfirmed: boolean;
+      notes?: string;
+    },
+    agreementFile: { buffer: Buffer; originalName: string; mimeType: string },
+    onboardedById: string
+  ) {
     const gymName = data.gymName.trim();
+    const branch = data.branch.trim();
+    const address = data.address.trim();
+    const city = data.city.trim();
+    const state = data.state.trim();
+    const pincode = data.pincode.trim();
     const adminName = data.adminName.trim();
+    const adminPhone = data.adminPhone.trim();
     const adminEmail = data.adminEmail.toLowerCase().trim();
 
     if (gymName.length < 2) throw new AppError(400, 'Gym name must be at least 2 characters');
-    if (!adminName) throw new AppError(400, 'Admin name is required');
+    if (branch.length < 2) throw new AppError(400, 'Branch / location is required');
+    if (address.length < 5) throw new AppError(400, 'Full address is required');
+    if (city.length < 2) throw new AppError(400, 'City is required');
+    if (state.length < 2) throw new AppError(400, 'State is required');
+    if (!/^\d{6}$/.test(pincode)) throw new AppError(400, 'Pincode must be 6 digits');
+    if (!adminName) throw new AppError(400, 'Franchisee name is required');
+    if (adminPhone.replace(/\D/g, '').length < 10) throw new AppError(400, 'Valid mobile number is required');
+    if (!data.agreementStartDate) throw new AppError(400, 'Agreement start date is required');
+    if (!data.agreementConfirmed) throw new AppError(400, 'Confirm that the franchise agreement is signed');
 
     const existing = await findOne<User>(COL.users, 'email', adminEmail);
     if (existing) throw new AppError(400, 'Email already exists');
@@ -329,6 +372,38 @@ export const platformService = {
       createdById: admin.id,
     });
 
+    const uploaded = await uploadFranchiseAgreement(
+      business.id,
+      agreementFile.buffer,
+      agreementFile.originalName,
+      agreementFile.mimeType
+    );
+
+    const franchise: FranchiseProfile = {
+      branch,
+      address,
+      city,
+      state,
+      pincode,
+      ownerPhone: adminPhone,
+      altPhone: data.altPhone?.trim() || null,
+      pan: data.pan?.trim().toUpperCase() || null,
+      gstNo: data.gstNo?.trim().toUpperCase() || null,
+      franchiseFee: data.franchiseFee ?? null,
+      royaltyPct: data.royaltyPct ?? null,
+      agreementStartDate: data.agreementStartDate,
+      agreementEndDate: data.agreementEndDate?.trim() || null,
+      agreementFilePath: uploaded.path,
+      agreementFileName: agreementFile.originalName,
+      agreementMimeType: agreementFile.mimeType,
+      agreementUploadedAt: new Date().toISOString(),
+      agreementConfirmed: true,
+      onboardedById,
+      notes: data.notes?.trim() || null,
+    };
+
+    await update<Business>(COL.businesses, business.id, { franchise });
+
     await create<BusinessMember>(COL.businessMembers, {
       businessId: business.id,
       userId: admin.id,
@@ -337,11 +412,38 @@ export const platformService = {
     });
 
     await seedBusinessDefaults(business.id, gymName);
-    await erpStoreService.save(business.id, defaultErpData(gymName), admin.id);
+    await erpStoreService.save(
+      business.id,
+      defaultErpData(gymName, {
+        branch,
+        gstNo: franchise.gstNo || '',
+        address,
+        city,
+        state,
+        pincode,
+      }),
+      admin.id
+    );
 
     return {
-      business: { id: business.id, name: business.name },
+      business: { id: business.id, name: business.name, franchise },
       admin: { id: admin.id, name: admin.name, email: admin.email, role: admin.role },
+    };
+  },
+
+  async getFranchiseAgreementUrl(businessId: string) {
+    const business = await getById<Business>(COL.businesses, businessId);
+    if (!business?.franchise?.agreementFilePath) {
+      throw new AppError(404, 'Franchise agreement not found');
+    }
+    const url = await getSignedDownloadUrl(
+      business.franchise.agreementFilePath,
+      business.franchise.agreementFileName || 'franchise-agreement.pdf'
+    );
+    return {
+      url,
+      fileName: business.franchise.agreementFileName,
+      uploadedAt: business.franchise.agreementUploadedAt,
     };
   },
 
@@ -508,7 +610,13 @@ export const platformService = {
           name: admin.name,
           email: admin.email,
           isActive: admin.isActive,
-          business: business ? { id: business.id, name: business.name } : null,
+          business: business
+            ? {
+                id: business.id,
+                name: business.name,
+                franchise: business.franchise || null,
+              }
+            : null,
         };
       })
     );
