@@ -190,6 +190,27 @@ hr.sep{border:none;border-top:1px solid var(--line);margin:14px 0}
 .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .clickable{cursor:pointer;color:#1554c0;font-weight:600}
 @media(max-width:900px){.g4,.g6{grid-template-columns:repeat(2,1fr)}.g3{grid-template-columns:1fr}}
+/* FRANCHISE / PLATFORM */
+.franchise-hero{background:linear-gradient(135deg,#0a0e17 0%,#111827 55%,#0c2440 100%);border-radius:var(--radius);padding:22px 24px;color:#f8fafc;margin-bottom:18px;border:1px solid rgba(0,153,255,.15);box-shadow:0 12px 40px rgba(10,14,23,.18)}
+.franchise-hero h2{color:#fff;font-size:1.5rem;margin-bottom:6px}
+.franchise-hero .sub{color:#94a3b8}
+.franchise-kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
+.franchise-kpi .card{background:#fff;border:1px solid var(--line);padding:16px 18px}
+.franchise-kpi .card .l{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--mut)}
+.franchise-kpi .card .v{font-size:1.35rem;font-weight:700;margin-top:6px;letter-spacing:-.02em}
+.rank-pill{display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:28px;border-radius:999px;font-size:11px;font-weight:800}
+.rank-1{background:linear-gradient(135deg,#fbbf24,#d97706);color:#1a1200}
+.rank-2{background:linear-gradient(135deg,#cbd5e1,#64748b);color:#0f172a}
+.rank-3{background:linear-gradient(135deg,#fdba74,#ea580c);color:#1a1200}
+.rank-n{background:#f1f5f9;color:var(--mut);font-weight:700}
+.franchise-table td,.franchise-table th{vertical-align:middle}
+.franchise-table tr.top-row td{background:linear-gradient(90deg,rgba(0,153,255,.06),transparent)}
+.perf-bar{height:8px;border-radius:999px;background:#e2e8f0;overflow:hidden;margin-top:6px}
+.perf-bar>i{display:block;height:100%;background:linear-gradient(90deg,var(--brand),#33b5ff);border-radius:999px}
+.franchise-tabs{display:flex;gap:8px;margin:0 0 14px;flex-wrap:wrap}
+.franchise-tabs button{background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px 14px;font-size:12px;font-weight:600;color:var(--mut)}
+.franchise-tabs button.on{background:var(--dark);color:#fff;border-color:var(--dark)}
+@media(max-width:900px){.franchise-kpi{grid-template-columns:repeat(2,1fr)}}
 </style>
 </head>
 <body>
@@ -398,7 +419,11 @@ async function enterAppFromAuth(opts={}){
   }
  }
  const isSuper=AUTH.user.role==='SUPERADMIN';
- if(AUTH.businessId){
+ if(isSuper&&!opts.keepGymContext){
+  AUTH.businessId=null;
+  persistAuth();
+  db=defaults();ensurePkgSettings();_cloudReady=false;
+ }else if(AUTH.businessId){
   try{
    const source=await loadFromCloud();
    if(!opts.quiet&&source)toast('Session restored from cloud');
@@ -410,17 +435,18 @@ async function enterAppFromAuth(opts={}){
   }
  }else if(isSuper){
   db=defaults();ensurePkgSettings();_cloudReady=false;
+  AUTH.businessId=null;
  }else{
   throw new Error('No business context');
  }
  USER={u:AUTH.user.email,p:'',role:mapCloudRole(AUTH.user.role,AUTH.user.email,AUTH.user.name),name:AUTH.user.name,cloudRole:AUTH.user.role,jobType:AUTH.user.jobType};
  showAppShell();
  setTopUser();
- $('sb_role').textContent=isSuper&&!AUTH.businessId?'FITO6 Platform':((db.settings&&db.settings.gymName)||'FITO6');
+ $('sb_role').textContent=isSuper?'FITO6 Franchise Network':((db.settings&&db.settings.gymName)||'FITO6');
  populateBizSwitcher(AUTH.businesses||[]);
  buildNav();
  const saved=resolveStartupPage();
- const target=saved&&canPage(saved)?saved:homePage();
+ const target=isSuper?(saved&&canPage(saved)?saved:'platform'):(saved&&canPage(saved)?saved:homePage());
  go(target,null,{hist:true,silent:true});
  pushAppHistory(appHistState(PAGE,false),true);
  hideBootLoad();
@@ -1353,22 +1379,29 @@ function isGroupClassType(t){return/group\s*class|dance|boxing|zumba|yoga/i.test
 
 /* ================= AUTH & NAV ================= */
 let USER=null,PAGE='dashboard';
-const ALL_PAGES=['platform','gymadmins','gymperformance','traineranalysis','clientanalysis','dashboard','leads','followups','clients','analysis','memberships','billing','batches','accounts','cashbook','expenses','notifications','trainers','trainer','fitness','staff','attendance','attreports','settings','help','appointments','payroll','todos','reports','audit','interviews','more'];
-const GYM_ADMIN_PAGES=ALL_PAGES.filter(p=>!['platform','gymadmins'].includes(p));
+const ALL_PAGES=['platform','franchise-analytics','franchise-performance','franchise-gym','gymadmins','gymperformance','traineranalysis','clientanalysis','dashboard','leads','followups','clients','analysis','memberships','billing','batches','accounts','cashbook','expenses','notifications','trainers','trainer','fitness','staff','attendance','attreports','settings','help','appointments','payroll','todos','reports','audit','interviews','more'];
+const SUPERADMIN_PAGES=['platform','franchise-analytics','franchise-performance','franchise-gym','gymadmins'];
+const GYM_ADMIN_PAGES=ALL_PAGES.filter(p=>!['platform','gymadmins','franchise-analytics','franchise-performance','franchise-gym'].includes(p));
 const MENUS={
- superadmin:['platform','gymadmins',...GYM_ADMIN_PAGES],
+ superadmin:SUPERADMIN_PAGES,
  gymadmin:['dashboard','traineranalysis','clientanalysis',...GYM_ADMIN_PAGES.filter(p=>!['dashboard','traineranalysis','clientanalysis'].includes(p))],
  frontoffice:['dashboard','leads','followups','clients','analysis','gymperformance','memberships','billing','batches','accounts','cashbook','expenses','notifications','trainers','fitness','staff','attendance','attreports','appointments','todos','help','more','settings','reports','interviews'],
  accountant:['dashboard','analysis','gymperformance','accounts','cashbook','expenses','attendance','attreports','settings','payroll','reports','fitness','help','more','billing'],
  trainer:['trainer','clients','attendance','batches','todos','appointments','help']};
 const PAGES={
- platform:'Platform',gymadmins:'Gym Admins',gymperformance:'Gym Performance',traineranalysis:'Trainer Analysis',clientanalysis:'Client Analysis',
+ platform:'Franchise Dashboard',gymadmins:'Gyms & Admins','franchise-analytics':'Gym Analytics','franchise-performance':'Network Performance','franchise-gym':'Gym Detail',gymperformance:'Gym Performance',traineranalysis:'Trainer Analysis',clientanalysis:'Client Analysis',
  dashboard:'Dashboard',leads:'Enquiry',followups:'Follow Ups',clients:'Members',analysis:'Analysis',
  memberships:'Memberships',billing:'Billing',batches:'Batches & Classes',accounts:'Accounts',cashbook:'Cashbook',
  expenses:'Expenses',notifications:'Notifications',trainers:'Trainers',trainer:'Trainer Portal',
  fitness:'Fitness Center',staff:'Staff',attendance:'Attendance',attreports:'Attendance Reports',
  settings:'Settings',help:'Help',appointments:'Appointments',payroll:'Payroll',
  todos:'To-do List',reports:'Reports',meter:'EB Meter',audit:'Audit Log',interviews:'Interview Candidates',more:'More'};
+const SUPER_NAV=[
+ {id:'platform',label:'Dashboard',page:'platform'},
+ {id:'franchise-analytics',label:'Gym Analytics',page:'franchise-analytics'},
+ {id:'franchise-performance',label:'Performance',page:'franchise-performance'},
+ {id:'gymadmins',label:'Gyms & Admins',page:'gymadmins'}
+];
 const NAV_TREE=[
  {id:'platform',label:'Platform',page:'platform'},
  {id:'gymadmins',label:'Gym Admins',page:'gymadmins'},
@@ -1500,10 +1533,14 @@ async function switchBusiness(id,afterPage){
  if(!id){
   AUTH.businessId=null;persistAuth();_cloudReady=false;
   db=defaults();ensurePkgSettings();cacheLocal();
-  $('sb_role').textContent='FITO6 Platform';
+  $('sb_role').textContent='FITO6 Franchise';
   populateBizSwitcher(AUTH.businesses||[]);
   buildNav();go('platform');
-  toast('Platform view — pick a gym to load its data');
+  return;
+ }
+ if(isSuperAdmin()&&!afterPage){
+  openGymAnalytics(id);
+  const sel=$('biz_switch');if(sel)sel.value='';
   return;
  }
  const prevId=AUTH.businessId;
@@ -1527,14 +1564,26 @@ async function switchBusiness(id,afterPage){
   toast(e.message||'Failed to switch gym');
  }
 }
-async function openGymAnalytics(id){
+function openGymAnalytics(id){
  if(!id)return;
- await switchBusiness(id,'gymperformance');
+ go('franchise-gym',id);
 }
 async function openGymWorkspace(id){
  if(!id)return;
  await switchBusiness(id,'dashboard');
 }
+function rankBadge(n){
+ const v=Number(n)||0;
+ if(v===1)return'<span class="rank-pill rank-1">1</span>';
+ if(v===2)return'<span class="rank-pill rank-2">2</span>';
+ if(v===3)return'<span class="rank-pill rank-3">3</span>';
+ return'<span class="rank-pill rank-n">'+v+'</span>';
+}
+function perfBar(val,max){
+ const pct=max>0?Math.min(100,Math.round((val/max)*100)):0;
+ return'<div class="perf-bar"><i style="width:'+pct+'%"></i></div>';
+}
+function franchiseMonthLabel(m){return m?String(m).replace('-',' · '):''}
 function openEditGym(id){
  if(!isSuperAdmin()){toast('Only Super Admin can rename gyms');return}
  const current=gymDisplayName(id)||'';
@@ -1598,7 +1647,7 @@ async function doLogin(){
   USER={u:AUTH.user.email,p:'',role:mapCloudRole(AUTH.user.role,AUTH.user.email,AUTH.user.name),name:AUTH.user.name,cloudRole:AUTH.user.role,jobType:AUTH.user.jobType};
   showAppShell();hideBootLoad();
   setTopUser();
-  $('sb_role').textContent=isSuper&&!AUTH.businessId?'FITO6 Platform':((db.settings&&db.settings.gymName)||(businesses&&businesses[0]&&businesses[0].name)||'FITO6');
+  $('sb_role').textContent=isSuper?'FITO6 Franchise Network':((db.settings&&db.settings.gymName)||(businesses&&businesses[0]&&businesses[0].name)||'FITO6');
   populateBizSwitcher(AUTH.businesses||[]);
   audit('Login','Cloud login · '+email);
   buildNav();go(homePage(),null,{hist:true});pushAppHistory(appHistState(PAGE,false),true);refreshTopbarNotifs();
@@ -1621,6 +1670,7 @@ function logout(){
 }
 function canPage(p){
  if(!USER||!MENUS[USER.role])return false;
+ if(p==='franchise-gym')return USER.role==='superadmin';
  if(p==='meter')return MENUS[USER.role].includes('fitness');
  return MENUS[USER.role].includes(p);
 }
@@ -1634,6 +1684,13 @@ function toggleNavGroup(id,ev){if(ev)ev.stopPropagation();const el=$(id);if(!el)
 function toggleSidebar(){const sb=$('sidebar'),ov=$('sidebar-overlay');if(!sb)return;sb.classList.toggle('open');if(ov)ov.classList.toggle('open')}
 function closeSidebar(){const sb=$('sidebar'),ov=$('sidebar-overlay');if(sb)sb.classList.remove('open');if(ov)ov.classList.remove('open')}
 function buildNav(){
+ if(isSuperAdmin()){
+  $('nav').innerHTML=SUPER_NAV.filter(navVisible).map(item=>
+   `<div class="nav-group nav-single"><button type="button" class="nav-head" id="navbtn_${item.id}" onclick="closeSidebar();go('${item.page}')"><span class="nav-label">${item.label}</span></button></div>`
+  ).join('');
+  markNavOn(PAGE);
+  return;
+ }
  const allowed=NAV_TREE.filter(navVisible);
  $('nav').innerHTML=allowed.map(item=>{
   if(item.kids){
@@ -1681,7 +1738,7 @@ function go(p,arg,opts){if(!canPage(p)){toast('No permission');return} PAGE=p;
  if(p&&p!=='search-miss'&&p!=='search'){try{localStorage.setItem(LASTPAGEKEY,p)}catch(e){}}
  if(!opts||!opts.keepNavSub)_navSubId=null;
  closeTbDrops();markNavOn(p);
- const pages={platform:pgPlatform,gymadmins:pgGymAdmins,gymperformance:pgGymPerformance,traineranalysis:pgTrainerAnalysis,clientanalysis:pgClientAnalysis,dashboard:pgDashboard,trainer:pgTrainerPortal,clients:pgClients,leads:pgLeads,followups:pgFollowups,memberships:pgMemberships,billing:pgBilling,cashbook:pgCashbook,expenses:pgExpenses,meter:pgMeter,staff:pgStaff,attendance:pgAttendance,payroll:pgPayroll,batches:pgBatches,todos:pgTodos,reports:pgReports,accounts:pgAccounts,audit:pgAudit,settings:pgSettings,analysis:pgAnalysis,notifications:pgNotifications,trainers:pgTrainers,fitness:pgFitness,attreports:pgAttReports,help:pgHelp,appointments:pgAppointments,interviews:pgInterviews,more:pgMore};
+ const pages={platform:pgPlatform,gymadmins:pgGymAdmins,'franchise-analytics':pgFranchiseAnalytics,'franchise-performance':pgFranchisePerformance,'franchise-gym':pgFranchiseGym,gymperformance:pgGymPerformance,traineranalysis:pgTrainerAnalysis,clientanalysis:pgClientAnalysis,dashboard:pgDashboard,trainer:pgTrainerPortal,clients:pgClients,leads:pgLeads,followups:pgFollowups,memberships:pgMemberships,billing:pgBilling,cashbook:pgCashbook,expenses:pgExpenses,meter:pgMeter,staff:pgStaff,attendance:pgAttendance,payroll:pgPayroll,batches:pgBatches,todos:pgTodos,reports:pgReports,accounts:pgAccounts,audit:pgAudit,settings:pgSettings,analysis:pgAnalysis,notifications:pgNotifications,trainers:pgTrainers,fitness:pgFitness,attreports:pgAttReports,help:pgHelp,appointments:pgAppointments,interviews:pgInterviews,more:pgMore};
  if(pages[p])pages[p](arg);else pgStub(PAGES[p]||p);
  refreshTopbarNotifs();
  if(!opts||(!opts.hist&&!opts.silent))pushAppHistory(appHistState(p,$('modalwrap')&&$('modalwrap').style.display==='flex'),false)}
@@ -3816,46 +3873,144 @@ function saveTodo(){
 function toggleTodo(id){const t=db.todos.find(x=>x.id===id);if(!t)return;t.done=!t.done;save();go('todos')}
 function removeTodo(id){db.todos=db.todos.filter(t=>t.id!==id);save();go('todos')}
 
-/* ================= PLATFORM / GYM ADMIN ================= */
+/* ================= PLATFORM / FRANCHISE ================= */
 async function pgPlatform(){
- $('content').innerHTML=`<div class="row" style="justify-content:space-between;margin-bottom:12px"><div><h2>Platform Dashboard</h2><div class="sub">Product super admin · all gyms performance</div></div>
-  <button class="btn" onclick="go('gymadmins')">＋ Create Gym Admin</button></div><div id="plat_body"><p class="sub">Loading platform analytics…</p></div>`;
+ $('content').innerHTML=`<div id="plat_body"><p class="sub">Loading franchise dashboard…</p></div>`;
  try{
   const data=await platformApi('/platform/analytics');
-  const gyms=(data.gyms||[]).slice().sort((a,b)=>(b.stats.collectionMonth||0)-(a.stats.collectionMonth||0));
+  const gyms=data.gyms||[];
   window._platformGyms=gyms;
+  const top=gyms[0];
+  const maxColl=Math.max(...gyms.map(g=>g.stats.collectionMonth||0),1);
   $('plat_body').innerHTML=`
-   <div class="grid g4" style="margin-bottom:14px">
-    ${stat('Total Gyms',data.totals.gyms,'br')}${stat('Total Members',data.totals.members,'ok')}
-    ${stat('Collection ('+data.month+')',inr(data.totals.collectionMonth),'ok')}${stat('Net ('+data.month+')',inr(data.profitMonth),data.profitMonth>=0?'ok':'bad')}
+   <div class="franchise-hero">
+    <div class="row" style="justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px">
+     <div><h2>Franchise Command Center</h2><div class="sub">Network overview · ${franchiseMonthLabel(data.month)} · compare gym performance across your chain</div></div>
+     <div class="row" style="gap:8px"><button class="btn sec" style="background:rgba(255,255,255,.08);color:#fff;border-color:rgba(255,255,255,.15)" onclick="go('franchise-analytics')">Gym Analytics</button><button class="btn" onclick="go('franchise-performance')">Performance Rankings</button><button class="btn sec" style="background:rgba(255,255,255,.08);color:#fff;border-color:rgba(255,255,255,.15)" onclick="go('gymadmins')">+ Add Gym</button></div>
+    </div>
    </div>
-   <div class="card"><h3>Gym-wise Performance</h3>
-    <p class="sub" style="margin-bottom:10px">Click a gym name or <b>Analytics</b> to view that gym’s performance. Use <b>Edit</b> to rename a gym.</p>
-    <div class="tbl"><table><tr><th>Gym</th><th>Admin</th><th>Members</th><th>Leads</th><th class="r">Collection</th><th class="r">Expense</th><th class="r">Net</th><th></th></tr>
-    ${gyms.map(g=>`<tr>
-     <td class="bold clickable" onclick="openGymAnalytics('${g.id}')" title="View gym analytics">${esc(g.gymName||g.name)}</td>
+   <div class="franchise-kpi">
+    <div class="card"><div class="l">Total Gyms</div><div class="v" style="color:var(--brand)">${data.totals.gyms}</div></div>
+    <div class="card"><div class="l">Network Members</div><div class="v" style="color:var(--ok)">${data.totals.members}</div></div>
+    <div class="card"><div class="l">Collection (${franchiseMonthLabel(data.month)})</div><div class="v" style="color:var(--ok)">${inr(data.totals.collectionMonth)}</div></div>
+    <div class="card"><div class="l">Network Net</div><div class="v" style="color:${data.profitMonth>=0?'var(--ok)':'var(--bad)'}">${inr(data.profitMonth)}</div></div>
+   </div>
+   ${top?`<div class="card" style="margin-bottom:14px;border-color:#c5daf5;background:linear-gradient(90deg,#f8fbff,#fff)"><div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px"><div><h3 style="color:var(--ink);text-transform:none;font-size:14px;margin:0">Top Performing Gym</h3><p class="big bold" style="margin-top:6px">${esc(top.gymName||top.name)}</p><p class="sub">Score ${top.score||0} · ${inr(top.net||0)} net · ${top.stats.members} members</p></div>${rankBadge(1)}</div></div>`:''}
+   <div class="card"><h3>Gym Leaderboard</h3><p class="sub" style="margin-bottom:12px">Ranked by composite score (net profit, members, collection efficiency). Click a gym for detailed performance.</p>
+    <div class="tbl franchise-table"><table><tr><th>#</th><th>Gym</th><th>Admin</th><th>Members</th><th class="r">Collection</th><th class="r">Net</th><th>Score</th><th></th></tr>
+    ${gyms.map(g=>`<tr class="${g.rank<=3?'top-row':''}">
+     <td>${rankBadge(g.rank||0)}</td>
+     <td><div class="bold clickable" onclick="openGymAnalytics('${g.id}')">${esc(g.gymName||g.name)}</div>${perfBar(g.stats.collectionMonth||0,maxColl)}</td>
      <td>${esc(g.admin?g.admin.name:'—')}<div class="sub">${esc(g.admin?g.admin.email:'')}</div></td>
-     <td>${g.stats.members}</td><td>${g.stats.leads}</td>
+     <td>${g.stats.members}</td>
      <td class="r">${inr(g.stats.collectionMonth)}</td>
-     <td class="r">${inr(g.stats.expenseMonth)}</td>
-     <td class="r bold">${inr((g.stats.collectionMonth||0)-(g.stats.expenseMonth||0))}</td>
-     <td style="white-space:nowrap"><button class="btn sm" onclick="openGymAnalytics('${g.id}')">Analytics</button> <button class="btn sm sec" onclick="openEditGym('${g.id}')">Edit</button> <button class="btn sm sec" onclick="openGymWorkspace('${g.id}')">Open</button></td>
-    </tr>`).join('')||'<tr><td colspan=8 class="mut">No gyms yet — create a gym admin</td></tr>'}
+     <td class="r bold" style="color:${(g.net||0)>=0?'var(--ok)':'var(--bad)'}">${inr(g.net||0)}</td>
+     <td><b>${g.score||0}</b></td>
+     <td style="white-space:nowrap"><button class="btn sm" onclick="openGymAnalytics('${g.id}')">View</button> <button class="btn sm sec" onclick="openEditGym('${g.id}')">Edit</button></td>
+    </tr>`).join('')||'<tr><td colspan=8 class="mut">No gyms yet — add your first franchise location</td></tr>'}
     </table></div></div>`;
  }catch(e){
-  $('plat_body').innerHTML=`<div class="card"><p class="sub" style="color:var(--bad)">${esc(e.message||'Failed to load platform analytics')}</p>
-   <button class="btn" style="margin-top:10px" onclick="go('gymadmins')">Create Gym Admin</button></div>`;
+  $('plat_body').innerHTML=`<div class="card"><p class="sub" style="color:var(--bad)">${esc(e.message||'Failed to load franchise dashboard')}</p><button class="btn" style="margin-top:10px" onclick="go('gymadmins')">Create Gym</button></div>`;
  }
 }
+async function pgFranchiseAnalytics(){
+ $('content').innerHTML=`<div id="fa_body"><p class="sub">Loading gym analytics…</p></div>`;
+ try{
+  const data=await platformApi('/platform/analytics');
+  const gyms=data.gyms||[];
+  window._platformGyms=gyms;
+  const maxColl=Math.max(...gyms.map(g=>g.stats.collectionMonth||0),1);
+  const maxMem=Math.max(...gyms.map(g=>g.stats.members||0),1);
+  const chart=gyms.slice(0,8).map(g=>({x:(g.gymName||g.name||'').slice(0,12),y:g.stats.collectionMonth||0}));
+  $('fa_body').innerHTML=`
+   <div class="franchise-hero"><h2>Gym Analytics</h2><div class="sub">Side-by-side comparison · ${franchiseMonthLabel(data.month)}</div></div>
+   <div class="grid g2" style="margin-bottom:14px">
+    <div class="card"><h3>Collection Comparison</h3><div class="bars">${chart.map(c=>`<div class="b"><div class="y">${inr(c.y)}</div><div class="bar" style="height:${Math.max(4,Math.round((c.y/maxColl)*100))}%"></div><div class="x">${esc(c.x)}</div></div>`).join('')||'<p class="mut">No data</p>'}</div></div>
+    <div class="card"><h3>Key Metrics</h3><div class="tbl"><table>
+     <tr><th>Gym</th><th class="r">Members</th><th class="r">Leads</th><th class="r">Collection</th><th class="r">Expense</th><th class="r">Net</th><th class="r">Per Member</th></tr>
+     ${gyms.map(g=>`<tr class="${g.rank<=3?'top-row':''}"><td class="bold clickable" onclick="openGymAnalytics('${g.id}')">${rankBadge(g.rank||0)} ${esc(g.gymName||g.name)}</td><td class="r">${g.stats.members}${perfBar(g.stats.members,maxMem)}</td><td class="r">${g.stats.leads}</td><td class="r">${inr(g.stats.collectionMonth)}</td><td class="r">${inr(g.stats.expenseMonth)}</td><td class="r bold">${inr(g.net||0)}</td><td class="r">${inr(g.perMember||0)}</td></tr>`).join('')}
+    </table></div></div>
+   </div>
+   <div class="card"><h3>Efficiency Matrix</h3><p class="sub" style="margin-bottom:10px">Higher net and per-member collection indicate stronger franchise unit economics.</p>
+    <div class="tbl franchise-table"><table><tr><th>Rank</th><th>Gym</th><th class="r">Net Profit</th><th class="r">Collection / Member</th><th class="r">Lead Pipeline</th><th></th></tr>
+    ${gyms.map(g=>`<tr><td>${rankBadge(g.rank||0)}</td><td class="bold">${esc(g.gymName||g.name)}</td><td class="r" style="color:${(g.net||0)>=0?'var(--ok)':'var(--bad)'}">${inr(g.net||0)}</td><td class="r">${inr(g.perMember||0)}</td><td class="r">${g.stats.leads}</td><td><button class="btn sm sec" onclick="openGymAnalytics('${g.id}')">Drill Down</button></td></tr>`).join('')}
+    </table></div></div>`;
+ }catch(e){$('fa_body').innerHTML=`<div class="card"><p class="sub" style="color:var(--bad)">${esc(e.message||'Failed to load analytics')}</p></div>`}
+}
+async function pgFranchisePerformance(){
+ $('content').innerHTML=`<div id="fp_body"><p class="sub">Loading network performance…</p></div>`;
+ try{
+  const data=await platformApi('/platform/franchise-performance');
+  window._franchisePerf=data;
+  const staff=data.staffLeaderboard||[];
+  const trainers=data.trainerLeaderboard||[];
+  $('fp_body').innerHTML=`
+   <div class="franchise-hero"><h2>Network Performance</h2><div class="sub">Cross-gym staff & trainer rankings · ${franchiseMonthLabel(data.month)}</div></div>
+   <div class="grid g2">
+    <div class="card"><h3>Top Staff / Sales (Network-wide)</h3><p class="sub" style="margin-bottom:10px">Ranked by collections this month across all franchise locations.</p>
+     <div class="tbl franchise-table"><table><tr><th>#</th><th>Staff</th><th>Gym</th><th>Invoices</th><th class="r">Collected</th></tr>
+     ${staff.slice(0,15).map((s,i)=>`<tr class="${i<3?'top-row':''}"><td>${rankBadge(i+1)}</td><td class="bold">${esc(s.name)}</td><td class="clickable" onclick="openGymAnalytics('${s.gymId}')">${esc(s.gymName)}</td><td>${s.invoices}</td><td class="r bold">${inr(s.collected)}</td></tr>`).join('')||'<tr><td colspan=5 class="mut">No staff billing data this month</td></tr>'}
+     </table></div></div>
+    <div class="card"><h3>Top Trainers (Network-wide)</h3><p class="sub" style="margin-bottom:10px">Ranked by PT revenue and active PT clients.</p>
+     <div class="tbl franchise-table"><table><tr><th>#</th><th>Trainer</th><th>Gym</th><th>Members</th><th>Active PT</th><th class="r">PT Revenue</th></tr>
+     ${trainers.slice(0,15).map((t,i)=>`<tr class="${i<3?'top-row':''}"><td>${rankBadge(i+1)}</td><td class="bold">${esc(t.name)}</td><td class="clickable" onclick="openGymAnalytics('${t.gymId}')">${esc(t.gymName)}</td><td>${t.clients}</td><td>${t.ptSubs}</td><td class="r bold">${inr(t.revenue)}</td></tr>`).join('')||'<tr><td colspan=6 class="mut">No trainer data this month</td></tr>'}
+     </table></div></div>
+   </div>
+   <div class="card" style="margin-top:14px"><h3>Gym Performance Index</h3>
+    <div class="tbl franchise-table"><table><tr><th>Rank</th><th>Gym</th><th class="r">Score</th><th class="r">Net</th><th>Top Staff</th><th>Top Trainer</th><th></th></tr>
+    ${(data.gyms||[]).map(g=>{
+     const topS=(g.performance&&g.performance.staffSales&&g.performance.staffSales[0])||null;
+     const topT=(g.performance&&g.performance.trainers&&g.performance.trainers[0])||null;
+     return`<tr class="${g.rank<=3?'top-row':''}"><td>${rankBadge(g.rank||0)}</td><td class="bold">${esc(g.gymName||g.name)}</td><td class="r"><b>${g.score||0}</b></td><td class="r">${inr(g.net||0)}</td><td>${topS?esc(topS.name)+' · '+inr(topS.collected):'—'}</td><td>${topT?esc(topT.name)+' · '+topT.ptSubs+' PT': '—'}</td><td><button class="btn sm" onclick="openGymAnalytics('${g.id}')">View Gym</button></td></tr>`}).join('')}
+    </table></div></div>`;
+ }catch(e){$('fp_body').innerHTML=`<div class="card"><p class="sub" style="color:var(--bad)">${esc(e.message||'Failed to load performance data')}</p></div>`}
+}
+async function pgFranchiseGym(gymId){
+ gymId=gymId||window._franchiseGymId;
+ if(!gymId){toast('Select a gym');go('platform');return}
+ window._franchiseGymId=gymId;
+ $('content').innerHTML=`<div id="fg_body"><p class="sub">Loading gym performance…</p></div>`;
+ try{
+  const data=await platformApi('/platform/gyms/'+gymId+'/performance');
+  const g=data.gym;
+  const perf=data.performance||{staffSales:[],trainers:[],staffAttendance:[]};
+  const trends=data.trends||[];
+  const maxTrend=Math.max(...trends.map(t=>t.collection||0),1);
+  $('fg_body').innerHTML=`
+   <div class="row" style="justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:14px">
+    <div><button class="btn sm sec" onclick="go('platform')">← Franchise Dashboard</button>
+     <h2 style="margin-top:10px">${esc(g.gymName||g.name)}</h2>
+     <div class="sub">${franchiseMonthLabel(data.month)} · Admin: ${esc(g.admin?g.admin.name:'—')} · Score <b>${g.score||0}</b></div></div>
+    <div class="row" style="gap:8px"><button class="btn sec" onclick="go('franchise-performance')">Network Rankings</button><button class="btn sec" onclick="openEditGym('${gymId}')">Edit Gym</button></div>
+   </div>
+   <div class="franchise-kpi">
+    <div class="card"><div class="l">Members</div><div class="v">${g.stats.members}</div></div>
+    <div class="card"><div class="l">Collection</div><div class="v" style="color:var(--ok)">${inr(g.stats.collectionMonth)}</div></div>
+    <div class="card"><div class="l">Expense</div><div class="v" style="color:var(--bad)">${inr(g.stats.expenseMonth)}</div></div>
+    <div class="card"><div class="l">Net / Member</div><div class="v">${inr(g.net||0)} · ${inr(g.perMember||0)}</div></div>
+   </div>
+   <div class="card" style="margin-bottom:14px"><h3>6-Month Trend</h3><div class="bars">${trends.map(t=>`<div class="b"><div class="y">${inr(t.collection)}</div><div class="bar g" style="height:${Math.max(4,Math.round(((t.collection||0)/maxTrend)*100))}%"></div><div class="x">${esc(String(t.month).slice(5))}</div></div>`).join('')}</div></div>
+   <div class="grid g2">
+    <div class="card"><h3>Staff Sales Performance</h3><div class="tbl"><table><tr><th>Staff</th><th>Invoices</th><th class="r">Billed</th><th class="r">Collected</th></tr>
+     ${(perf.staffSales||[]).map(s=>`<tr><td class="bold">${esc(s.name)}</td><td>${s.invoices}</td><td class="r">${inr(s.billed)}</td><td class="r bold">${inr(s.collected)}</td></tr>`).join('')||'<tr><td colspan=4 class="mut">No billing this month</td></tr>'}
+     </table></div></div>
+    <div class="card"><h3>Trainer Performance</h3><div class="tbl"><table><tr><th>Trainer</th><th>Members</th><th>Active PT</th><th>Visits</th><th class="r">Revenue</th></tr>
+     ${(perf.trainers||[]).map(t=>`<tr><td class="bold">${esc(t.name)}</td><td>${t.clients}</td><td>${t.ptSubs}</td><td>${t.visits}</td><td class="r bold">${inr(t.revenue)}</td></tr>`).join('')||'<tr><td colspan=5 class="mut">No trainer data</td></tr>'}
+     </table></div></div>
+   </div>
+   <div class="card" style="margin-top:14px"><h3>Staff Attendance</h3><div class="tbl"><table><tr><th>Staff</th><th>Present</th><th>Absent</th><th>Late</th><th>Half Day</th></tr>
+    ${(perf.staffAttendance||[]).map(a=>`<tr><td>${esc(a.name)}</td><td>${a.present}</td><td>${a.absent}</td><td>${a.late}</td><td>${a.halfDay}</td></tr>`).join('')||'<tr><td colspan=5 class="mut">No attendance logged</td></tr>'}
+   </table></div></div>`;
+ }catch(e){$('fg_body').innerHTML=`<div class="card"><p class="sub" style="color:var(--bad)">${esc(e.message||'Failed to load gym detail')}</p><button class="btn sm sec" style="margin-top:10px" onclick="go('platform')">Back</button></div>`}
+}
 async function pgGymAdmins(){
- $('content').innerHTML=`<div class="row" style="justify-content:space-between;margin-bottom:12px"><div><h2>Gym Admins</h2><div class="sub">Each admin owns one gym · create login for partner gyms</div></div>
-  <button class="btn" onclick="openCreateGymAdmin()">＋ Create Gym Admin</button></div><div id="ga_body"><p class="sub">Loading…</p></div>`;
+ $('content').innerHTML=`<div class="franchise-hero" style="margin-bottom:14px"><div class="row" style="justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px"><div><h2>Gyms & Admins</h2><div class="sub">Onboard franchise locations · each gym gets its own admin login and ERP database</div></div><button class="btn" onclick="openCreateGymAdmin()">+ Create Gym</button></div></div><div id="ga_body"><p class="sub">Loading…</p></div>`;
  try{
   const admins=await platformApi('/platform/gym-admins');
   $('ga_body').innerHTML=`<div class="tbl"><table><tr><th>Admin</th><th>Email</th><th>Gym</th><th>Status</th><th></th></tr>
    ${admins.map(a=>`<tr><td class="bold">${esc(a.name)}</td><td>${esc(a.email)}</td><td>${esc(a.business?a.business.name:'—')}${a.business?` <button class="btn sm sec" style="margin-left:6px" onclick="openEditGym('${a.business.id}')">Edit</button>`:''}</td>
    <td><span class="badge ${a.isActive?'b-ok':'b-bad'}">${a.isActive?'Active':'Inactive'}</span></td>
-   <td style="white-space:nowrap">${a.business?`<button class="btn sm" onclick="openGymAnalytics('${a.business.id}')">Analytics</button> <button class="btn sm sec" onclick="openGymWorkspace('${a.business.id}')">Open</button>`:''}</td></tr>`).join('')||'<tr><td colspan=5 class="mut">No gym admins yet</td></tr>'}
+   <td style="white-space:nowrap">${a.business?`<button class="btn sm" onclick="openGymAnalytics('${a.business.id}')">Performance</button>`:''}</td></tr>`).join('')||'<tr><td colspan=5 class="mut">No gym admins yet</td></tr>'}
    </table></div>`;
  }catch(e){$('ga_body').innerHTML=`<div class="card"><p class="sub" style="color:var(--bad)">${esc(e.message||'Failed to load gym admins')}</p></div>`}
 }

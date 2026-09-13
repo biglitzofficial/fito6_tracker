@@ -25,6 +25,22 @@ router.get(
 );
 
 router.get(
+  '/franchise-performance',
+  asyncHandler(async (_req: AuthRequest, res) => {
+    const data = await platformService.getFranchisePerformance();
+    sendSuccess(res, data);
+  })
+);
+
+router.get(
+  '/gyms/:id/performance',
+  asyncHandler(async (req: AuthRequest, res) => {
+    const data = await platformService.getGymPerformanceDetail(String(req.params.id));
+    sendSuccess(res, data);
+  })
+);
+
+router.get(
   '/gyms/:id',
   asyncHandler(async (req: AuthRequest, res) => {
     const gym = await platformService.getGymById(String(req.params.id));
