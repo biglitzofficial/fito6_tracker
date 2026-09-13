@@ -167,7 +167,7 @@ hr.sep{border:none;border-top:1px solid var(--line);margin:14px 0}
   <div id="topnav"><nav id="nav"></nav></div>
   <div id="main">
     <div id="topbar">
-      <input id="gsearch" placeholder="🔍 Search name / phone / invoice / member ID…" onkeydown="if(event.key==='Enter')doSearch()">
+      <input id="gsearch" placeholder="🔍 Search name / phone / enquiry / invoice / member ID…" onkeydown="if(event.key==='Enter')doSearch()">
       <div class="sp"></div>
       <div style="position:relative">
         <button type="button" class="tb-ico" title="Bill notifications" onclick="toggleTbDrop('tb_bill_drop')">🔔<span class="dot" id="tb_bill_dot" style="display:none">0</span></button>
@@ -271,6 +271,13 @@ function setupHistoryNav(){
   }
  });
  document.addEventListener('click',e=>{const a=e.target.closest('a[href="#"]');if(a)e.preventDefault()},true);
+ document.addEventListener('keydown',e=>{
+  if(e.key!=='Escape'&&e.key!=='Esc')return;
+  const modalOpen=$('modalwrap')&&$('modalwrap').style.display==='flex';
+  if(!modalOpen)return;
+  e.preventDefault();
+  closeModal();
+ },true);
 }
 async function enterAppFromAuth(opts={}){
  if(!AUTH.token||!AUTH.user)throw new Error('No session');
@@ -1029,14 +1036,20 @@ function trainerCell(c,ptCounts){
 function nextStaffId(dept){
  const yy=String(new Date().getFullYear()).slice(2);
  const d=(dept||'').toLowerCase();
- let code='FOM',key='fom';
+ let code='FM',key='fm';
  if(/train/.test(d)){code='TR';key='trainer'}
  else if(/account/.test(d)){code='ACC';key='accountant'}
- else{code='FOM';key='fom'} // Reception, Management, Manager, Cleaner → FOM series
+ else if(/front\s*office|reception|front office|^front$/.test(d)||!d){code='FM';key='fm'} // Front Office / Reception → FM
+ else{code='ST';key='staff'} // Management, Manager, Cleaner, etc.
  if(!db.seq.staffByYear)db.seq.staffByYear={};
  if(!db.seq.staffByYear[yy])db.seq.staffByYear[yy]={};
+ // Continue from older FOM counter so existing Front Office sequence does not restart
+ if(key==='fm'&&db.seq.staffByYear[yy].fm==null&&db.seq.staffByYear[yy].fom!=null){
+  db.seq.staffByYear[yy].fm=db.seq.staffByYear[yy].fom;
+ }
  if(!db.seq.staffByYear[yy][key])db.seq.staffByYear[yy][key]=0;
  db.seq.staffByYear[yy][key]++;
+ if(key==='fm')db.seq.staffByYear[yy].fom=db.seq.staffByYear[yy].fm;
  save();
  return yy+code+String(db.seq.staffByYear[yy][key]).padStart(3,'0');
 }
@@ -3272,17 +3285,47 @@ function pgAudit(){
 /* ================= ELECTRICITY METER ================= */
 let METER_MONTH='';
 function meterFor(date){return(db.meterReadings||[]).find(r=>r.date===date)}
+function meterHasVal(v){return v!=null&&v!==''&&Number.isFinite(Number(v))}
 function meterDayFinal(night,day){
+ if(!meterHasVal(night)||!meterHasVal(day))return null;
  const n=Number(night),d=Number(day);
- if(!Number.isFinite(n)||!Number.isFinite(d))return null;
- return +(d-n).toFixed(2);
+ // Night is the later reading — units used that day = Night − Day
+ return +(n-d).toFixed(2);
+}
+function repairMeterFinals(){
+ if(!Array.isArray(db.meterReadings))return false;
+ let changed=false;
+ db.meterReadings.forEach(r=>{
+  const f=meterDayFinal(r.night,r.day);
+  const cur=r.final==null||r.final===''?null:Number(r.final);
+  if(f==null){
+   if(r.final!=null&&r.final!==''){r.final=null;changed=true}
+  }else if(cur!==f){r.final=f;changed=true}
+ });
+ return changed;
 }
 function meterMonthTotal(ym){
  return(db.meterReadings||[]).filter(r=>(r.date||'').startsWith(ym)&&r.final!=null)
   .reduce((s,r)=>s+Number(r.final||0),0);
 }
+function meterSuggestType(date){
+ const r=meterFor(date);
+ if(!r||!meterHasVal(r.day))return'day';
+ if(!meterHasVal(r.night))return'night';
+ return'day';
+}
+function meterQuickEntry(){
+ const t=today(),y=addDays(t,-1);
+ const yr=meterFor(y);
+ // Next-day flow: if yesterday has Day but no Night, enter Night for yesterday
+ if(yr&&meterHasVal(yr.day)&&!meterHasVal(yr.night)){meterEntry(y,'night');return}
+ const tr=meterFor(t);
+ if(tr&&meterHasVal(tr.day)&&!meterHasVal(tr.night)){meterEntry(t,'night');return}
+ meterEntry(t,'day');
+}
 function pgMeter(){
  if(!Array.isArray(db.meterReadings))db.meterReadings=[];
+ if(repairMeterFinals())save();
  const ym=METER_MONTH||thisMonth();
  METER_MONTH=ym;
  const [y,mo]=ym.split('-').map(Number);
@@ -3290,33 +3333,36 @@ function pgMeter(){
  const daysInMonth=new Date(y,mo,0).getDate();
  const startPad=first.getDay(); // 0 Sun
  const monthRows=(db.meterReadings||[]).filter(r=>(r.date||'').startsWith(ym)).sort((a,b)=>a.date.localeCompare(b.date));
+ const completeRows=monthRows.filter(r=>r.final!=null);
  const monthFinal=meterMonthTotal(ym);
+ const pendingRows=monthRows.filter(r=>r.final==null&&(meterHasVal(r.day)||meterHasVal(r.night)));
  const cells=[];
  for(let i=0;i<startPad;i++)cells.push(`<div class="day mut"></div>`);
  for(let d=1;d<=daysInMonth;d++){
   const date=ym+'-'+String(d).padStart(2,'0');
   const r=meterFor(date);
-  const has=!!r&&(r.night!=null||r.day!=null);
+  const has=!!r&&(meterHasVal(r.day)||meterHasVal(r.night));
+  const pending=has&&r.final==null;
   cells.push(`<div class="day ${has?'has':''}" onclick="meterEntry('${date}')">
    <div class="dn">${d}</div>
-   ${has?`<div class="sm">D: ${r.day??'—'}<br>N: ${r.night??'—'}</div>
-   <div class="fv">${r.final!=null?r.final+' u':'—'}</div>`:`<div class="sm">No entry</div>`}
+   ${has?`<div class="sm">D: ${meterHasVal(r.day)?r.day:'—'}<br>N: ${meterHasVal(r.night)?r.night:'—'}</div>
+   <div class="fv">${r.final!=null?r.final+' u':(pending?'Pending':'—')}</div>`:`<div class="sm">No entry</div>`}
   </div>`);
  }
  $('content').innerHTML=`
  <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:10px">
   <div><h2>EB Meter Reading</h2>
-   <div class="sub"><b>EB Day Reading</b> first, then <b>EB Night Reading</b> · Daily final = Day − Night · Month total = sum of daily finals</div></div>
+   <div class="sub">Submit <b>one reading at a time</b> · Day today, Night next day · Final = Night − Day when both are in</div></div>
   <div class="row" style="gap:8px;align-items:end">
    <div class="field" style="margin:0"><label>Month</label><input type="month" id="mt_month" value="${ym}" onchange="METER_MONTH=this.value;pgMeter()"></div>
-   <button class="btn" onclick="meterEntry(today())">＋ Today’s Entry</button>
+   <button class="btn" onclick="meterQuickEntry()">＋ Submit Reading</button>
   </div>
  </div>
  <div class="grid g4" style="margin:14px 0">
-  ${stat('Days entered',monthRows.length,'ok')}
+  ${stat('Days with readings',monthRows.length,'ok')}
   ${stat('Month final (units)',monthFinal.toFixed(2),'br')}
-  ${stat('Avg / day',monthRows.length?(monthFinal/monthRows.length).toFixed(2):'0')}
-  ${stat('Formula','Day − Night')}
+  ${stat('Avg / complete day',completeRows.length?(monthFinal/completeRows.length).toFixed(2):'0')}
+  ${stat('Pending (need Night/Day)',pendingRows.length,pendingRows.length?'warn':'')}
  </div>
  <div class="card">
   <div class="cal">
@@ -3325,50 +3371,81 @@ function pgMeter(){
   </div>
  </div>
  <h3 style="margin-top:16px">Day-wise log (${ym})</h3>
- <div class="tbl"><table><tr><th>Date</th><th class="r">Day</th><th class="r">Night</th><th class="r">Final (Day−Night)</th><th>By</th><th>Notes</th><th></th></tr>
-  ${monthRows.slice().reverse().map(r=>`<tr>
+ <div class="tbl"><table><tr><th>Date</th><th class="r">Day</th><th class="r">Night</th><th class="r">Final (Night−Day)</th><th>Status</th><th>By</th><th>Notes</th><th></th></tr>
+  ${monthRows.slice().reverse().map(r=>{
+   const st=r.final!=null?'Complete':(meterHasVal(r.day)&&!meterHasVal(r.night)?'Awaiting Night':(!meterHasVal(r.day)&&meterHasVal(r.night)?'Awaiting Day':'Incomplete'));
+   const badge=r.final!=null?'b-ok':(st==='Awaiting Night'?'b-warn':'b-mut');
+   return`<tr>
    <td class="clickable" onclick="meterEntry('${r.date}')">${fmtD(r.date)}</td>
-   <td class="r">${r.day??'—'}</td><td class="r">${r.night??'—'}</td>
+   <td class="r">${meterHasVal(r.day)?r.day:'—'}</td><td class="r">${meterHasVal(r.night)?r.night:'—'}</td>
    <td class="r bold">${r.final!=null?r.final:'—'}</td>
+   <td><span class="badge ${badge}">${st}</span></td>
    <td>${esc(r.by||'')}</td><td>${esc(r.notes||'')}</td>
-   <td class="r"><button class="btn sm sec" onclick="meterEntry('${r.date}')">Edit</button>
+   <td class="r"><button class="btn sm sec" onclick="meterEntry('${r.date}')">Add / Edit</button>
    <button class="btn sm dgr" onclick="deleteMeterEntry('${r.date}')">Delete</button></td>
-  </tr>`).join('')||'<tr><td colspan=7 class="mut">No readings this month — click a calendar day</td></tr>'}
-  <tr><td class="bold" colspan="3">Month total</td><td class="r bold" style="color:var(--brand)">${monthFinal.toFixed(2)}</td><td colspan="3"></td></tr>
+  </tr>`}).join('')||'<tr><td colspan=8 class="mut">No readings this month — click Submit Reading or a calendar day</td></tr>'}
+  <tr><td class="bold" colspan="3">Month total</td><td class="r bold" style="color:var(--brand)">${monthFinal.toFixed(2)}</td><td colspan="4"></td></tr>
  </table></div>`;
 }
-function meterEntry(date){
+function meterEntry(date,forceType){
  const r=meterFor(date)||{date,night:'',day:'',notes:''};
+ const type=forceType||meterSuggestType(date);
+ const existing=type==='night'?(meterHasVal(r.night)?r.night:''):(meterHasVal(r.day)?r.day:'');
  const preview=meterDayFinal(r.night,r.day);
  openModal(`<h2>EB Meter — ${fmtD(date)}</h2>
- <p class="sub" style="margin-bottom:12px">Enter <b>EB Day Reading</b> first, then <b>EB Night Reading</b>. Final for the day = <b>Day − Night</b>.</p>
- <div class="grid g3">
-  ${fld('mt_day','EB Day Reading',r.day??'','number')}
-  ${fld('mt_night','EB Night Reading',r.night??'','number')}
-  <div class="field"><label>Daily final (Day − Night)</label><input id="mt_final" readonly class="ro" value="${preview!=null?preview:''}"></div>
+ <p class="sub" style="margin-bottom:12px">Submit <b>a single reading</b>. Enter Day now; enter Night tomorrow on the same date. Final = <b>Night − Day</b> after both are saved.</p>
+ <div class="grid g2" style="margin-bottom:10px">
+  <div class="card" style="padding:10px"><div class="l" style="font-size:11px;color:var(--mut);font-weight:700">DAY ON FILE</div><div class="v" style="font-size:18px;font-weight:800">${meterHasVal(r.day)?r.day:'—'}</div></div>
+  <div class="card" style="padding:10px"><div class="l" style="font-size:11px;color:var(--mut);font-weight:700">NIGHT ON FILE</div><div class="v" style="font-size:18px;font-weight:800">${meterHasVal(r.night)?r.night:'—'}</div></div>
+ </div>
+ <div class="grid g2">
+  <div class="field"><label>Reading Type</label>
+   <select id="mt_type" onchange="meterTypeChanged()">
+    <option value="day" ${type==='day'?'selected':''}>Day Reading</option>
+    <option value="night" ${type==='night'?'selected':''}>Night Reading</option>
+   </select>
+  </div>
+  ${fld('mt_value','Meter Reading *',existing,'number')}
   ${fld('mt_notes','Notes',r.notes||'')}
   ${fld('mt_by','Entered By',r.by||(USER?USER.name:''))}
  </div>
+ <div class="field"><label>Daily final (after both readings)</label><input id="mt_final" readonly class="ro" value="${preview!=null?preview:'Pending — need both Day & Night'}"></div>
  <div class="row" style="justify-content:flex-end;gap:8px;margin-top:12px">
   <button class="btn sec" onclick="closeModal()">Cancel</button>
   <button class="btn" onclick="saveMeterEntry('${date}')">Save Reading</button>
  </div>
  <script>
-  function _mtRecalc(){const f=meterDayFinal(num('mt_night'),num('mt_day'));$('mt_final').value=f==null?'':f}
-  ['mt_night','mt_day'].forEach(id=>{const el=$(id);if(el){el.oninput=_mtRecalc;el.onchange=_mtRecalc}})
+  window.meterTypeChanged=function(){
+   const t=val('mt_type');
+   const cur=meterFor('${date}');
+   const v=t==='night'?(cur&&meterHasVal(cur.night)?cur.night:''):(cur&&meterHasVal(cur.day)?cur.day:'');
+   if($('mt_value'))$('mt_value').value=v;
+  };
  <\/script>`)}
 function saveMeterEntry(date){
- const nightRaw=val('mt_night'),dayRaw=val('mt_day');
- if(nightRaw===''||dayRaw===''){toast('Enter both day and night readings');return}
- const night=parseFloat(nightRaw),day=parseFloat(dayRaw);
- if(!Number.isFinite(night)||!Number.isFinite(day)){toast('Invalid readings');return}
- const final=meterDayFinal(night,day);
- if(final==null){toast('Invalid readings');return}
+ const type=val('mt_type')||'day';
+ const raw=val('mt_value');
+ if(raw===''){toast('Enter the meter reading');return}
+ const reading=parseFloat(raw);
+ if(!Number.isFinite(reading)){toast('Invalid reading');return}
  let r=meterFor(date);
  if(!r){r={date};db.meterReadings.push(r)}
- Object.assign(r,{night,day,final,notes:val('mt_notes'),by:val('mt_by')||USER.name,updated:today()});
- save();audit('Meter Reading',date+' · N '+night+' · D '+day+' · Final '+final);
- toast('Saved · Final '+final);closeModal();pgMeter();
+ if(type==='day'){
+  if(meterHasVal(r.night)&&Number(r.night)<reading){toast('Day reading should be ≤ Night reading already on file');return}
+  r.day=reading;
+ }else{
+  if(meterHasVal(r.day)&&reading<Number(r.day)){toast('Night reading should be ≥ Day reading');return}
+  r.night=reading;
+ }
+ r.final=meterDayFinal(r.night,r.day);
+ r.notes=val('mt_notes');
+ r.by=val('mt_by')||(USER?USER.name:'');
+ r.updated=today();
+ save();
+ const label=type==='day'?'Day':'Night';
+ audit('Meter Reading',date+' · '+label+' '+reading+(r.final!=null?' · Final '+r.final:''));
+ toast(r.final!=null?('Saved · Final '+r.final+' u'):('Saved '+label+' reading — final pending'));
+ closeModal();pgMeter();
 }
 function deleteMeterEntry(date){
  if(!confirm('Delete meter reading for '+fmtD(date)+'?'))return;
@@ -4179,6 +4256,23 @@ function backup(){const a=document.createElement('a');a.href=URL.createObjectURL
 function restore(inp){const f=inp.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{db=JSON.parse(r.result);save();toast('Backup restored');location.reload()}catch(e){toast('Invalid backup file')}};r.readAsText(f)}
 
 /* ================= GLOBAL SEARCH ================= */
+function searchPhoneMatch(hay,q){
+ const hq=normalizeMobile(q);
+ if(hq&&hq.length>=7){
+  const hn=normalizeMobile(hay);
+  if(hn&&(hn.includes(hq)||hq.includes(hn)))return true;
+ }
+ return String(hay||'').toLowerCase().includes(String(q||'').toLowerCase());
+}
+function searchTextMatch(fields,q){
+ const ql=String(q||'').toLowerCase().trim();
+ if(!ql)return false;
+ if(fields.some(f=>String(f||'').toLowerCase().includes(ql)))return true;
+ if(/\d{7,}/.test(ql.replace(/\D/g,''))){
+  return fields.some(f=>searchPhoneMatch(f,ql));
+ }
+ return false;
+}
 function isPhoneQuery(q){
  const d=String(q||'').replace(/\D/g,'');
  return d.length>=7&&d.length<=15;
@@ -4221,6 +4315,7 @@ function pgUnregisteredSearch(mobile){
 }
 function doSearch(){
  const raw=val('gsearch').trim();if(!raw)return;
+ if(!Array.isArray(db.leads))db.leads=[];
  const mobile=normalizeMobile(raw);
  if(isPhoneQuery(raw)){
   const c=findClientByMobile(mobile);
@@ -4229,17 +4324,28 @@ function doSearch(){
   if(l){leadForm(l.id);return}
   if(maybeShowUnregisteredSearch(raw))return;
  }
- const q=raw.toLowerCase();
- const cs=db.clients.filter(c=>[c.name,c.mobile,c.id,c.email,c.wa].join(' ').toLowerCase().includes(q));
- const ls=(db.leads||[]).filter(l=>[l.name,l.mobile,l.code,l.email,l.wa].join(' ').toLowerCase().includes(q));
- const ivs=db.invoices.filter(i=>i.no.toLowerCase().includes(q));
- const sts=db.staff.filter(s=>[s.name,s.phone,s.id].join(' ').toLowerCase().includes(q));
- if(!cs.length&&!ls.length&&!ivs.length&&!sts.length&&isPhoneQuery(raw)){
+ const q=raw;
+ const ql=q.toLowerCase();
+ const cs=(db.clients||[]).filter(c=>searchTextMatch([c.name,c.mobile,c.wa,c.id,c.email],q));
+ const leads=(db.leads||[]).filter(l=>searchTextMatch([l.name,l.mobile,l.wa,l.code,l.id,l.email,l.status,l.source,l.handledBy],q));
+ const ivs=(db.invoices||[]).filter(i=>String(i.no||'').toLowerCase().includes(ql)||(i.clientId&&(db.clients||[]).some(c=>c.id===i.clientId&&searchTextMatch([c.name,c.mobile],q))));
+ const sts=(db.staff||[]).filter(s=>searchTextMatch([s.name,s.phone,s.id,s.dept],q));
+ if(!cs.length&&!leads.length&&!ivs.length&&!sts.length&&isPhoneQuery(raw)){
   pgUnregisteredSearch(mobile);return;
  }
- $('content').innerHTML=`<h2>Search: "${esc(raw)}"</h2>
- <h3 style="margin-top:14px">Clients (${cs.length})</h3><div class="tbl"><table>${cs.map(c=>`<tr><td>${c.id}</td><td class="clickable" onclick="openClient('${c.id}')">${esc(c.name)}</td><td>${formatMobile(c.mobile)}</td><td><button class="btn sm sec" onclick="openClient('${c.id}')">Open</button></td></tr>`).join('')||'<tr><td class="mut">None</td></tr>'}</table></div>
- <h3 style="margin-top:14px">Leads (${ls.length})</h3><div class="tbl"><table>${ls.map(l=>`<tr><td>${esc(l.code||l.id||'')}</td><td class="clickable" onclick="leadForm('${l.id}')">${esc(l.name)}</td><td>${formatMobile(l.mobile)}</td><td><button class="btn sm sec" onclick="leadForm('${l.id}')">Open</button></td></tr>`).join('')||'<tr><td class="mut">None</td></tr>'}</table></div>
+ $('content').innerHTML=`<h2>Search: "${esc(q)}"</h2>
+ <h3 style="margin-top:14px">Enquiries / Leads (${leads.length})</h3>
+ <div class="tbl"><table><tr><th>Code</th><th>Date</th><th>Name</th><th>Mobile</th><th>Status</th><th>Source</th><th></th></tr>
+ ${leads.map(l=>`<tr>
+  <td>${esc(l.code||l.id||'')}</td><td>${fmtD(l.date)}</td>
+  <td class="bold clickable" onclick="leadForm('${l.id}')">${esc(l.name||'')}</td>
+  <td>${formatMobile(l.mobile)||esc(l.mobile||'')}</td>
+  <td><span class="badge ${l.status==='Converted'?'b-ok':l.status==='Hot'?'b-br':l.status==='Lost'?'b-bad':'b-warn'}">${esc(l.status||'New')}</span></td>
+  <td>${esc(l.source||'')}</td>
+  <td class="r"><button class="btn sm sec" onclick="leadForm('${l.id}')">Open</button>
+  ${l.status!=='Converted'?`<button class="btn sm" onclick="convertLead('${l.id}')">→ Client</button>`:''}</td>
+ </tr>`).join('')||'<tr><td colspan="7" class="mut">None</td></tr>'}</table></div>
+ <h3 style="margin-top:14px">Clients (${cs.length})</h3><div class="tbl"><table>${cs.map(c=>`<tr><td>${c.id}</td><td class="clickable" onclick="openClient('${c.id}')">${esc(c.name)}</td><td>${formatMobile(c.mobile)||esc(c.mobile||'')}</td><td><button class="btn sm sec" onclick="openClient('${c.id}')">Open</button></td></tr>`).join('')||'<tr><td class="mut">None</td></tr>'}</table></div>
  <h3 style="margin-top:14px">Invoices (${ivs.length})</h3><div class="tbl"><table>${ivs.map(i=>`<tr><td class="clickable" onclick="showInvoice('${i.id}')">${i.no}</td><td>${fmtD(i.date)}</td><td class="r">${inr(i.grand)}</td></tr>`).join('')||'<tr><td class="mut">None</td></tr>'}</table></div>
  <h3 style="margin-top:14px">Staff (${sts.length})</h3><div class="tbl"><table>${sts.map(s=>`<tr><td>${s.id}</td><td>${esc(s.name)}</td><td>${esc(s.dept)}</td></tr>`).join('')||'<tr><td class="mut">None</td></tr>'}</table></div>`;
 }
