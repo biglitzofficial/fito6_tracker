@@ -19,16 +19,18 @@ router.get(
 
 router.get(
   '/analytics',
-  asyncHandler(async (_req: AuthRequest, res) => {
-    const analytics = await platformService.getAnalytics();
+  asyncHandler(async (req: AuthRequest, res) => {
+    const month = typeof req.query.month === 'string' ? req.query.month : undefined;
+    const analytics = await platformService.getAnalytics(month);
     sendSuccess(res, analytics);
   })
 );
 
 router.get(
   '/franchise-performance',
-  asyncHandler(async (_req: AuthRequest, res) => {
-    const data = await platformService.getFranchisePerformance();
+  asyncHandler(async (req: AuthRequest, res) => {
+    const month = typeof req.query.month === 'string' ? req.query.month : undefined;
+    const data = await platformService.getFranchisePerformance(month);
     sendSuccess(res, data);
   })
 );
@@ -36,7 +38,8 @@ router.get(
 router.get(
   '/gyms/:id/performance',
   asyncHandler(async (req: AuthRequest, res) => {
-    const data = await platformService.getGymPerformanceDetail(String(req.params.id));
+    const month = typeof req.query.month === 'string' ? req.query.month : undefined;
+    const data = await platformService.getGymPerformanceDetail(String(req.params.id), month);
     sendSuccess(res, data);
   })
 );

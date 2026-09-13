@@ -26,8 +26,8 @@ input,select,textarea{font-family:inherit;font-size:13px;padding:9px 12px;border
 input:focus,select:focus,textarea:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px rgba(0,153,255,.15)}
 label{font-size:11px;font-weight:600;color:var(--mut);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:5px}
 .field{margin-bottom:12px}
-h2{font-size:1.375rem;font-weight:700;margin-bottom:4px;letter-spacing:-.025em;color:var(--ink)} h3{font-size:.8125rem;font-weight:600;margin-bottom:10px;letter-spacing:.04em;text-transform:uppercase;color:var(--mut)}
-.sub{color:var(--mut);font-size:12.5px;font-weight:400}
+h2{font-size:1.375rem;font-weight:800;margin-bottom:4px;letter-spacing:-.03em;color:var(--ink)} h3{font-size:.8125rem;font-weight:700;margin-bottom:10px;letter-spacing:.04em;text-transform:uppercase;color:var(--mut)}
+.sub{color:var(--mut);font-size:12.5px;font-weight:500}
 /* BOOT / SESSION */
 html.session-restore #login{display:none!important}
 html.session-restore #app{display:block!important}
@@ -99,7 +99,8 @@ html.session-restore #boot-load{display:flex}
 .unreg-btn:hover{background:#1d4ed8!important}
 .unreg-nav{justify-content:center;gap:10px;margin-bottom:14px}
 .unreg-page{margin-top:4px}
-.flow-chart{width:100%;min-height:200px;background:linear-gradient(180deg,#eef2f7 0%,#e2e8f0 100%);border-radius:8px;padding:8px 6px 4px;border:1px solid #d8e0ea}
+.flow-chart{width:100%;min-height:200px;background:linear-gradient(180deg,#f8fafc 0%,#f1f5f9 100%);border-radius:10px;padding:10px 8px 6px;border:1px solid var(--line)}
+.ana-panel .flow-chart{background:#fafbfd;border-color:#e2e8f0}
 .flow-chart svg{width:100%;height:200px;display:block}
 .flow-chart-bars svg{height:210px}
 .cal{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
@@ -222,6 +223,74 @@ hr.sep{border:none;border-top:1px solid var(--line);margin:14px 0}
 .review-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px 18px;font-size:13px}
 .review-grid .k{color:var(--mut);font-size:11px;text-transform:uppercase;font-weight:600}
 @media(max-width:900px){.franchise-kpi{grid-template-columns:repeat(2,1fr)}.review-grid{grid-template-columns:1fr}}
+/* ANALYTICS DASHBOARD */
+.ana-dash{font-variant-numeric:tabular-nums}
+.ana-head{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:14px;margin-bottom:18px}
+.ana-head h2{font-size:1.625rem;font-weight:800;letter-spacing:-.035em}
+.ana-head .sub{font-size:13px;font-weight:500;color:var(--mut);margin-top:4px}
+.ana-filter{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;padding:14px 16px;background:#fff;border:1px solid var(--line);border-radius:12px;margin-bottom:18px;box-shadow:var(--shadow)}
+.ana-filter .field{margin:0;min-width:140px}
+.ana-filter label{font-size:10px;font-weight:700;letter-spacing:.06em}
+.ana-kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px}
+.ana-kpi{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px 18px;box-shadow:var(--shadow);position:relative;overflow:hidden}
+.ana-kpi:before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--brand),var(--brand2));opacity:.85}
+.ana-kpi.ok:before{background:linear-gradient(90deg,#34d399,#10b981)}
+.ana-kpi.bad:before{background:linear-gradient(90deg,#f87171,#ef4444)}
+.ana-kpi.warn:before{background:linear-gradient(90deg,#fbbf24,#f59e0b)}
+.ana-kpi-top{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.ana-kpi-icon{width:32px;height:32px;border-radius:8px;background:#eef6ff;color:var(--brand);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;flex-shrink:0}
+.ana-kpi.ok .ana-kpi-icon{background:#ecfdf5;color:var(--ok)}
+.ana-kpi.bad .ana-kpi-icon{background:#fef2f2;color:var(--bad)}
+.ana-kpi-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--mut)}
+.ana-kpi-val{font-size:1.75rem;font-weight:800;letter-spacing:-.04em;line-height:1.1;color:var(--ink)}
+.ana-kpi-sub{font-size:11px;font-weight:600;color:var(--mut);margin-top:6px}
+.ana-panel{background:#fff;border:1px solid var(--line);border-radius:12px;padding:18px 20px;box-shadow:var(--shadow);margin-bottom:14px}
+.ana-panel-h{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+.ana-panel-h h3{font-size:13px;font-weight:800;text-transform:none;letter-spacing:-.01em;color:var(--ink);margin:0}
+.ana-panel-h .tag{font-size:10px;font-weight:700;padding:4px 10px;border-radius:999px;background:#f1f5f9;color:var(--mut);text-transform:uppercase;letter-spacing:.05em}
+.ana-hbars{display:flex;flex-direction:column;gap:10px}
+.ana-hbar{display:grid;grid-template-columns:minmax(90px,120px) 1fr minmax(70px,90px);gap:10px;align-items:center;font-size:12px;font-weight:600}
+.ana-hbar .track{height:10px;background:#eef2f7;border-radius:999px;overflow:hidden}
+.ana-hbar .fill{height:100%;border-radius:999px;background:linear-gradient(90deg,var(--brand),#33b5ff);min-width:2px}
+.ana-hbar .fill.g{background:linear-gradient(90deg,#34d399,#10b981)}
+.ana-hbar .fill.r{background:linear-gradient(90deg,#f87171,#ef4444)}
+.ana-hbar .amt{text-align:right;font-weight:800;font-size:12px;color:var(--ink)}
+.ana-table-wrap{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff}
+.ana-table-wrap table{margin:0}
+.ana-table-wrap th{background:#f8fafc;font-size:10px;font-weight:800;letter-spacing:.06em;padding:11px 12px}
+.ana-table-wrap td{padding:11px 12px;font-size:13px;font-weight:500}
+.ana-table-wrap tr:hover td{background:#f8fbff}
+.ana-table-wrap tr.top-row td{background:linear-gradient(90deg,rgba(0,153,255,.05),transparent)}
+.ana-split{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+.ana-metric-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+.ana-mini{background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px;text-align:center}
+.ana-mini .k{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--mut)}
+.ana-mini .v{font-size:1.25rem;font-weight:800;margin-top:4px;letter-spacing:-.03em}
+.ana-hero-lite{background:linear-gradient(135deg,#0a0e17 0%,#111827 55%,#0c2440 100%);border-radius:12px;padding:20px 22px;color:#f8fafc;margin-bottom:18px;border:1px solid rgba(0,153,255,.12)}
+.ana-hero-lite h2{color:#fff;font-size:1.5rem;font-weight:800;margin:0}
+.ana-hero-lite .sub{color:#94a3b8;margin-top:4px}
+.ana-section{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.12em;color:var(--mut);margin:22px 0 12px;padding-bottom:8px;border-bottom:2px solid var(--line);display:flex;align-items:center;gap:8px}
+.ana-section:after{content:'';flex:1;height:1px;background:linear-gradient(90deg,var(--line),transparent)}
+.ana-kpi-icon svg{width:16px;height:16px;display:block}
+.stat .v{font-weight:800}
+/* REPORTS DASHBOARD */
+.rep-dash{max-width:100%}
+.rep-header{margin-bottom:16px}
+.rep-header h2{font-size:1.5rem;font-weight:800;letter-spacing:-.03em}
+.rep-layout{display:grid;grid-template-columns:260px 1fr;gap:16px;align-items:start}
+.rep-nav{background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px;box-shadow:var(--shadow);max-height:70vh;overflow:auto}
+.rep-nav button{display:block;width:100%;text-align:left;padding:10px 12px;border:none;background:transparent;border-radius:8px;font-size:12.5px;font-weight:600;color:var(--ink);margin-bottom:2px;transition:background .12s}
+.rep-nav button:hover{background:#f8fafc}
+.rep-nav button.on{background:linear-gradient(90deg,rgba(0,153,255,.1),transparent);color:var(--brand-dark);font-weight:800;box-shadow:inset 3px 0 0 var(--brand)}
+.rep-main{background:#fff;border:1px solid var(--line);border-radius:12px;padding:18px 20px;box-shadow:var(--shadow);min-height:420px}
+.rep-main-h{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--line)}
+.rep-main-h h3{font-size:1.125rem;font-weight:800;text-transform:none;color:var(--ink);margin:0;letter-spacing:-.02em}
+.rep-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+.rep-stat{background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.rep-stat .k{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--mut)}
+.rep-stat .v{font-size:1.2rem;font-weight:800;margin-top:4px;letter-spacing:-.03em}
+@media(max-width:900px){.ana-kpi-grid,.ana-split,.ana-metric-row{grid-template-columns:repeat(2,1fr)}.rep-layout{grid-template-columns:1fr}.rep-nav{max-height:none;display:grid;grid-template-columns:repeat(2,1fr);gap:6px}}
+@media(max-width:600px){.ana-kpi-grid,.ana-metric-row,.rep-stats{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -3483,17 +3552,39 @@ const REPORTS={
  'GST Report':()=>[['Invoice','Date','Customer','Taxable','GST %','GST Amount','Total'],...db.invoices.map(i=>[i.no,i.date,client(i.clientId)?.name,i.woGst,i.gstPct,i.gst,i.grand])],
  'Lead / Referral Report':()=>{const m={};db.clients.forEach(c=>{m[c.ref||'Unknown']=(m[c.ref||'Unknown']||0)+1});return[['Referral Source','Clients'],...Object.entries(m)]},
  'Customer Growth Report':()=>{const m={};db.clients.forEach(c=>{const k=(c.joined||'').slice(0,7);m[k]=(m[k]||0)+1});return[['Month','New Clients'],...Object.entries(m).sort()]}};
+function reportSummary(rows){
+ const data=rows.slice(1);
+ const numCols=rows[0]?rows[0].length:0;
+ let totalAmt=0,amtCount=0;
+ data.forEach(r=>{
+  r.forEach((c,i)=>{
+   if(i>0&&typeof c==='number'&&c>100){totalAmt+=c;amtCount++}
+   else if(i>0&&typeof c==='string'&&/^\d/.test(c)){const n=parseFloat(String(c).replace(/[^\d.-]/g,''));if(!isNaN(n)&&n>100){totalAmt+=n;amtCount++}}
+  });
+ });
+ return {rows:data.length,cols:numCols,totalAmt,hasAmounts:amtCount>0};
+}
 function pgReports(){
- $('content').innerHTML=`<h2>Reports</h2><div class="sub">Click a report to view · export as CSV (opens in Excel) or print as PDF</div>
- <div class="tabs" style="margin-top:14px">${Object.keys(REPORTS).map((r,i)=>`<button class="${i===0?'on':''}" onclick="showReport(this,'${r}')">${r}</button>`).join('')}</div>
- <div class="toolbar"><button class="btn sec sm" onclick="csvExport(REPORTS[window._rep](),window._rep.replace(/[^a-z0-9]/gi,'_'))">⬇ Excel / CSV</button>
- <button class="btn sec sm" onclick="printHTML('<div class=inv><h2>'+window._rep+' — '+esc(db.settings.gymName)+'</h2>'+document.getElementById('rep_tbl').innerHTML+'</div>')"> Print / PDF</button></div>
- <div class="tbl" id="rep_tbl"></div>`;
- window._rep=Object.keys(REPORTS)[0];renderReport()}
-function showReport(btn,name){document.querySelectorAll('.tabs button').forEach(b=>b.classList.remove('on'));btn.classList.add('on');window._rep=name;renderReport()}
-function renderReport(){const rows=REPORTS[window._rep]();
+ const names=Object.keys(REPORTS);
+ window._rep=window._rep||names[0];
+ $('content').innerHTML=`<div class="rep-dash"><div class="rep-header"><h2>Business Reports</h2><div class="sub">${esc(db.settings.gymName||'FITO6')} · professional exports · Excel / CSV / PDF</div></div>
+ <div class="rep-layout">
+  <div class="rep-nav">${names.map(r=>`<button type="button" class="${window._rep===r?'on':''}" onclick="showReport(this,'${r.replace(/'/g,"\\'")}')">${esc(r)}</button>`).join('')}</div>
+  <div class="rep-main">
+   <div class="rep-main-h"><div><h3 id="rep_title">${esc(window._rep)}</h3><div class="sub" id="rep_sub">Generated from live gym data</div></div>
+    <div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn sec sm" onclick="csvExport(REPORTS[window._rep](),window._rep.replace(/[^a-z0-9]/gi,'_'))">Export CSV</button><button class="btn sec sm" onclick="printHTML('<div class=inv><h2>'+window._rep+' — '+esc(db.settings.gymName)+'</h2>'+document.getElementById('rep_tbl').innerHTML+'</div>')">Print / PDF</button></div></div>
+   <div id="rep_stats"></div>
+   <div class="ana-table-wrap" id="rep_tbl"></div>
+  </div>
+ </div></div>`;
+ renderReport()}
+function showReport(btn,name){document.querySelectorAll('.rep-nav button').forEach(b=>b.classList.remove('on'));if(btn)btn.classList.add('on');window._rep=name;const t=$('rep_title');if(t)t.textContent=name;renderReport()}
+function renderReport(){
+ const rows=REPORTS[window._rep]();
+ const sum=reportSummary(rows);
+ if($('rep_stats'))$('rep_stats').innerHTML=sum.rows?`<div class="rep-stats"><div class="rep-stat"><div class="k">Records</div><div class="v">${sum.rows}</div></div><div class="rep-stat"><div class="k">Columns</div><div class="v">${sum.cols}</div></div><div class="rep-stat"><div class="k">${sum.hasAmounts?'Est. Total':'Report Type'}</div><div class="v">${sum.hasAmounts?inr(sum.totalAmt):'Tabular'}</div></div></div>`:'';
  $('rep_tbl').innerHTML=`<table><tr>${rows[0].map(h=>`<th>${esc(h)}</th>`).join('')}</tr>
- ${rows.slice(1).map(r=>`<tr>${r.map(c=>`<td>${esc(c)}</td>`).join('')}</tr>`).join('')||'<tr><td class="mut" colspan='+rows[0].length+'>No data</td></tr>'}</table>`}
+ ${rows.slice(1).map(r=>`<tr>${r.map(c=>`<td>${esc(c)}</td>`).join('')}</tr>`).join('')||'<tr><td class="mut" colspan='+rows[0].length+'>No data for this report</td></tr>'}</table>`}
 
 /* ================= ACCOUNTS / P&L / LEDGER ================= */
 function pgAccounts(){
@@ -3936,6 +4027,63 @@ function toggleTodo(id){const t=db.todos.find(x=>x.id===id);if(!t)return;t.done=
 function removeTodo(id){db.todos=db.todos.filter(t=>t.id!==id);save();go('todos')}
 
 /* ================= PLATFORM / FRANCHISE ================= */
+window._platformFilters={month:null,gymFilter:''};
+function platformMonth(){return window._platformFilters.month||thisMonth()}
+function platformQuery(){const m=platformMonth();return m?'?month='+encodeURIComponent(m):''}
+const ANA_ICONS={
+ gym:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 21h18M6 21V7l6-4 6 4v14M9 21v-6h6v6"/></svg>',
+ users:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+ revenue:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>',
+ profit:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>'
+};
+function anaSection(title){return`<div class="ana-section">${esc(title)}</div>`}
+function anaKpi(icon,label,value,sub,tone){
+ const ic=typeof icon==='string'&&ANA_ICONS[icon]?ANA_ICONS[icon]:icon;
+ return`<div class="ana-kpi ${tone||''}"><div class="ana-kpi-top"><span class="ana-kpi-icon">${ic}</span><span class="ana-kpi-label">${label}</span></div><div class="ana-kpi-val">${value}</div>${sub?`<div class="ana-kpi-sub">${sub}</div>`:''}</div>`;
+}
+function anaFilterBar(gyms,opts){
+ opts=opts||{};
+ const m=platformMonth();
+ const gymOpts=(gyms||[]).map(g=>`<option value="${g.id}" ${window._platformFilters.gymFilter===g.id?'selected':''}>${esc(g.gymName||g.name)}</option>`).join('');
+ return`<div class="ana-filter">
+  <div class="field"><label>Analysis Period</label><input type="month" id="pf_month" value="${m}" onchange="window._platformFilters.month=this.value;${opts.reload||'reloadPlatformAnalytics()'}"></div>
+  ${opts.hideGymFilter?'':`<div class="field"><label>Gym Comparison</label><select id="pf_gym" onchange="window._platformFilters.gymFilter=this.value;${opts.reload||'reloadPlatformAnalytics()'}"><option value="">All Gyms</option>${gymOpts}</select></div>`}
+  <div class="field" style="margin-left:auto"><label>&nbsp;</label><button class="btn sec sm" onclick="window._platformFilters={month:'${thisMonth()}',gymFilter:''};${opts.reload||'reloadPlatformAnalytics()'}">Reset Filters</button></div>
+ </div>`;
+}
+function hBarChart(items,maxKey,labelKey,valueKey,theme){
+ if(!items||!items.length)return'<p class="mut">No data for selected period</p>';
+ const max=Math.max(...items.map(i=>Number(i[maxKey]||i[valueKey]||0)),1);
+ return`<div class="ana-hbars">${items.map(i=>{
+  const v=Number(i[valueKey]||i[maxKey]||0);
+  const pct=Math.max(2,Math.round((v/max)*100));
+  return`<div class="ana-hbar"><span class="bold">${esc(String(i[labelKey]||'').slice(0,16))}</span><div class="track"><div class="fill ${theme||''}" style="width:${pct}%"></div></div><span class="amt">${inr(v)}</span></div>`;
+ }).join('')}</div>`;
+}
+function dualTrendChart(trends){
+ if(!trends||!trends.length)return'<p class="mut">No trend data</p>';
+ const coll=trends.map(t=>({x:String(t.month).slice(5),y:t.collection||0}));
+ const exp=trends.map(t=>({x:String(t.month).slice(5),y:t.expense||0}));
+ return`<div class="grid g2" style="gap:12px"><div><div class="sub" style="margin-bottom:8px;font-weight:700;color:var(--ok)">Revenue Trend</div>${lineChart(coll,'#10b981',{money:true})}</div><div><div class="sub" style="margin-bottom:8px;font-weight:700;color:var(--bad)">Expense Trend</div>${lineChart(exp,'#ef4444',{money:true})}</div></div>`;
+}
+function memberTrendChart(trends){
+ if(!trends||!trends.length)return'';
+ const data=trends.map(t=>({x:String(t.month).slice(5),y:t.newMembers||0}));
+ return barChart(data,'blue',{money:false});
+}
+function visitTrendChart(trends){
+ if(!trends||!trends.length)return'';
+ const data=trends.map(t=>({x:String(t.month).slice(5),y:t.memberVisits||0}));
+ return barChart(data,'green',{money:false});
+}
+function anaLeaderTable(rows,cols,emptyMsg){
+ if(!rows||!rows.length)return`<div class="ana-table-wrap"><table><tr>${cols.map(c=>`<th class="${c.r?'r':''}">${c.h}</th>`).join('')}</tr><tr><td colspan=${cols.length} class="mut">${emptyMsg||'No data'}</td></tr></table></div>`;
+ return`<div class="ana-table-wrap"><table><tr>${cols.map(c=>`<th class="${c.r?'r':''}">${c.h}</th>`).join('')}</tr>${rows.map((r,i)=>`<tr class="${i<3?'top-row':''}">${cols.map(c=>`<td class="${c.r?'r':''} ${c.bold?'bold':''} ${c.click?'clickable':''}" ${c.click&&r[c.gymId||'id']?`onclick="openGymAnalytics('${r[c.gymId||'id']}')"`:''}>${c.fn?c.fn(r,i):esc(r[c.k])}</td>`).join('')}</tr>`).join('')}</table></div>`;
+}
+function reloadPlatformAnalytics(){
+ if(PAGE==='platform')pgPlatform();
+ else if(PAGE==='franchise-gym'&&window._franchiseGymId)pgFranchiseGym(window._franchiseGymId);
+}
 function renderActivityRows(rows,limit,hideGym){
  const cols=hideGym?4:5;
  return (rows||[]).slice(0,limit||15).map(a=>`<tr>
@@ -3946,58 +4094,81 @@ function renderActivityRows(rows,limit,hideGym){
 }
 async function pgPlatform(){
  _superGymMode=false;
- $('content').innerHTML=`<div id="plat_body"><p class="sub">Loading platform dashboard…</p></div>`;
+ $('content').innerHTML=`<div id="plat_body" class="ana-dash"><p class="sub">Loading analytics…</p></div>`;
  try{
+  const q=platformQuery();
   const [analytics,perf]=await Promise.all([
-   platformApi('/platform/analytics'),
-   platformApi('/platform/franchise-performance')
+   platformApi('/platform/analytics'+q),
+   platformApi('/platform/franchise-performance'+q)
   ]);
   const gyms=analytics.gyms||[];
   window._platformGyms=gyms;
   window._franchisePerf=perf;
-  const maxColl=Math.max(...gyms.map(g=>g.stats.collectionMonth||0),1);
-  const maxMem=Math.max(...gyms.map(g=>g.stats.members||0),1);
-  const chart=gyms.slice(0,8).map(g=>({x:(g.gymName||g.name||'').slice(0,14),y:g.stats.collectionMonth||0}));
-  const staff=perf.staffLeaderboard||[];
-  const trainers=perf.trainerLeaderboard||[];
-  const acts=perf.recentActivities||[];
-  const top=gyms[0];
+  const gf=window._platformFilters.gymFilter;
+  const filteredGyms=gf?gyms.filter(g=>g.id===gf):gyms;
+  const staff=(perf.staffLeaderboard||[]).filter(s=>!gf||s.gymId===gf);
+  const trainers=(perf.trainerLeaderboard||[]).filter(t=>!gf||t.gymId===gf);
+  const acts=(perf.recentActivities||[]).filter(a=>!gf||a.gymId===gf);
+  const trends=perf.trends||analytics.trends||[];
+  const att=perf.attendanceSummary||{present:0,absent:0,late:0,halfDay:0};
+  const top=filteredGyms[0]||gyms[0];
+  const collChart=filteredGyms.slice(0,10).map(g=>({label:g.gymName||g.name,value:g.stats.collectionMonth||0}));
+  const netChart=filteredGyms.slice(0,10).map(g=>({label:g.gymName||g.name,value:g.net||0}));
+  const memChart=filteredGyms.slice(0,10).map(g=>({label:g.gymName||g.name,value:g.stats.members||0}));
+  const revTrend=trends.map(t=>({x:String(t.month).slice(5),y:t.collection||0}));
   $('plat_body').innerHTML=`
    ${platformGymTabs(gyms,null)}
-   <div class="franchise-hero">
-    <div class="row" style="justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px">
-     <div><h2>Platform Dashboard</h2><div class="sub">Franchise owner view · ${franchiseMonthLabel(analytics.month)} · all gyms in one place</div></div>
-     <button class="btn sec" style="background:rgba(255,255,255,.08);color:#fff;border-color:rgba(255,255,255,.15)" onclick="go('add-gym')">+ Add Gym</button>
+   <div class="ana-hero-lite"><div class="row" style="justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px"><div><h2>Platform Analytics</h2><div class="sub">Franchise network intelligence · ${franchiseMonthLabel(analytics.month)} · revenue, growth & performance</div></div><button class="btn sec" style="background:rgba(255,255,255,.08);color:#fff;border-color:rgba(255,255,255,.15)" onclick="go('add-gym')">+ Add Gym</button></div></div>
+   ${anaFilterBar(gyms,{reload:'reloadPlatformAnalytics()'})}
+   ${anaSection('Network Overview')}
+   <div class="ana-kpi-grid">
+    ${anaKpi('gym','Total Gyms',analytics.totals.gyms,'Active franchise locations')}
+    ${anaKpi('users','Network Members',analytics.totals.members.toLocaleString('en-IN'),'Active members across gyms')}
+    ${anaKpi('revenue','Revenue',inr(analytics.totals.collectionMonth),'Collection · '+franchiseMonthLabel(analytics.month),'ok')}
+    ${anaKpi('profit',analytics.profitMonth>=0?'Net Profit':'Net Loss',inr(analytics.profitMonth),'Revenue − expenses · '+franchiseMonthLabel(analytics.month),analytics.profitMonth>=0?'ok':'bad')}
+   </div>
+   <div class="ana-metric-row">
+    <div class="ana-mini"><div class="k">Leads</div><div class="v">${analytics.totals.leads}</div></div>
+    <div class="ana-mini"><div class="k">Expenses</div><div class="v" style="color:var(--bad)">${inr(analytics.totals.expenseMonth)}</div></div>
+    <div class="ana-mini"><div class="k">Member Visits</div><div class="v">${(perf.memberVisits||0).toLocaleString('en-IN')}</div></div>
+    <div class="ana-mini"><div class="k">Staff Present</div><div class="v">${att.present.toLocaleString('en-IN')}</div></div>
+   </div>
+   ${top?`<div class="ana-panel" style="background:linear-gradient(90deg,#f8fbff,#fff);border-color:#c5daf5"><div class="ana-panel-h"><h3>Top Performing Gym · ${franchiseMonthLabel(analytics.month)}</h3><span class="tag">Rank #1</span></div><div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px"><div><div style="font-size:1.25rem;font-weight:800;letter-spacing:-.03em">${esc(top.gymName||top.name)}</div><div class="sub" style="margin-top:4px;font-weight:600">Performance score ${top.score||0} · Net ${inr(top.net||0)} · ${top.stats.members} members</div></div><button class="btn sm" onclick="openGymAnalytics('${top.id}')">View Details →</button></div></div>`:''}
+   ${anaSection('Revenue Analytics · Gym Comparison')}
+   <div class="ana-split">
+    <div class="ana-panel"><div class="ana-panel-h"><h3>Revenue by Gym</h3><span class="tag">Comparison</span></div>${hBarChart(collChart,'value','label','value')}</div>
+    <div class="ana-panel"><div class="ana-panel-h"><h3>Net Profit by Gym</h3><span class="tag">Comparison</span></div>${hBarChart(netChart,'value','label','value','g')}</div>
+   </div>
+   ${anaSection('Growth Trends · 6 Month View')}
+   <div class="ana-panel"><div class="ana-panel-h"><h3>Network Growth Trends</h3><span class="tag">6 Months</span></div>${dualTrendChart(trends)}</div>
+   <div class="ana-split">
+    <div class="ana-panel"><div class="ana-panel-h"><h3>New Member Growth</h3><span class="tag">Monthly</span></div>${memberTrendChart(trends)}</div>
+    <div class="ana-panel"><div class="ana-panel-h"><h3>Member Visit Trend</h3><span class="tag">Attendance</span></div>${visitTrendChart(trends)}</div>
+   </div>
+   <div class="ana-panel"><div class="ana-panel-h"><h3>Revenue Trend Line</h3><span class="tag">${franchiseMonthLabel(analytics.month)} context</span></div>${lineChart(revTrend,'#0099ff',{money:true})}</div>
+   ${anaSection('Gym-wise Performance')}
+   <div class="ana-panel"><div class="ana-panel-h"><h3>Gym Performance Index</h3><span class="tag">Leaderboard</span></div>
+    ${anaLeaderTable(filteredGyms,[{h:'#',k:'rank',fn:r=>rankBadge(r.rank||0)},{h:'Gym',k:'gymName',bold:true,click:true,gymId:'id',fn:r=>esc(r.gymName||r.name)},{h:'Members',k:'members',fn:r=>r.stats.members+perfBar(r.stats.members,Math.max(...filteredGyms.map(g=>g.stats.members||0),1))},{h:'Collection',k:'coll',r:true,fn:r=>inr(r.stats.collectionMonth)},{h:'Net',k:'net',r:true,bold:true,fn:r=>inr(r.net||0)}])}
+   </div>
+   ${anaSection('Staff & Trainer Performance')}
+   <div class="ana-split">
+    <div class="ana-panel"><div class="ana-panel-h"><h3>Staff Performance</h3><span class="tag">Top collectors</span></div>
+     ${anaLeaderTable(staff.slice(0,10),[{h:'#',fn:(r,i)=>rankBadge(i+1)},{h:'Staff',k:'name',bold:true},{h:'Gym',k:'gymName',click:true,gymId:'gymId'},{h:'Collected',k:'collected',r:true,bold:true,fn:r=>inr(r.collected)}],'No billing data this period')}
+    </div>
+    <div class="ana-panel"><div class="ana-panel-h"><h3>Trainer Performance</h3><span class="tag">PT revenue</span></div>
+     ${anaLeaderTable(trainers.slice(0,10),[{h:'#',fn:(r,i)=>rankBadge(i+1)},{h:'Trainer',k:'name',bold:true},{h:'Gym',k:'gymName',click:true,gymId:'gymId'},{h:'PT Rev',k:'revenue',r:true,bold:true,fn:r=>inr(r.revenue)}],'No trainer data this period')}
     </div>
    </div>
-   <div class="franchise-kpi">
-    <div class="card"><div class="l">Total Gyms</div><div class="v" style="color:var(--brand)">${analytics.totals.gyms}</div></div>
-    <div class="card"><div class="l">Network Members</div><div class="v" style="color:var(--ok)">${analytics.totals.members}</div></div>
-    <div class="card"><div class="l">Collection</div><div class="v" style="color:var(--ok)">${inr(analytics.totals.collectionMonth)}</div></div>
-    <div class="card"><div class="l">Network Net</div><div class="v" style="color:${analytics.profitMonth>=0?'var(--ok)':'var(--bad)'}">${inr(analytics.profitMonth)}</div></div>
+   ${anaSection('Member Analytics')}
+   <div class="ana-panel"><div class="ana-panel-h"><h3>Members by Gym</h3><span class="tag">Network split</span></div>${hBarChart(memChart,'value','label','value','g')}</div>
+   ${anaSection('Attendance Analytics')}
+   <div class="ana-panel"><div class="ana-panel-h"><h3>Staff Attendance Summary</h3><span class="tag">${franchiseMonthLabel(analytics.month)}</span></div>
+    <div class="ana-metric-row"><div class="ana-mini"><div class="k">Present</div><div class="v" style="color:var(--ok)">${att.present}</div></div><div class="ana-mini"><div class="k">Absent</div><div class="v" style="color:var(--bad)">${att.absent}</div></div><div class="ana-mini"><div class="k">Late</div><div class="v" style="color:var(--warn)">${att.late}</div></div><div class="ana-mini"><div class="k">Half Day</div><div class="v">${att.halfDay}</div></div></div>
    </div>
-   ${top?`<div class="card" style="margin-bottom:14px;border-color:#c5daf5;background:linear-gradient(90deg,#f8fbff,#fff)"><div class="row" style="justify-content:space-between;align-items:center"><div><h3 style="color:var(--ink);text-transform:none;font-size:14px;margin:0">Top Gym This Month</h3><p class="big bold" style="margin-top:6px">${esc(top.gymName||top.name)}</p><p class="sub">Score ${top.score||0} · ${inr(top.net||0)} net</p></div>${rankBadge(1)}</div></div>`:''}
-   <div class="grid g2" style="margin-bottom:14px">
-    <div class="card"><h3>Gym Comparison</h3><div class="bars">${chart.map(c=>`<div class="b"><div class="y">${inr(c.y)}</div><div class="bar" style="height:${Math.max(4,Math.round((c.y/maxColl)*100))}%"></div><div class="x">${esc(c.x)}</div></div>`).join('')||'<p class="mut">No data</p>'}</div></div>
-    <div class="card"><h3>Gym Leaderboard</h3><div class="tbl franchise-table"><table><tr><th>#</th><th>Gym</th><th>Members</th><th class="r">Collection</th><th class="r">Net</th></tr>
-     ${gyms.map(g=>`<tr class="${g.rank<=3?'top-row':''}"><td>${rankBadge(g.rank||0)}</td><td class="bold clickable" onclick="openGymAnalytics('${g.id}')">${esc(g.gymName||g.name)}</td><td>${g.stats.members}${perfBar(g.stats.members,maxMem)}</td><td class="r">${inr(g.stats.collectionMonth)}</td><td class="r bold">${inr(g.net||0)}</td></tr>`).join('')}
-    </table></div></div>
-   </div>
-   <div class="grid g2" style="margin-bottom:14px">
-    <div class="card"><h3>Best Staff (All Gyms)</h3><div class="tbl franchise-table"><table><tr><th>#</th><th>Staff</th><th>Gym</th><th class="r">Collected</th></tr>
-     ${staff.slice(0,8).map((s,i)=>`<tr class="${i<3?'top-row':''}"><td>${rankBadge(i+1)}</td><td class="bold">${esc(s.name)}</td><td class="clickable" onclick="openGymAnalytics('${s.gymId}')">${esc(s.gymName)}</td><td class="r bold">${inr(s.collected)}</td></tr>`).join('')||'<tr><td colspan=4 class="mut">No data</td></tr>'}
-    </table></div></div>
-    <div class="card"><h3>Best Trainers (All Gyms)</h3><div class="tbl franchise-table"><table><tr><th>#</th><th>Trainer</th><th>Gym</th><th class="r">PT Revenue</th></tr>
-     ${trainers.slice(0,8).map((t,i)=>`<tr class="${i<3?'top-row':''}"><td>${rankBadge(i+1)}</td><td class="bold">${esc(t.name)}</td><td class="clickable" onclick="openGymAnalytics('${t.gymId}')">${esc(t.gymName)}</td><td class="r bold">${inr(t.revenue)}</td></tr>`).join('')||'<tr><td colspan=4 class="mut">No data</td></tr>'}
-    </table></div></div>
-   </div>
-   <div class="card"><h3>Recent Activity (All Gyms)</h3><p class="sub" style="margin-bottom:10px">Latest entries and actions across your franchise network.</p>
-    <div class="tbl franchise-table"><table><tr><th>Time</th><th>Gym</th><th>User</th><th>Action</th><th>Detail</th></tr>
-     ${renderActivityRows(acts,15)}
-    </table></div></div>`;
+   <div class="ana-panel"><div class="ana-panel-h"><h3>Recent Activity</h3><span class="tag">Live feed</span></div><div class="ana-table-wrap"><table><tr><th>Time</th><th>Gym</th><th>User</th><th>Action</th><th>Detail</th></tr>${renderActivityRows(acts,15)}</table></div></div>`;
   buildNav();
  }catch(e){
-  $('plat_body').innerHTML=`<div class="card"><p class="sub" style="color:var(--bad)">${esc(e.message||'Failed to load platform dashboard')}</p><button class="btn" style="margin-top:10px" onclick="go('gymadmins')">Create Gym</button></div>`;
+  $('plat_body').innerHTML=`<div class="ana-panel"><p class="sub" style="color:var(--bad);font-weight:600">${esc(e.message||'Failed to load platform analytics')}</p><button class="btn" style="margin-top:10px" onclick="go('gymadmins')">Create Gym</button></div>`;
  }
 }
 function pgFranchiseAnalytics(){go('platform')}
@@ -4007,58 +4178,55 @@ async function pgFranchiseGym(gymId){
  gymId=gymId||window._franchiseGymId;
  if(!gymId){toast('Select a gym');go('platform');return}
  window._franchiseGymId=gymId;
- $('content').innerHTML=`<div id="fg_body"><p class="sub">Loading gym…</p></div>`;
+ $('content').innerHTML=`<div id="fg_body" class="ana-dash"><p class="sub">Loading gym analytics…</p></div>`;
  try{
-  const data=await platformApi('/platform/gyms/'+gymId+'/performance');
+  const data=await platformApi('/platform/gyms/'+gymId+'/performance'+platformQuery());
   const g=data.gym;
-  const perf=data.performance||{staffSales:[],trainers:[],staffAttendance:[]};
+  const perf=data.performance||{staffSales:[],trainers:[],staffAttendance:[],memberVisits:0};
   const trends=data.trends||[];
-  const maxTrend=Math.max(...trends.map(t=>t.collection||0),1);
   const gyms=window._platformGyms||[];
   const f=g.franchise||null;
-  const franchiseBlock=f?`<div class="card" style="margin-bottom:14px"><div class="row" style="justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px"><div><h3 style="text-transform:none;color:var(--ink);font-size:14px">Franchise Details</h3><div class="review-grid" style="margin-top:12px">
-   <div><div class="k">Location</div><div>${esc(f.branch||'—')}</div></div>
-   <div><div class="k">Address</div><div>${esc([f.address,f.city,f.state,f.pincode].filter(Boolean).join(', ')||'—')}</div></div>
-   <div><div class="k">Owner Phone</div><div>${esc(f.ownerPhone||'—')}</div></div>
-   <div><div class="k">Agreement</div><div>${f.agreementStartDate?esc(f.agreementStartDate+(f.agreementEndDate?' → '+f.agreementEndDate:'')):'—'}</div></div>
-   <div><div class="k">Franchise Fee</div><div>${f.franchiseFee!=null?inr(f.franchiseFee):'—'}</div></div>
-   <div><div class="k">Royalty</div><div>${f.royaltyPct!=null?f.royaltyPct+'%':'—'}</div></div>
-  </div></div>${f.agreementFilePath?`<button class="btn sm sec" onclick="viewFranchiseAgreement('${gymId}')">View Signed Agreement</button>`:''}</div></div>`:'';
+  const att=(perf.staffAttendance||[]).reduce((a,s)=>({present:a.present+s.present,absent:a.absent+s.absent,late:a.late+s.late,halfDay:a.halfDay+s.halfDay}),{present:0,absent:0,late:0,halfDay:0});
+  const revTrend=trends.map(t=>({x:String(t.month).slice(5),y:t.collection||0}));
+  const franchiseBlock=f?`<div class="ana-panel"><div class="ana-panel-h"><h3>Franchise Profile</h3>${f.agreementFilePath?`<button class="btn sm sec" onclick="viewFranchiseAgreement('${gymId}')">View Agreement</button>`:''}</div><div class="review-grid">${[['Location',f.branch],['Address',[f.address,f.city,f.state,f.pincode].filter(Boolean).join(', ')],['Owner Phone',f.ownerPhone],['Agreement',f.agreementStartDate?(f.agreementStartDate+(f.agreementEndDate?' → '+f.agreementEndDate:'')):'—'],['Franchise Fee',f.franchiseFee!=null?inr(f.franchiseFee):'—'],['Royalty',f.royaltyPct!=null?f.royaltyPct+'%':'—']].map(([k,v])=>`<div><div class="k">${esc(k)}</div><div class="bold">${esc(String(v||'—'))}</div></div>`).join('')}</div></div>`:'';
   $('fg_body').innerHTML=`
    ${platformGymTabs(gyms,gymId)}
-   <div class="row" style="justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:14px">
-    <div>
-     <h2>${esc(g.gymName||g.name)}</h2>
-     <div class="sub">${franchiseMonthLabel(data.month)} · Admin: ${esc(g.admin?g.admin.name:'—')} (${esc(g.admin?g.admin.email:'')}) · Score <b>${g.score||0}</b></div>
-    </div>
-    <div class="row" style="gap:8px;flex-wrap:wrap">
-     <button class="btn" onclick="openGymWorkspace('${gymId}')">Enter Gym →</button>
-     <button class="btn sec" onclick="openEditGym('${gymId}')">Edit Name</button>
-    </div>
-   </div>
+   <div class="ana-head"><div><h2>${esc(g.gymName||g.name)}</h2><div class="sub">${franchiseMonthLabel(data.month)} · ${esc(g.admin?g.admin.name:'—')} · Score ${g.score||0} · Performance analytics</div></div><div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn" onclick="openGymWorkspace('${gymId}')">Enter Gym →</button><button class="btn sec" onclick="openEditGym('${gymId}')">Edit Name</button></div></div>
+   ${anaFilterBar(gyms,{hideGymFilter:true,reload:"pgFranchiseGym('"+gymId+"')"})}
    ${franchiseBlock}
-   <div class="franchise-kpi">
-    <div class="card"><div class="l">Members</div><div class="v">${g.stats.members}</div></div>
-    <div class="card"><div class="l">Leads</div><div class="v">${g.stats.leads}</div></div>
-    <div class="card"><div class="l">Collection</div><div class="v" style="color:var(--ok)">${inr(g.stats.collectionMonth)}</div></div>
-    <div class="card"><div class="l">Net Profit</div><div class="v" style="color:${(g.net||0)>=0?'var(--ok)':'var(--bad)'}">${inr(g.net||0)}</div></div>
+   <div class="ana-kpi-grid">
+    ${anaKpi('users','Members',g.stats.members,'Active members')}
+    ${anaKpi('gym','Leads',g.stats.leads,'Pipeline enquiries')}
+    ${anaKpi('revenue','Revenue',inr(g.stats.collectionMonth),franchiseMonthLabel(data.month),'ok')}
+    ${anaKpi('profit',(g.net||0)>=0?'Net Profit':'Net Loss',inr(g.net||0),'After expenses',(g.net||0)>=0?'ok':'bad')}
    </div>
-   <div class="card" style="margin-bottom:14px"><h3>6-Month Collection Trend</h3><div class="bars">${trends.map(t=>`<div class="b"><div class="y">${inr(t.collection)}</div><div class="bar g" style="height:${Math.max(4,Math.round(((t.collection||0)/maxTrend)*100))}%"></div><div class="x">${esc(String(t.month).slice(5))}</div></div>`).join('')}</div></div>
-   <div class="grid g2" style="margin-bottom:14px">
-    <div class="card"><h3>Staff Performance</h3><div class="tbl"><table><tr><th>Staff</th><th>Invoices</th><th class="r">Collected</th></tr>
-     ${(perf.staffSales||[]).map(s=>`<tr><td class="bold">${esc(s.name)}</td><td>${s.invoices}</td><td class="r bold">${inr(s.collected)}</td></tr>`).join('')||'<tr><td colspan=3 class="mut">No billing this month</td></tr>'}
-    </table></div></div>
-    <div class="card"><h3>Trainer Performance</h3><div class="tbl"><table><tr><th>Trainer</th><th>Members</th><th>PT</th><th class="r">Revenue</th></tr>
-     ${(perf.trainers||[]).map(t=>`<tr><td class="bold">${esc(t.name)}</td><td>${t.clients}</td><td>${t.ptSubs}</td><td class="r bold">${inr(t.revenue)}</td></tr>`).join('')||'<tr><td colspan=4 class="mut">No trainer data</td></tr>'}
-    </table></div></div>
+   <div class="ana-metric-row">
+    <div class="ana-mini"><div class="k">Expenses</div><div class="v" style="color:var(--bad)">${inr(g.stats.expenseMonth)}</div></div>
+    <div class="ana-mini"><div class="k">Per Member Rev</div><div class="v">${inr(g.perMember||0)}</div></div>
+    <div class="ana-mini"><div class="k">Member Visits</div><div class="v">${perf.memberVisits||0}</div></div>
+    <div class="ana-mini"><div class="k">Performance Score</div><div class="v" style="color:var(--brand)">${g.score||0}</div></div>
    </div>
-   <div class="card"><h3>Recent Activity (This Gym)</h3><p class="sub" style="margin-bottom:10px">Who did what — latest entries in this gym.</p>
-    <div class="tbl"><table><tr><th>Time</th><th>User</th><th>Action</th><th>Detail</th></tr>
-     ${renderActivityRows(data.recentActivities||[],20,true)}
-    </table></div></div>
-   <p class="sub" style="margin-top:14px">Need to add members, billing, or cashbook entries? Click <b>Enter Gym →</b> above.</p>`;
+   <div class="ana-panel"><div class="ana-panel-h"><h3>Revenue & Expense Trends</h3><span class="tag">6 months</span></div>${dualTrendChart(trends)}</div>
+   <div class="ana-split">
+    <div class="ana-panel"><div class="ana-panel-h"><h3>Revenue Trend</h3><span class="tag">Monthly</span></div>${lineChart(revTrend,'#0099ff',{money:true})}</div>
+    <div class="ana-panel"><div class="ana-panel-h"><h3>Member Growth</h3><span class="tag">New joins</span></div>${memberTrendChart(trends)}</div>
+   </div>
+   <div class="ana-split">
+    <div class="ana-panel"><div class="ana-panel-h"><h3>Staff Performance</h3><span class="tag">${franchiseMonthLabel(data.month)}</span></div>
+     ${anaLeaderTable(perf.staffSales||[],[{h:'Staff',k:'name',bold:true},{h:'Invoices',k:'invoices'},{h:'Billed',k:'billed',r:true,fn:r=>inr(r.billed)},{h:'Collected',k:'collected',r:true,bold:true,fn:r=>inr(r.collected)}],'No billing this period')}
+    </div>
+    <div class="ana-panel"><div class="ana-panel-h"><h3>Trainer Performance</h3><span class="tag">PT & revenue</span></div>
+     ${anaLeaderTable(perf.trainers||[],[{h:'Trainer',k:'name',bold:true},{h:'Members',k:'clients'},{h:'PT',k:'ptSubs'},{h:'Visits',k:'visits'},{h:'Revenue',k:'revenue',r:true,bold:true,fn:r=>inr(r.revenue)}],'No trainer data')}
+    </div>
+   </div>
+   <div class="ana-panel"><div class="ana-panel-h"><h3>Staff Attendance</h3><span class="tag">${franchiseMonthLabel(data.month)}</span></div>
+    <div class="ana-metric-row"><div class="ana-mini"><div class="k">Present</div><div class="v" style="color:var(--ok)">${att.present}</div></div><div class="ana-mini"><div class="k">Absent</div><div class="v" style="color:var(--bad)">${att.absent}</div></div><div class="ana-mini"><div class="k">Late</div><div class="v" style="color:var(--warn)">${att.late}</div></div><div class="ana-mini"><div class="k">Half Day</div><div class="v">${att.halfDay}</div></div></div>
+    ${anaLeaderTable(perf.staffAttendance||[],[{h:'Staff',k:'name',bold:true},{h:'Present',k:'present'},{h:'Absent',k:'absent'},{h:'Late',k:'late'},{h:'Half Day',k:'halfDay'}],'No attendance logged')}
+   </div>
+   <div class="ana-panel"><div class="ana-panel-h"><h3>Recent Activity</h3><span class="tag">This gym</span></div><div class="ana-table-wrap"><table><tr><th>Time</th><th>User</th><th>Action</th><th>Detail</th></tr>${renderActivityRows(data.recentActivities||[],20,true)}</table></div></div>
+   <p class="sub" style="margin-top:8px;font-weight:600">Manage entries inside the gym ERP · <button class="btn sm" onclick="openGymWorkspace('${gymId}')">Enter Gym →</button></p>`;
   buildNav();
- }catch(e){$('fg_body').innerHTML=`<div class="card"><p class="sub" style="color:var(--bad)">${esc(e.message||'Failed to load gym')}</p><button class="btn sm sec" style="margin-top:10px" onclick="go('platform')">← All Gyms</button></div>`}
+ }catch(e){$('fg_body').innerHTML=`<div class="ana-panel"><p class="sub" style="color:var(--bad);font-weight:600">${esc(e.message||'Failed to load gym analytics')}</p><button class="btn sm sec" style="margin-top:10px" onclick="go('platform')">← All Gyms</button></div>`}
 }
 async function pgGymAdmins(){
  $('content').innerHTML=`<div class="franchise-hero" style="margin-bottom:14px"><div class="row" style="justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px"><div><h2>Gyms & Franchisees</h2><div class="sub">Onboard franchise locations · collect details, signed agreement, and create gym admin login</div></div><button class="btn" onclick="go('add-gym')">+ Add Gym</button></div></div><div id="ga_body"><p class="sub">Loading…</p></div>`;

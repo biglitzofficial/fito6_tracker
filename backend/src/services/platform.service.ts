@@ -141,10 +141,15 @@ function computeGymPerformance(erp: ErpSnapshot | null, month: string) {
     else if (a.status === 'Half Day') row.halfDay += 1;
   });
 
+  const memberVisits = (erp?.memberAtt || []).filter((a) =>
+    ((a as { date?: string }).date || '').startsWith(month)
+  ).length;
+
   return {
     staffSales: Object.values(staffSales).sort((a, b) => b.collected - a.collected),
     trainers: Object.values(trainerStats).sort((a, b) => b.ptSubs - a.ptSubs || b.clients - a.clients),
     staffAttendance: Object.values(staffAttendance).sort((a, b) => b.present - a.present),
+    memberVisits,
   };
 }
 
@@ -220,6 +225,62 @@ function monthPrefix() {
   return new Date().toISOString().slice(0, 7);
 }
 
+function resolveMonth(month?: string) {
+  if (month && /^\d{4}-\d{2}$/.test(month)) return month;
+  return monthPrefix();
+}
+
+function monthKeys(count: number, endMonth?: string) {
+  const end = endMonth && /^\d{4}-\d{2}$/.test(endMonth) ? endMonth : monthPrefix();
+  const [y, m] = end.split('-').map(Number);
+  return [...Array(count)].map((_, i) => {
+    const d = new Date(y, m - 1 - (count - 1 - i), 1);
+    return d.toISOString().slice(0, 7);
+  });
+}
+
+async function networkTrends(endMonth?: string, count = 6) {
+  const businesses = await findMany<Business>(COL.businesses, () => true);
+  const months = monthKeys(count, endMonth);
+  const erps = await Promise.all(
+    businesses.map(async (b) => (await erpStoreService.get(b.id)) as ErpSnapshot | null)
+  );
+
+  return months.map((month) => ({
+    month,
+    collection: erps.reduce((sum, erp) => sum + (erp ? sumCash(erp, 'in', month) : 0), 0),
+    expense: erps.reduce((sum, erp) => sum + (erp ? sumCash(erp, 'out', month) : 0), 0),
+    newMembers: erps.reduce(
+      (sum, erp) =>
+        sum +
+        (erp?.clients || []).filter((c) => {
+          const joined = (c as { joined?: string; created?: string }).joined ||
+            (c as { created?: string }).created ||
+            '';
+          return joined.startsWith(month);
+        }).length,
+      0
+    ),
+    memberVisits: erps.reduce(
+      (sum, erp) =>
+        sum +
+        (erp?.memberAtt || []).filter((a) => ((a as { date?: string }).date || '').startsWith(month))
+          .length,
+      0
+    ),
+    staffPresent: erps.reduce(
+      (sum, erp) =>
+        sum +
+        (erp?.staffAtt || []).filter(
+          (a) =>
+            ((a as { date?: string }).date || '').startsWith(month) &&
+            (a as { status?: string }).status === 'Present'
+        ).length,
+      0
+    ),
+  }));
+}
+
 function sumCash(data: ErpSnapshot, type: 'in' | 'out', month?: string) {
   return (data.cashbook || [])
     .filter((e) => {
@@ -248,7 +309,8 @@ type GymStats = {
 };
 
 export const platformService = {
-  async listGyms() {
+  async listGyms(month?: string) {
+    const period = resolveMonth(month);
     const businesses = sortBy(await findMany<Business>(COL.businesses, () => true), 'name');
     const admins = await findMany<User>(COL.users, (u) => u.role === Role.ADMIN && u.isActive);
     const members = await findMany<BusinessMember>(COL.businessMembers, (m) => m.isActive);
@@ -258,7 +320,7 @@ export const platformService = {
         const member = members.find((m) => m.businessId === business.id && m.role === Role.ADMIN);
         const admin = member ? admins.find((a) => a.id === member.userId) : null;
         const erp = (await erpStoreService.get(business.id)) as ErpSnapshot | null;
-        const month = monthPrefix();
+        const month = period;
         const stats: GymStats = {
           members: erp ? activeMembers(erp) : 0,
           leads: (erp?.leads || []).length,
@@ -447,9 +509,10 @@ export const platformService = {
     };
   },
 
-  async getAnalytics() {
-    const gyms = await this.listGyms();
-    const month = monthPrefix();
+  async getAnalytics(month?: string) {
+    const period = resolveMonth(month);
+    const gyms = await this.listGyms(period);
+    const month = period;
     const totals = gyms.reduce(
       (acc, gym) => {
         acc.gyms += 1;
@@ -472,17 +535,21 @@ export const platformService = {
       .sort((a, b) => b.score - a.score)
       .map((g, i) => ({ ...g, rank: i + 1 }));
 
+    const trends = await networkTrends(month, 6);
+
     return {
       month,
       totals,
       profitMonth: totals.collectionMonth - totals.expenseMonth,
       gyms: ranked,
+      trends,
     };
   },
 
-  async getFranchisePerformance() {
-    const month = monthPrefix();
-    const gyms = await this.listGyms();
+  async getFranchisePerformance(month?: string) {
+    const period = resolveMonth(month);
+    const month = period;
+    const gyms = await this.listGyms(month);
     const gymRows = await Promise.all(
       gyms.map(async (gym) => {
         const erp = (await erpStoreService.get(gym.id)) as ErpSnapshot | null;
@@ -544,6 +611,24 @@ export const platformService = {
       { gyms: 0, members: 0, leads: 0, collectionMonth: 0, expenseMonth: 0 }
     );
 
+    const attendanceSummary = ranked.reduce(
+      (acc, g) => {
+        (g.performance.staffAttendance || []).forEach((a) => {
+          acc.present += a.present;
+          acc.absent += a.absent;
+          acc.late += a.late;
+          acc.halfDay += a.halfDay;
+        });
+        return acc;
+      },
+      { present: 0, absent: 0, late: 0, halfDay: 0 }
+    );
+
+    const memberVisits = ranked.reduce((sum, g) => {
+      const erpVisits = g.performance?.memberVisits;
+      return sum + (typeof erpVisits === 'number' ? erpVisits : 0);
+    }, 0);
+
     return {
       month,
       totals,
@@ -552,26 +637,36 @@ export const platformService = {
       staffLeaderboard: staffLeaderboard.slice(0, 50),
       trainerLeaderboard: trainerLeaderboard.slice(0, 50),
       recentActivities: networkActivities,
+      attendanceSummary,
+      memberVisits,
+      trends: await networkTrends(month, 6),
     };
   },
 
-  async getGymPerformanceDetail(businessId: string) {
-    const gym = await this.getGymById(businessId);
-    const month = monthPrefix();
+  async getGymPerformanceDetail(businessId: string, month?: string) {
+    const period = resolveMonth(month);
+    const gyms = await this.listGyms(period);
+    const gym = gyms.find((g) => g.id === businessId);
+    if (!gym) throw new AppError(404, 'Gym not found');
+    const month = period;
     const erp = (await erpStoreService.get(businessId)) as ErpSnapshot | null;
     const performance = computeGymPerformance(erp, month);
     const net = gym.stats.collectionMonth - gym.stats.expenseMonth;
 
-    const months6 = [...Array(6)].map((_, i) => {
-      const d = new Date();
-      d.setMonth(d.getMonth() - (5 - i));
-      return d.toISOString().slice(0, 7);
-    });
-
+    const months6 = monthKeys(6, month);
     const trends = months6.map((m) => ({
       month: m,
       collection: erp ? sumCash(erp, 'in', m) : 0,
       expense: erp ? sumCash(erp, 'out', m) : 0,
+      newMembers: (erp?.clients || []).filter((c) => {
+        const joined = (c as { joined?: string; created?: string }).joined ||
+          (c as { created?: string }).created ||
+          '';
+        return joined.startsWith(m);
+      }).length,
+      memberVisits: (erp?.memberAtt || []).filter((a) =>
+        ((a as { date?: string }).date || '').startsWith(m)
+      ).length,
     }));
 
     return {
