@@ -50,6 +50,14 @@ class ApiClient {
         throw new Error('Invalid server response');
       }
 
+      if (res.status === 401 && typeof window !== 'undefined') {
+        localStorage.removeItem('token');
+        import('@/stores/auth.store').then(({ useAuthStore }) => {
+          useAuthStore.getState().logout();
+        });
+        throw new Error('Session expired. Please sign in again.');
+      }
+
       if (!res.ok || !data.success) {
         throw new Error(data.error || 'Request failed');
       }
@@ -99,6 +107,10 @@ class ApiClient {
     const headers: HeadersInit = {};
     if (token) {
       (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
+    }
+    const businessId = getActiveBusinessId();
+    if (businessId && !endpoint.startsWith('/auth') && !endpoint.startsWith('/businesses')) {
+      (headers as Record<string, string>)['X-Business-Id'] = businessId;
     }
 
     const controller = new AbortController();

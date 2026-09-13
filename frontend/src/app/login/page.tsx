@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, Suspense } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
@@ -23,19 +23,27 @@ function getSafeRedirect(path: string | null) {
   if (!path || !path.startsWith('/') || path.startsWith('//')) {
     return '/dashboard';
   }
+  if (path === '/login' || path.startsWith('/login?') || path === '/forgot-password' || path === '/reset-password') {
+    return '/dashboard';
+  }
   return path;
 }
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { login, isLoading } = useAuthStore();
+  const { login, isLoading, token, user, hasHydrated } = useAuthStore();
   const [error, setError] = useState('');
 
   const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: { email: '', password: '' },
   });
+
+  useEffect(() => {
+    if (!hasHydrated || !token || !user) return;
+    router.replace(getSafeRedirect(searchParams.get('redirect')));
+  }, [hasHydrated, token, user, router, searchParams]);
 
   const onSubmit = async (data: FormData) => {
     setError('');
@@ -46,6 +54,10 @@ function LoginForm() {
       setError(e instanceof Error ? e.message : 'Login failed');
     }
   };
+
+  if (hasHydrated && token && user) {
+    return <LoginFallback />;
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-[#141b2d] to-[#26314e] p-4">
@@ -102,9 +114,17 @@ function LoginForm() {
   );
 }
 
+function LoginFallback() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-[#141b2d] to-[#26314e]">
+      <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-white" />
+    </div>
+  );
+}
+
 export default function LoginPage() {
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<LoginFallback />}>
       <LoginForm />
     </Suspense>
   );

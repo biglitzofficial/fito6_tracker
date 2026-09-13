@@ -9,6 +9,14 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script>
+(function(){
+ try{
+  var a=JSON.parse(localStorage.getItem('fito6_erp_auth')||'null');
+  if(a&&a.token)document.documentElement.classList.add('session-restore');
+ }catch(e){}
+})();
+</script>
 <style>
 :root{--bg:#f1f5f9;--card:#fff;--ink:#0f172a;--mut:#64748b;--brand:#0099ff;--brand2:#0077cc;--brand-dark:#005fa3;--dark:#0a0e17;--dark2:#111827;--sidebar:#0a0e17;--sidebar2:#111827;--sidebar-hover:#1e293b;--sidebar-border:rgba(255,255,255,.06);--sidebar-text:#94a3b8;--sidebar-hi:#f8fafc;--ok:#10b981;--bad:#ef4444;--warn:#f59e0b;--line:#e2e8f0;--shadow:0 1px 3px rgba(15,23,42,.06),0 8px 24px rgba(15,23,42,.04);--radius:10px}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -20,6 +28,15 @@ label{font-size:11px;font-weight:600;color:var(--mut);text-transform:uppercase;l
 .field{margin-bottom:12px}
 h2{font-size:1.375rem;font-weight:700;margin-bottom:4px;letter-spacing:-.025em;color:var(--ink)} h3{font-size:.8125rem;font-weight:600;margin-bottom:10px;letter-spacing:.04em;text-transform:uppercase;color:var(--mut)}
 .sub{color:var(--mut);font-size:12.5px;font-weight:400}
+/* BOOT / SESSION */
+html.session-restore #login{display:none!important}
+html.session-restore #app{display:block!important}
+#boot-load{position:fixed;inset:0;background:linear-gradient(145deg,#0a0e17 0%,#0c1220 40%,#001a33 100%);display:none;align-items:center;justify-content:center;z-index:200;flex-direction:column;gap:14px;color:#e2e8f0}
+html.session-restore #boot-load{display:flex}
+.boot-logo{width:120px;height:auto;opacity:.95}
+.boot-msg{font-size:13px;color:#94a3b8;letter-spacing:.04em}
+.boot-spin{width:28px;height:28px;border:2px solid rgba(0,153,255,.2);border-top-color:var(--brand);border-radius:50%;animation:bootspin .7s linear infinite}
+@keyframes bootspin{to{transform:rotate(360deg)}}
 /* LOGIN */
 #login{position:fixed;inset:0;background:linear-gradient(145deg,#0a0e17 0%,#0c1220 40%,#001a33 100%);display:flex;align-items:center;justify-content:center;z-index:100}
 #login .box{background:#fff;border-radius:16px;padding:40px;width:380px;box-shadow:0 24px 80px rgba(0,0,0,.5),0 0 0 1px rgba(0,153,255,.1)}
@@ -177,6 +194,12 @@ hr.sep{border:none;border-top:1px solid var(--line);margin:14px 0}
 </head>
 <body>
 
+<div id="boot-load" aria-live="polite" aria-busy="true">
+  <img src="/fito6-logo.webp" alt="" class="boot-logo" width="120" height="120">
+  <div class="boot-spin" aria-hidden="true"></div>
+  <div class="boot-msg">Restoring session…</div>
+</div>
+
 <div id="login">
   <div class="box">
     <img src="/fito6-logo.webp" alt="FITO6 Fitness Studio" class="login-brand" width="168" height="168">
@@ -184,7 +207,7 @@ hr.sep{border:none;border-top:1px solid var(--line);margin:14px 0}
     <div class="field"><label>Email</label><input id="lg_u" type="email" placeholder="you@company.com" autocomplete="username"></div>
     <div class="field"><label>Password</label><input id="lg_p" type="password" placeholder="Your password" autocomplete="current-password"></div>
     <button class="btn" style="width:100%" id="lg_btn" onclick="doLogin()">Login</button>
-    <div class="sub" style="margin-top:14px;line-height:1.7" id="lg_hint">Cloud login · Super Admin: <b>superadmin@fito6.com</b> / <b>Fito6Super@2026</b> (created on backend deploy)</div>
+    <div class="sub" style="margin-top:14px;line-height:1.7" id="lg_hint">Sign in with your gym ERP email and password.</div>
     <div class="sub" style="margin-top:8px;color:var(--bad);display:none" id="lg_err"></div>
   </div>
 </div>
@@ -241,11 +264,15 @@ hr.sep{border:none;border-top:1px solid var(--line);margin:14px 0}
 /* ================= CLOUD API + DATABASE ================= */
 const DBKEY='fito6_erp_v1';
 const AUTHKEY='fito6_erp_auth';
+const LASTPAGEKEY='fito6_erp_page';
 let API_URL='http://localhost:4000/api';
 let AUTH={token:null,businessId:null,user:null,businesses:[]};
 let db=null;
 let _saveTimer=null;
 let _cloudReady=false;
+let _restoreBusy=false;
+let _cbPendingMode=null;
+var _navSubId=null;
 
 async function initApiConfig(){
  try{const r=await fetch('/fito6-config.json',{cache:'no-store'});if(r.ok){const j=await r.json();if(j.apiUrl)API_URL=j.apiUrl}}catch(e){}
@@ -271,8 +298,37 @@ async function api(path,opts={}){
 }
 
 function persistAuth(){localStorage.setItem(AUTHKEY,JSON.stringify({token:AUTH.token,businessId:AUTH.businessId,user:AUTH.user,businesses:AUTH.businesses||[]}))}
-function clearAuth(){AUTH={token:null,businessId:null,user:null,businesses:[]};localStorage.removeItem(AUTHKEY)}
+function clearAuth(){AUTH={token:null,businessId:null,user:null,businesses:[]};localStorage.removeItem(AUTHKEY);localStorage.removeItem(LASTPAGEKEY)}
 function restoreAuth(){try{const a=JSON.parse(localStorage.getItem(AUTHKEY)||'null');if(a&&a.token)AUTH=a}catch(e){}}
+function showLoginScreen(){
+ try{closeModal(true)}catch(e){}
+ stopWebcam();
+ closeSidebar();
+ closeTbDrops();
+ const gs=$('gsearch');if(gs)gs.value='';
+ db=null;
+ document.documentElement.classList.remove('session-restore');
+ const login=$('login'),app=$('app'),boot=$('boot-load');
+ if(login)login.style.display='flex';
+ if(app)app.style.display='none';
+ if(boot){boot.style.display='none';boot.setAttribute('aria-busy','false')}
+}
+function showAppShell(){
+ document.documentElement.classList.add('session-restore');
+ const login=$('login'),app=$('app');
+ if(login)login.style.display='none';
+ if(app)app.style.display='block';
+}
+function hideBootLoad(){
+ document.documentElement.classList.remove('session-restore');
+ const boot=$('boot-load');if(boot){boot.style.display='none';boot.setAttribute('aria-busy','false')}
+}
+function resolveStartupPage(){
+ const st=history.state;
+ if(st&&st.fito6&&st.page)return st.page;
+ try{const lp=localStorage.getItem(LASTPAGEKEY);if(lp)return lp}catch(e){}
+ return null;
+}
 function isAuthError(e){const m=String((e&&e.message)||'');return /401|403|authentication required|invalid token|invalid credentials|inactive account/i.test(m)}
 let _histBusy=false;
 function appHistState(page,modal){return{fito6:true,page:page||PAGE||'dashboard',modal:!!modal}}
@@ -293,15 +349,20 @@ function setupHistoryNav(){
    const st=history.state;
    const modalOpen=$('modalwrap')&&$('modalwrap').style.display==='flex';
    if(modalOpen){
-    $('modalwrap').style.display='none';
-    if(st&&st.fito6&&st.page)go(st.page,null,{hist:true});
+    closeModal(true);
+    if(st&&st.fito6&&st.page&&AUTH.token&&USER)go(st.page,null,{hist:true});
     return;
    }
-   if(st&&st.fito6&&st.page){go(st.page,null,{hist:true});return}
+   if(st&&st.fito6&&st.page){
+    if(!AUTH.token||!USER)return;
+    go(st.page,null,{hist:true});
+    return;
+   }
    if(AUTH.token&&AUTH.user){
     restoreAuth();
     if(!USER||!$('app')||$('app').style.display==='none'){
-     enterAppFromAuth({quiet:true}).catch(e=>{if(isAuthError(e))logout()});
+     showAppShell();
+     enterAppFromAuth({quiet:true}).catch(e=>{if(isAuthError(e))logout();else showLoginScreen()});
     }else{
      pushAppHistory(appHistState(PAGE,false),true);
     }
@@ -312,7 +373,8 @@ function setupHistoryNav(){
   if(!e.persisted)return;
   restoreAuth();
   if(AUTH.token&&AUTH.user&&(!$('app')||$('app').style.display==='none')){
-   enterAppFromAuth({quiet:true}).catch(()=>{});
+   showAppShell();
+   enterAppFromAuth({quiet:true}).catch(err=>{if(isAuthError(err))logout();else showLoginScreen()});
   }
  });
  document.addEventListener('click',e=>{const a=e.target.closest('a[href="#"]');if(a)e.preventDefault()},true);
@@ -325,7 +387,10 @@ function setupHistoryNav(){
  },true);
 }
 async function enterAppFromAuth(opts={}){
+ if(_restoreBusy)return;
  if(!AUTH.token||!AUTH.user)throw new Error('No session');
+ _restoreBusy=true;
+ try{
  if(!AUTH.businesses||!AUTH.businesses.length){
   try{AUTH.businesses=await api('/businesses')}catch(e){
    if(isAuthError(e))throw e;
@@ -349,14 +414,18 @@ async function enterAppFromAuth(opts={}){
   throw new Error('No business context');
  }
  USER={u:AUTH.user.email,p:'',role:mapCloudRole(AUTH.user.role,AUTH.user.email,AUTH.user.name),name:AUTH.user.name,cloudRole:AUTH.user.role,jobType:AUTH.user.jobType};
- $('login').style.display='none';$('app').style.display='block';
+ showAppShell();
  setTopUser();
  $('sb_role').textContent=isSuper&&!AUTH.businessId?'FITO6 Platform':((db.settings&&db.settings.gymName)||'FITO6');
  populateBizSwitcher(AUTH.businesses||[]);
  buildNav();
- go(homePage(),null,{hist:true});
+ const saved=resolveStartupPage();
+ const target=saved&&canPage(saved)?saved:homePage();
+ go(target,null,{hist:true,silent:true});
  pushAppHistory(appHistState(PAGE,false),true);
+ hideBootLoad();
  refreshTopbarNotifs();
+ }finally{_restoreBusy=false;}
 }
 
 function defaults(){return{
@@ -826,7 +895,7 @@ function getSettingsList(key){
 function settingsListRows(listKey,items){
  const safeKey=listKey.replace(/[^a-zA-Z0-9]/g,'_');
  return`<div class="settings-list" style="max-height:240px;overflow:auto;margin-bottom:10px">
- ${(items||[]).map((c,i)=>`<div class="row" style="gap:8px;margin-bottom:6px;align-items:center;padding:8px 10px;background:#f8f9fb;border:1px solid var(--border);border-radius:6px">
+ ${(items||[]).map((c,i)=>`<div class="row" style="gap:8px;margin-bottom:6px;align-items:center;padding:8px 10px;background:#f8f9fb;border:1px solid var(--line);border-radius:6px">
   <span style="flex:1;font-weight:600">${esc(c)}</span>
   <button type="button" class="btn sm sec" onclick="renameSettingsItem('${listKey}',${i})">Rename</button>
   <button type="button" class="btn sm dgr" onclick="removeSettingsItem('${listKey}',${i})">Delete</button>
@@ -1060,7 +1129,7 @@ function phoneField(id,label,mobile,locked){
  const ro=locked?'readonly class="ro"':'';
  return`<div class="field"><label>${label}</label>
   <div class="row" style="gap:0;align-items:stretch;margin:0">
-   <span style="padding:8px 10px;background:#f0f2f5;border:1px solid var(--border);border-right:0;border-radius:6px 0 0 6px;font-size:13px;color:var(--mut);white-space:nowrap">+91</span>
+   <span style="padding:8px 10px;background:#f0f2f5;border:1px solid var(--line);border-right:0;border-radius:6px 0 0 6px;font-size:13px;color:var(--mut);white-space:nowrap">+91</span>
    <input id="${id}" type="tel" maxlength="10" inputmode="numeric" placeholder="10-digit number" value="${esc(m)}" ${ro} style="border-radius:0 6px 6px 0;flex:1" oninput="this.value=this.value.replace(/\\D/g,'').slice(0,10)">
   </div></div>`;
 }
@@ -1198,7 +1267,7 @@ function refreshTopbarNotifs(){
  if(dot){dot.style.display=due.length?'flex':'none';dot.textContent=String(due.length)}
  if(drop)drop.innerHTML=due.length?due.map(i=>{const c=client(i.clientId);return`<a href="#" onclick="closeTbDrops();showInvoice('${i.id}');return false">${esc(i.no)} · ${esc(c?c.name:'?')} · ${inr(i.pending)}</a>`}).join('')+'<a href="#" onclick="closeTbDrops();go(\'billing\');return false"><b>View all billing →</b></a>':'<div style="padding:10px" class="mut">No pending bills</div>';
 }
-function filterCashMode(mode){go('cashbook');setTimeout(()=>{if($('cb_mode')){$('cb_mode').value=(mode==='Cash'?'Cash':'Bank');applyCbFilters()}},50)}
+function filterCashMode(mode){_cbPendingMode=mode==='Cash'?'Cash':'Bank';go('cashbook')}
 function chartFmtNum(v){
  v=Number(v)||0;
  if(v>=100000)return (v/100000).toFixed(1)+'L';
@@ -1437,9 +1506,13 @@ async function switchBusiness(id,afterPage){
   toast('Platform view — pick a gym to load its data');
   return;
  }
- AUTH.businessId=id;persistAuth();_cloudReady=false;
+ const prevId=AUTH.businessId;
+ const prevDb=db;
+ AUTH.businessId=id;
+ _cloudReady=false;
  try{
   const source=await loadFromCloud();
+  persistAuth();
   $('sb_role').textContent=(db.settings&&db.settings.gymName)||gymDisplayName(id)||'FITO6';
   populateBizSwitcher(AUTH.businesses||[]);
   buildNav();
@@ -1447,7 +1520,12 @@ async function switchBusiness(id,afterPage){
   else if(isSuperAdmin())go('dashboard');
   else go(homePage());
   toast('Switched to '+($('sb_role').textContent||'gym')+(source==='firestore'?' · cloud':''));
- }catch(e){toast(e.message||'Failed to switch gym')}
+ }catch(e){
+  AUTH.businessId=prevId;
+  db=prevDb;
+  if(prevId)persistAuth();else{AUTH.businessId=null;localStorage.setItem(AUTHKEY,JSON.stringify({token:AUTH.token,businessId:null,user:AUTH.user,businesses:AUTH.businesses||[]}))}
+  toast(e.message||'Failed to switch gym');
+ }
 }
 async function openGymAnalytics(id){
  if(!id)return;
@@ -1493,6 +1571,9 @@ async function doLogin(){
  const email=val('lg_u').toLowerCase(),password=val('lg_p');
  if(!email||!password){showLoginError('Enter email and password');return}
  const btn=$('lg_btn');if(btn){btn.disabled=true;btn.textContent='Signing in…'}
+ const bootMsg=document.querySelector('#boot-load .boot-msg');
+ if(bootMsg)bootMsg.textContent='Signing in…';
+ document.documentElement.classList.add('session-restore');
  try{
   await initApiConfig();
   const result=await api('/auth/login',{method:'POST',body:{email,password}});
@@ -1515,7 +1596,7 @@ async function doLogin(){
   }
   persistAuth();
   USER={u:AUTH.user.email,p:'',role:mapCloudRole(AUTH.user.role,AUTH.user.email,AUTH.user.name),name:AUTH.user.name,cloudRole:AUTH.user.role,jobType:AUTH.user.jobType};
-  $('login').style.display='none';$('app').style.display='block';
+  showAppShell();hideBootLoad();
   setTopUser();
   $('sb_role').textContent=isSuper&&!AUTH.businessId?'FITO6 Platform':((db.settings&&db.settings.gymName)||(businesses&&businesses[0]&&businesses[0].name)||'FITO6');
   populateBizSwitcher(AUTH.businesses||[]);
@@ -1524,16 +1605,19 @@ async function doLogin(){
   if(isSuper&&!AUTH.businessId)toast('Platform Super Admin — create gym admins to add gyms');
  }catch(e){
   clearAuth();_cloudReady=false;
+  showLoginScreen();
   showLoginError(e.message||'Login failed');
   toast(e.message||'Login failed');
+  if(bootMsg)bootMsg.textContent='Restoring session…';
  }finally{
   if(btn){btn.disabled=false;btn.textContent='Login'}
  }
 }
 function logout(){
  try{if(db&&USER)audit('Logout','User logged out')}catch(e){}
- USER=null;_cloudReady=false;clearAuth();
- $('app').style.display='none';$('login').style.display='flex';
+ USER=null;PAGE='dashboard';_navSubId=null;_restoreBusy=false;_cloudReady=false;clearAuth();
+ try{history.replaceState(null,'',location.pathname+location.search)}catch(e){}
+ showLoginScreen();
 }
 function canPage(p){
  if(!USER||!MENUS[USER.role])return false;
@@ -1557,7 +1641,7 @@ function buildNav(){
    if(!kids.length)return'';
    const nid='navg_'+item.id;
    return `<div class="nav-group" id="${nid}"><button type="button" class="nav-head" id="navbtn_${item.id}" onclick="toggleNavGroup('${nid}',event)"><span class="nav-label">${item.label}</span><span class="nav-chevron"></span></button>
-    <div class="nav-sub">${kids.map((k,i)=>`<a href="#" class="nav-sub-item" id="navsub_${item.id}_${i}" data-page="${k.page}" onclick="closeSidebar();${k.fn||("go('"+k.page+"')")};return false">${k.label}</a>`).join('')}</div></div>`;
+    <div class="nav-sub">${kids.map((k,i)=>`<a href="#" class="nav-sub-item" id="navsub_${item.id}_${i}" data-page="${k.page}" onclick="closeSidebar();_navSubId='navsub_${item.id}_${i}';${k.fn?("go('"+k.page+"');"+k.fn):("go('"+k.page+"')")};return false">${k.label}</a>`).join('')}</div></div>`;
   }
   return `<div class="nav-group nav-single"><button type="button" class="nav-head" id="navbtn_${item.id}" onclick="closeSidebar();go('${item.page}')"><span class="nav-label">${item.label}</span></button></div>`;
  }).join('');
@@ -1566,6 +1650,19 @@ function buildNav(){
 function markNavOn(p){
  document.querySelectorAll('.nav-head').forEach(b=>b.classList.remove('on'));
  document.querySelectorAll('.nav-sub-item').forEach(a=>a.classList.remove('on'));
+ if(_navSubId){
+  const active=$(_navSubId);
+  if(active&&active.dataset.page===p){
+   active.classList.add('on');
+   const parentId=active.closest('.nav-group')?.id?.replace('navg_','');
+   if(parentId){
+    const grp=$('navg_'+parentId);if(grp)grp.classList.add('open');
+    const head=$('navbtn_'+parentId);if(head)head.classList.add('on');
+   }
+   return;
+  }
+  _navSubId=null;
+ }
  const parent=NAV_TREE.find(item=>{
   if(item.page===p)return true;
   return(item.kids||[]).some(k=>k.page===p);
@@ -1581,6 +1678,8 @@ function markNavOn(p){
  }
 }
 function go(p,arg,opts){if(!canPage(p)){toast('No permission');return} PAGE=p;
+ if(p&&p!=='search-miss'&&p!=='search'){try{localStorage.setItem(LASTPAGEKEY,p)}catch(e){}}
+ if(!opts||!opts.keepNavSub)_navSubId=null;
  closeTbDrops();markNavOn(p);
  const pages={platform:pgPlatform,gymadmins:pgGymAdmins,gymperformance:pgGymPerformance,traineranalysis:pgTrainerAnalysis,clientanalysis:pgClientAnalysis,dashboard:pgDashboard,trainer:pgTrainerPortal,clients:pgClients,leads:pgLeads,followups:pgFollowups,memberships:pgMemberships,billing:pgBilling,cashbook:pgCashbook,expenses:pgExpenses,meter:pgMeter,staff:pgStaff,attendance:pgAttendance,payroll:pgPayroll,batches:pgBatches,todos:pgTodos,reports:pgReports,accounts:pgAccounts,audit:pgAudit,settings:pgSettings,analysis:pgAnalysis,notifications:pgNotifications,trainers:pgTrainers,fitness:pgFitness,attreports:pgAttReports,help:pgHelp,appointments:pgAppointments,interviews:pgInterviews,more:pgMore};
  if(pages[p])pages[p](arg);else pgStub(PAGES[p]||p);
@@ -1671,9 +1770,9 @@ function pgDashboard(){
   ${clickStat('Renewal Upcoming',expiring7.length,'br',"go('clients')")}
   ${clickStat('Pending Dues',pendingDue.length,'bad',"go('billing')")}
   ${clickStat('Expired',expiredN,'bad',"go('clients')")}
-  ${clickStat('Irregular (14d+)',irregular,'warn',"go('attendance')")}
+  ${clickStat('Irregular (14d+)',irregular,'warn',"go('attreports')")}
   ${clickStat('Registered',registered,'ok',"go('clients')")}
-  ${clickStat('Follow-ups',db.leads.filter(l=>l.follow===t).length,'',"go('clients')")}
+  ${clickStat('Follow-ups',db.leads.filter(l=>l.follow===t).length,'',"go('followups')")}
  </div>
  <h3 style="margin-top:16px">Today's Summary</h3>
  <div class="grid g6">
@@ -1839,7 +1938,7 @@ function pgClients(){
     <option value="Inactive" ${CL_F.status==='Inactive'?'selected':''}>Inactive / Deactivated</option>
     <option value="No Plan" ${CL_F.status==='No Plan'?'selected':''}>No Subscription</option>
    </select></div>
-   <div class="field"><label>Services</label><select id="cl_service"><option value="">All Service</option>
+   <div class="field"><label>Services</label><select id="cl_service"><option value="">All Services</option>
     ${['Membership','PT','Group Class'].map(s=>`<option value="${s}" ${CL_F.service===s?'selected':''}>${s}</option>`).join('')}
    </select></div>
    <div class="field"><label>Memberships</label><select id="cl_mem"><option value="">All Membership</option>${pkgs.map(p=>`<option ${CL_F.membership===p?'selected':''}>${esc(p)}</option>`).join('')}</select></div>
@@ -2213,7 +2312,9 @@ function saveSub(clientId,wizard){
 
 /* ---- Payment / Billing form ---- */
 function payFormHTML(invId,wizard){
- const iv=db.invoices.find(i=>i.id===invId);const c=client(iv.clientId);
+ const iv=db.invoices.find(i=>i.id===invId);
+ if(!iv)return'<p class="mut">Invoice not found.</p>';
+ const c=client(iv.clientId);
  return`
  <div class="card" style="background:#fafbfd;margin-bottom:12px">
  <div class="grid g4">${stat('Invoice',iv.no)}${stat('Customer',esc(c.name))}${stat('Total',inr(iv.grand))}${stat('Pending','<b>'+inr(iv.pending)+'</b>','bad')}</div></div>
@@ -2420,11 +2521,15 @@ function invoiceHTML(iv){const c=client(iv.clientId);const st=db.settings;
  </div>
  <p style="margin-top:20px;font-size:11px">#FITO6 · This is a computer generated invoice. Thank you for training with ${esc(st.gymName)}!</p></div>`}
 function showInvoice(id){const iv=db.invoices.find(i=>i.id===id);
+ if(!iv){toast('Invoice not found');return}
  openModal(`${invoiceHTML(iv)}<div class="row" style="justify-content:flex-end;margin-top:12px">
  <button class="btn sec" onclick="closeModal()">Close</button>
  <button class="btn sec" onclick="waShare('${id}')">WhatsApp</button>
  <button class="btn" onclick="audit('Invoice Printed','${iv.no}');printHTML(document.querySelector('#modal .inv').outerHTML)">Print / PDF</button></div>`)}
-function waShare(id){const iv=db.invoices.find(i=>i.id===id);const c=client(iv.clientId);
+function waShare(id){const iv=db.invoices.find(i=>i.id===id);
+ if(!iv){toast('Invoice not found');return}
+ const c=client(iv.clientId);
+ if(!c){toast('Client not found');return}
  const msg=encodeURIComponent(`Hi ${c.name}! Thank you for your payment at ${db.settings.gymName}.\nInvoice: ${iv.no}\nAmount: ${inr(iv.grand)}\nPaid: ${inr(iv.paid)}\nBalance: ${inr(iv.pending)}\nStay fit!`);
  window.open('https://wa.me/91'+(c.wa||c.mobile).replace(/\D/g,'').slice(-10)+'?text='+msg)}
 
@@ -2756,6 +2861,7 @@ function pgCashbook(){
  <div class="grid g4" id="cb_sum" style="margin-bottom:12px"></div>
  <div class="tbl" id="cb_tbl"></div>`;
  applyCbFilters();
+ if(_cbPendingMode&&$('cb_mode')){$('cb_mode').value=_cbPendingMode;_cbPendingMode=null;applyCbFilters()}
  ['cb_month','cb_cat','cb_flow','cb_mode','cb_sales','cb_role','cb_show'].forEach(id=>{const el=$(id);if(el)el.onchange=applyCbFilters});
  if($('cb_party'))$('cb_party').oninput=()=>{clearTimeout(window._cbPartyT);window._cbPartyT=setTimeout(applyCbFilters,250)};
 }
@@ -3178,13 +3284,17 @@ function pgAttendance(){
    return`<tr><td>${a.time}</td><td>${esc(c?c.name:'?')}</td><td><span class="badge ${ok?'b-ok':'b-bad'}">${ok?'Active':'EXPIRED'}</span></td></tr>`}).join('')||'<tr><td colspan=3 class="mut">No check-ins today</td></tr>'}</table></div></div>
  <div class="card"><h3>Staff Attendance</h3><div class="tbl"><table><tr><th>Staff</th><th>Dept</th><th>Mark</th><th>Today</th></tr>${staffRows||'<tr><td colspan=4 class="mut">Add staff first</td></tr>'}</table></div></div></div>`}
 function markStaff(staffId,status){
+ const st=staffById(staffId);
+ if(!st){toast('Staff not found');return}
  let a=db.staffAtt.find(x=>x.date===today()&&x.staffId===staffId);
  if(!a){a={date:today(),staffId};db.staffAtt.push(a)}
  a.status=status;a.time=new Date().toTimeString().slice(0,5);
- save();audit('Attendance Marked',staffById(staffId).name+' → '+status);pgAttendance()}
+ save();audit('Attendance Marked',st.name+' → '+status);pgAttendance()}
 function checkinMember(){
- const q=val('ma_id').toLowerCase();
- const c=db.clients.find(x=>x.id.toLowerCase()===q||x.mobile===q);
+ const raw=val('ma_id').trim();
+ const q=raw.toLowerCase();
+ const mq=normalizeMobile(raw);
+ const c=db.clients.find(x=>x.id.toLowerCase()===q||x.mobile===raw||normalizeMobile(x.mobile)===mq);
  if(!c){toast('Member not found');return}
  db.memberAtt.push({date:today(),clientId:c.id,time:new Date().toTimeString().slice(0,5)});
  save();
@@ -4347,15 +4457,17 @@ function maybeShowUnregisteredSearch(q){
  pgUnregisteredSearch(mobile);
  return true;
 }
+function clearNavHighlight(){_navSubId=null;document.querySelectorAll('.nav-head,.nav-sub-item').forEach(el=>el.classList.remove('on'));document.querySelectorAll('.nav-group.open').forEach(el=>el.classList.remove('open'))}
 function pgUnregisteredSearch(mobile){
  mobile=normalizeMobile(mobile);
  if(!mobile){toast('Enter a valid mobile number');return}
  PAGE='search-miss';
+ clearNavHighlight();
  const gs=$('gsearch');if(gs)gs.value=mobile;
  const addMem=canPage('clients')?`<button class="btn unreg-btn" onclick="openWizard('${mobile}')">Add Member - ${esc(mobile)}</button>`:'';
  const addEnq=canPage('leads')?`<button class="btn unreg-btn" onclick="leadForm(null,{mobile:'${mobile}'})">Add Enquiry - ${esc(mobile)}</button>`:'';
  $('content').innerHTML=`<div class="unreg-search">
-  <p class="unreg-msg">Do you want to add a new enquiry.<br>Click on below button to add new enquiry.</p>
+  <p class="unreg-msg">No member or enquiry found for <b>${esc(mobile)}</b>.<br>Add one using the options below.</p>
   <div class="unreg-actions">${addMem}${addEnq}${!addMem&&!addEnq?'<p class="sub">You do not have permission to add members or enquiries.</p>':''}</div>
   <div class="row unreg-nav">
    <button class="btn sec" onclick="go('clients')">Back</button>
@@ -4385,6 +4497,9 @@ function doSearch(){
  if(!cs.length&&!leads.length&&!ivs.length&&!sts.length&&isPhoneQuery(raw)){
   pgUnregisteredSearch(mobile);return;
  }
+ PAGE='search';
+ clearNavHighlight();
+ pushAppHistory(appHistState(PAGE,false),false);
  $('content').innerHTML=`<h2>Search: "${esc(q)}"</h2>
  <h3 style="margin-top:14px">Enquiries / Leads (${leads.length})</h3>
  <div class="tbl"><table><tr><th>Code</th><th>Date</th><th>Name</th><th>Mobile</th><th>Status</th><th>Source</th><th></th></tr>
@@ -4433,16 +4548,25 @@ function seedDemo(){
 
 /* ================= INIT ================= */
 (async function boot(){
- await initApiConfig();
  setupHistoryNav();
  restoreAuth();
+ await initApiConfig();
  if(AUTH.token&&AUTH.user){
   try{
-   await enterAppFromAuth({quiet:false});
+   await enterAppFromAuth({quiet:true});
   }catch(e){
-   if(isAuthError(e)||(e&&e.message==='No business context')){clearAuth();_cloudReady=false}
-   else console.warn('Session restore failed',e);
+   if(isAuthError(e)||(e&&e.message==='No business context')){
+    clearAuth();_cloudReady=false;
+    showLoginScreen();
+    if(isAuthError(e))toast('Session expired — please sign in again');
+   }else{
+    console.warn('Session restore failed',e);
+    showLoginScreen();
+    toast('Could not restore session — please sign in again');
+   }
   }
+ }else{
+  showLoginScreen();
  }
  const pw=$('lg_p');if(pw)pw.addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
  document.addEventListener('click',e=>{if(!e.target.closest('.tb-action')&&!e.target.closest('.tb-drop'))closeTbDrops()});

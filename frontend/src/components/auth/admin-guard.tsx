@@ -28,6 +28,12 @@ export function AdminGuard({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!isAdmin(user)) return null;
+  if (!isAdmin(user)) {
+    return (
+      <div className="p-6">
+        <p className="text-sm text-muted-foreground">Redirecting…</p>
+      </div>
+    );
+  }
   return <>{children}</>;
 }
