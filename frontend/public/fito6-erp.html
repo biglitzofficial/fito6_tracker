@@ -291,6 +291,37 @@ hr.sep{border:none;border-top:1px solid var(--line);margin:14px 0}
 .rep-stat .v{font-size:1.2rem;font-weight:800;margin-top:4px;letter-spacing:-.03em}
 @media(max-width:900px){.ana-kpi-grid,.ana-split,.ana-metric-row{grid-template-columns:repeat(2,1fr)}.rep-layout{grid-template-columns:1fr}.rep-nav{max-height:none;display:grid;grid-template-columns:repeat(2,1fr);gap:6px}}
 @media(max-width:600px){.ana-kpi-grid,.ana-metric-row,.rep-stats{grid-template-columns:1fr}}
+/* MEMBER PIPELINE / SALES REPORTS / TRACKER */
+.pipe-dots{display:inline-flex;gap:5px;align-items:center;vertical-align:middle}
+.pipe-dot{width:11px;height:11px;border-radius:50%;background:#e2e8f0;border:2px solid #fff;box-shadow:0 0 0 1px #cbd5e1;opacity:.45}
+.pipe-dot.on{opacity:1;box-shadow:0 0 0 2px #fff,0 0 0 3px currentColor}
+.pipe-grey.on{background:#64748b;color:#64748b}
+.pipe-red.on{background:#ef4444;color:#ef4444}
+.pipe-yellow.on{background:#eab308;color:#eab308}
+.pipe-green.on{background:#10b981;color:#10b981}
+.pipe-legend{display:flex;flex-wrap:wrap;gap:12px;font-size:11px;font-weight:600;color:var(--mut);margin:8px 0 12px}
+.pipe-legend span{display:inline-flex;align-items:center;gap:5px}
+.pipe-stage-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:12px 0}
+.pipe-stage{padding:10px;border-radius:10px;border:1px solid var(--line);text-align:center;font-size:11px;font-weight:700;cursor:pointer;transition:all .15s;background:#f8fafc}
+.pipe-stage.on-grey{border-color:#64748b;background:#f1f5f9;color:#334155}
+.pipe-stage.on-red{border-color:#ef4444;background:#fef2f2;color:#991b1b}
+.pipe-stage.on-yellow{border-color:#eab308;background:#fefce8;color:#854d0e}
+.pipe-stage.on-green{border-color:#10b981;background:#ecfdf5;color:#065f46}
+.dash-rep-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:18px}
+.dash-rep-card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px;box-shadow:var(--shadow)}
+.dash-rep-card h4{font-size:13px;font-weight:800;margin:0 0 10px;color:var(--ink);text-transform:none;letter-spacing:-.01em}
+.dash-rep-kpi{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:10px}
+.dash-rep-kpi .n{font-size:1.5rem;font-weight:800;letter-spacing:-.03em}
+.dash-rep-kpi .a{font-size:12px;font-weight:700;color:var(--ok)}
+.dash-period{display:flex;gap:4px;margin-bottom:8px}
+.dash-period button{padding:4px 10px;border-radius:6px;border:1px solid var(--line);background:#fff;font-size:11px;font-weight:700;color:var(--mut);cursor:pointer}
+.dash-period button.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+.lead-tabs{display:flex;gap:6px;margin:12px 0;flex-wrap:wrap}
+.lead-tabs button{padding:8px 14px;border-radius:8px;border:1px solid var(--line);background:#fff;font-size:12px;font-weight:700;color:var(--mut);cursor:pointer}
+.lead-tabs button.on{background:var(--dark);color:#fff;border-color:var(--dark)}
+.trk-status{display:inline-block;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:800;text-transform:uppercase}
+.trk-open{background:#fef3c7;color:#b45309}.trk-done{background:#d1fae5;color:#065f46}.trk-hold{background:#f1f5f9;color:#64748b}
+@media(max-width:900px){.dash-rep-grid,.pipe-stage-row{grid-template-columns:1fr 1fr}}
 </style>
 </head>
 <body>
@@ -553,10 +584,10 @@ function defaults(){return{
   expCats:['Rent','Electricity','Salary','Petrol','Marketing','Maintenance','Repairs','Office Expense','Cleaning','Stationery','Equipment Purchase','Water','Internet','Tea','Misc'],
   incCats:['Product Sales','Owner Investment','Misc Income','Interest','Other Income'],
   payModes:['Cash','UPI','Card'],bankPayModes:['UPI','Card'],openingCash:0,openingBank:0,
-  adminIds:{superAdmin:'',admin:''}},
+  adminIds:{superAdmin:'',admin:''},branchDocs:[]},
  users:[],
- seq:{client:1000,invoice:1,receipt:1,voucher:1,staff:100,trainer:0,payroll:0,clientByYear:{},clientByBranch:{}},
- clients:[],subs:[],invoices:[],cashbook:[],staff:[],staffAtt:[],memberAtt:[],payroll:[],audit:[],leads:[],batches:[],classes:[],todos:[],meterReadings:[],appointments:[],interviews:[]};}
+ seq:{client:1000,invoice:1,receipt:1,voucher:1,staff:100,trainer:0,payroll:0,clientByBranch:{},clientByYear:{}},
+ clients:[],subs:[],invoices:[],cashbook:[],staff:[],staffAtt:[],memberAtt:[],payroll:[],audit:[],leads:[],batches:[],classes:[],todos:[],meterReadings:[],appointments:[],interviews:[],digitalTracker:[]};}
 
 function cacheLocal(){try{localStorage.setItem(DBKEY,JSON.stringify(db))}catch(e){}}
 function loadLocalCache(){try{return JSON.parse(localStorage.getItem(DBKEY))}catch(e){return null}}
@@ -624,7 +655,13 @@ function ensurePkgSettings(){
  if(!Array.isArray(db.trainerRequests))db.trainerRequests=[];
  if(!Array.isArray(db.appointments))db.appointments=[];
  if(!Array.isArray(db.interviews))db.interviews=[];
- (db.clients||[]).forEach(c=>{if(!c.status)c.status='Active';if(c.billRep&&!c.billRepFrozen)c.billRepFrozen=true});
+ if(!Array.isArray(db.digitalTracker))db.digitalTracker=[];
+ if(!Array.isArray(db.settings.branchDocs))db.settings.branchDocs=[];
+ (db.clients||[]).forEach(c=>{
+  if(!c.status)c.status='Active';
+  if(c.billRep&&!c.billRepFrozen)c.billRepFrozen=true;
+  ensureClientPipeline(c);
+ });
  (db.cashbook||[]).forEach(e=>{if(!e.status)e.status='Active'});
 }
 
@@ -1464,22 +1501,99 @@ function sortClientsDateWise(list){
  });
 }
 function activeClients(){return(db.clients||[]).filter(c=>c.status!=='Inactive')}
+const ONLINE_LEAD_SOURCES=['Website','Facebook','Instagram','Google','WhatsApp','Call'];
+function isOnlineLead(l){return ONLINE_LEAD_SOURCES.includes(l.source||'')}
+function ensureClientPipeline(c){
+ if(!c.pipeline)c.pipeline={feesPaid:false,inbody:false,nutrition:false,workoutCard:false};
+ const invs=(db.invoices||[]).filter(i=>i.clientId===c.id);
+ if(invs.some(i=>Number(i.paid||0)>0))c.pipeline.feesPaid=true;
+ return c.pipeline;
+}
+function pipelineDotsHTML(c){
+ const p=ensureClientPipeline(c);
+ return `<span class="pipe-dots"><span class="pipe-dot pipe-grey ${p.feesPaid?'on':''}" title="Fees Paid"></span><span class="pipe-dot pipe-red ${p.inbody?'on':''}" title="InBody"></span><span class="pipe-dot pipe-yellow ${p.nutrition?'on':''}" title="Nutrition"></span><span class="pipe-dot pipe-green ${p.workoutCard?'on':''}" title="Workout Card"></span></span>`;
+}
+function pipelineStageHTML(c){
+ const p=ensureClientPipeline(c);
+ const can=canManageStaff()||USER.role==='frontoffice';
+ const mk=(k,label,cls,on)=>`<div class="pipe-stage ${on?'on-'+cls:''}" ${can?`onclick="togglePipeline('${c.id}','${k}')"`:''}><span class="pipe-dot pipe-${cls} ${on?'on':''}" style="display:block;margin:0 auto 6px"></span>${label}</div>`;
+ return `<div class="pipe-legend"><span><span class="pipe-dot pipe-grey on"></span>Fees Paid</span><span><span class="pipe-dot pipe-red on"></span>InBody</span><span><span class="pipe-dot pipe-yellow on"></span>Nutrition</span><span><span class="pipe-dot pipe-green on"></span>Workout Card</span></div><div class="pipe-stage-row">${mk('feesPaid','Fees Paid','grey',p.feesPaid)}${mk('inbody','InBody','red',p.inbody)}${mk('nutrition','Nutrition','yellow',p.nutrition)}${mk('workoutCard','Workout Card','green',p.workoutCard)}</div>`;
+}
+function togglePipeline(cId,key){
+ const c=client(cId);if(!c)return;
+ ensureClientPipeline(c);
+ c.pipeline[key]=!c.pipeline[key];
+ save();audit('Pipeline Updated',c.id+' · '+key);openClient(cId);
+}
+window._dashPeriod=window._dashPeriod||'day';
+window._salesReport={type:'membership',period:'day',employee:''};
+function salesPeriodRange(period){
+ const t=today(),m=thisMonth();
+ if(period==='day')return[t,t];
+ if(period==='week')return[addDays(t,-6),t];
+ return[m+'-01',m+'-31'];
+}
+function salesReportFilter(type){
+ return s=>{
+  if(type==='membership')return s.type==='Membership'&&s.kind==='New';
+  if(type==='renewal')return s.type==='Membership'&&s.kind==='Renew';
+  if(type==='pt')return s.type==='PT'&&s.kind==='New';
+  if(type==='pt_renewal')return s.type==='PT'&&s.kind==='Renew';
+  return false;
+ };
+}
+function subEmployee(s){
+ const iv=(db.invoices||[]).find(i=>i.subId===s.id||i.clientId===s.clientId);
+ return (iv&&(iv.billRep||iv.by))||s.billRep||'—';
+}
+function salesReportRows(type,period,employee){
+ const [from,to]=salesPeriodRange(period||'day');
+ const filt=salesReportFilter(type);
+ let rows=(db.subs||[]).filter(s=>{
+  const d=(s.created||s.start||'').slice(0,10);
+  if(d<from||d>to)return false;
+  return filt(s);
+ });
+ if(employee)rows=rows.filter(s=>subEmployee(s)===employee);
+ return rows.map(s=>{
+  const c=client(s.clientId);
+  return {date:s.created||s.start,member:c?c.name:'?',id:s.clientId,package:s.pkg,amount:s.final||0,employee:subEmployee(s),sub:s};
+ });
+}
+function salesReportSummary(type,period,employee){
+ const rows=salesReportRows(type,period,employee);
+ return {count:rows.length,amount:rows.reduce((a,r)=>a+r.amount,0),rows};
+}
+function dashReportCard(type,label){
+ const period=window._dashPeriod||'day';
+ const sum=salesReportSummary(type,period);
+ return `<div class="dash-rep-card"><h4>${esc(label)}</h4>
+  <div class="dash-period">${['day','week','month'].map(p=>`<button type="button" class="${period===p?'on':''}" onclick="window._dashPeriod='${p}';pgDashboard()">${p==='day'?'Day':p==='week'?'Week':'Month'}</button>`).join('')}</div>
+  <div class="dash-rep-kpi"><div><div class="n">${sum.count}</div><div class="sub" style="font-weight:600;margin-top:2px">transactions</div></div><div class="a">${inr(sum.amount)}</div></div>
+  <button class="btn sm sec" onclick="window._salesReport={type:'${type}',period:'${period}',employee:''};go('salesreport','${type}')">View More →</button></div>`;
+}
+function billRepOptions(){
+ return [...new Set((db.invoices||[]).map(i=>i.billRep||i.by).filter(Boolean))].sort();
+}
+function readFileAsDataUrl(file,cb){
+ const r=new FileReader();r.onload=()=>cb(r.result);r.readAsDataURL(file);
+}
 function isGroupClassType(t){return/group\s*class|dance|boxing|zumba|yoga/i.test(t||'')}
 
 /* ================= AUTH & NAV ================= */
 let USER=null,PAGE='dashboard';
-const ALL_PAGES=['platform','franchise-analytics','franchise-performance','franchise-gym','gymadmins','gymperformance','traineranalysis','clientanalysis','dashboard','leads','followups','clients','analysis','memberships','billing','batches','accounts','cashbook','expenses','notifications','trainers','trainer','fitness','staff','attendance','attreports','settings','help','appointments','payroll','todos','reports','audit','interviews','more'];
+const ALL_PAGES=['platform','franchise-analytics','franchise-performance','franchise-gym','gymadmins','gymperformance','traineranalysis','clientanalysis','dashboard','salesreport','leads','followups','clients','analysis','memberships','billing','batches','accounts','cashbook','expenses','notifications','trainers','trainer','fitness','staff','attendance','attreports','settings','help','appointments','payroll','todos','reports','audit','interviews','digitaltracker','more'];
 const SUPERADMIN_PAGES=['platform','franchise-gym','gymadmins','add-gym'];
 const GYM_ADMIN_PAGES=ALL_PAGES.filter(p=>!['platform','gymadmins','franchise-analytics','franchise-performance','franchise-gym'].includes(p));
 const MENUS={
  superadmin:SUPERADMIN_PAGES,
- gymadmin:['dashboard','traineranalysis','clientanalysis',...GYM_ADMIN_PAGES.filter(p=>!['dashboard','traineranalysis','clientanalysis'].includes(p))],
- frontoffice:['dashboard','leads','followups','clients','analysis','gymperformance','memberships','billing','batches','accounts','cashbook','expenses','notifications','trainers','fitness','staff','attendance','attreports','appointments','todos','help','more','settings','reports','interviews'],
- accountant:['dashboard','analysis','gymperformance','accounts','cashbook','expenses','attendance','attreports','settings','payroll','reports','fitness','help','more','billing'],
+ gymadmin:['dashboard','salesreport','traineranalysis','clientanalysis',...GYM_ADMIN_PAGES.filter(p=>!['dashboard','salesreport','traineranalysis','clientanalysis'].includes(p))],
+ frontoffice:['dashboard','salesreport','leads','followups','clients','analysis','gymperformance','memberships','billing','batches','accounts','cashbook','expenses','notifications','trainers','fitness','staff','attendance','attreports','appointments','todos','help','more','settings','reports','interviews','digitaltracker'],
+ accountant:['dashboard','salesreport','analysis','gymperformance','accounts','cashbook','expenses','attendance','attreports','settings','payroll','reports','fitness','help','more','billing'],
  trainer:['trainer','clients','attendance','batches','todos','appointments','help']};
 const PAGES={
  platform:'Franchise Dashboard',gymadmins:'Gyms & Admins','franchise-analytics':'Gym Analytics','franchise-performance':'Network Performance','franchise-gym':'Gym Detail',gymperformance:'Gym Performance',traineranalysis:'Trainer Analysis',clientanalysis:'Client Analysis',
- dashboard:'Dashboard',leads:'Enquiry',followups:'Follow Ups',clients:'Members',analysis:'Analysis',
+ dashboard:'Dashboard',salesreport:'Sales Reports',digitaltracker:'Digital Tracker',leads:'Enquiry',followups:'Follow Ups',clients:'Members',analysis:'Analysis',
  memberships:'Memberships',billing:'Billing',batches:'Batches & Classes',accounts:'Accounts',cashbook:'Cashbook',
  expenses:'Expenses',notifications:'Notifications',trainers:'Trainers',trainer:'Trainer Portal',
  fitness:'Fitness Center',staff:'Staff',attendance:'Attendance',attreports:'Attendance Reports',
@@ -1495,9 +1609,12 @@ const NAV_TREE=[
  {id:'dashboard',label:'Dashboard',page:'dashboard'},
  {id:'enquiry',label:'Enquiry',kids:[
   {label:'Leads / Enquiries',page:'leads'},
+  {label:'Online Enquiries',page:'leads',fn:"window._leadTab='online';go('leads')"},
+  {label:'Offline Enquiries',page:'leads',fn:"window._leadTab='offline';go('leads')"},
   {label:'Add Enquiry',page:'leads',fn:'leadForm()'},
   {label:'Import Enquiries CSV',page:'leads',fn:"openYdlImport('leads')"},
-  {label:'Follow Ups',page:'followups'}
+  {label:'Follow Ups',page:'followups'},
+  {label:'Digital Tracker',page:'digitaltracker'}
  ]},
  {id:'members',label:'Members',kids:[
   {label:'My Members',page:'clients'},
@@ -1513,11 +1630,13 @@ const NAV_TREE=[
   {label:'Subscription Types',page:'settings'}
  ]},
  {id:'analysis',label:'Admin Panel',kids:[
+  {label:'Sales Reports',page:'salesreport'},
   {label:'Trainer Analysis',page:'traineranalysis'},
   {label:'Client Analysis',page:'clientanalysis'},
   {label:'Gym Performance',page:'gymperformance'},
   {label:'Reports & Charts',page:'analysis'},
-  {label:'Classic Reports',page:'reports'}
+  {label:'Classic Reports',page:'reports'},
+  {label:'Digital Tracker',page:'digitaltracker'}
  ]},
  {id:'batches',label:'Batches & Classes',kids:[
   {label:'Batches / Classes',page:'batches'},
@@ -1866,7 +1985,7 @@ function go(p,arg,opts){if(!canPage(p)){toast('No permission');return} PAGE=p;
  if(p&&p!=='search-miss'&&p!=='search'){try{localStorage.setItem(LASTPAGEKEY,p)}catch(e){}}
  if(!opts||!opts.keepNavSub)_navSubId=null;
  closeTbDrops();markNavOn(p);
- const pages={platform:pgPlatform,gymadmins:pgGymAdmins,'add-gym':pgAddGym,'franchise-analytics':pgFranchiseAnalytics,'franchise-performance':pgFranchisePerformance,'franchise-gym':pgFranchiseGym,gymperformance:pgGymPerformance,traineranalysis:pgTrainerAnalysis,clientanalysis:pgClientAnalysis,dashboard:pgDashboard,trainer:pgTrainerPortal,clients:pgClients,leads:pgLeads,followups:pgFollowups,memberships:pgMemberships,billing:pgBilling,cashbook:pgCashbook,expenses:pgExpenses,meter:pgMeter,staff:pgStaff,attendance:pgAttendance,payroll:pgPayroll,batches:pgBatches,todos:pgTodos,reports:pgReports,accounts:pgAccounts,audit:pgAudit,settings:pgSettings,analysis:pgAnalysis,notifications:pgNotifications,trainers:pgTrainers,fitness:pgFitness,attreports:pgAttReports,help:pgHelp,appointments:pgAppointments,interviews:pgInterviews,more:pgMore};
+ const pages={platform:pgPlatform,gymadmins:pgGymAdmins,'add-gym':pgAddGym,'franchise-analytics':pgFranchiseAnalytics,'franchise-performance':pgFranchisePerformance,'franchise-gym':pgFranchiseGym,gymperformance:pgGymPerformance,traineranalysis:pgTrainerAnalysis,clientanalysis:pgClientAnalysis,dashboard:pgDashboard,salesreport:pgSalesReport,digitaltracker:pgDigitalTracker,trainer:pgTrainerPortal,clients:pgClients,leads:pgLeads,followups:pgFollowups,memberships:pgMemberships,billing:pgBilling,cashbook:pgCashbook,expenses:pgExpenses,meter:pgMeter,staff:pgStaff,attendance:pgAttendance,payroll:pgPayroll,batches:pgBatches,todos:pgTodos,reports:pgReports,accounts:pgAccounts,audit:pgAudit,settings:pgSettings,analysis:pgAnalysis,notifications:pgNotifications,trainers:pgTrainers,fitness:pgFitness,attreports:pgAttReports,help:pgHelp,appointments:pgAppointments,interviews:pgInterviews,more:pgMore};
  if(pages[p])pages[p](arg);else pgStub(PAGES[p]||p);
  refreshTopbarNotifs();
  if(!opts||(!opts.hist&&!opts.silent))pushAppHistory(appHistState(p,$('modalwrap')&&$('modalwrap').style.display==='flex'),false)}
@@ -1994,11 +2113,19 @@ function pgDashboard(){
    ${(()=>{const tot=Object.values(refMap).reduce((s,n)=>s+n,0)||1;return Object.entries(refMap).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<tr><td>${esc(k)}</td><td class="r">${v}</td><td class="r">${Math.round(v*100/tot)}%</td></tr>`).join('')||'<tr><td colspan=3 class="mut">No traffic data</td></tr>'})()}
    </table></div></div>
  </div>
+ <h3 style="margin-top:18px">Sales Reports</h3><p class="sub" style="margin-bottom:10px">Membership · Renewal · PT · PT Renewal — Day / Week / Month comparison · click View More for full list</p>
+ <div class="dash-rep-grid">
+  ${dashReportCard('membership','New Membership')}
+  ${dashReportCard('renewal','Membership Renewal')}
+  ${dashReportCard('pt','Personal Training (PT)')}
+  ${dashReportCard('pt_renewal','PT Renewal')}
+ </div>
  <div class="grid g2" style="margin-top:18px">
   <div class="card"><h3>Sales Leaderboard (${m})</h3><div class="tbl"><table><tr><th>Sold By</th><th class="r">Today</th><th class="r">This Month</th></tr>
-   ${Object.entries(lb).sort((a,b)=>b[1].m-a[1].m).map(([k,v])=>`<tr><td>${esc(k)}</td><td class="r">${inr(v.t)}</td><td class="r bold">${inr(v.m)}</td></tr>`).join('')||'<tr><td colspan=3 class="mut">No sales yet this month</td></tr>'}</table></div></div>
+   ${Object.entries(lb).sort((a,b)=>b[1].m-a[1].m).map(([k,v])=>`<tr><td class="clickable" onclick="window._salesReport={type:'membership',period:'month',employee:'${esc(k).replace(/'/g,"\\'")}'};go('salesreport','membership')">${esc(k)}</td><td class="r">${inr(v.t)}</td><td class="r bold">${inr(v.m)}</td></tr>`).join('')||'<tr><td colspan=3 class="mut">No sales yet this month</td></tr>'}</table></div></div>
   <div class="card"><h3>⏳ Expiring in 7 days</h3><div class="tbl"><table><tr><th>Member</th><th>Package</th><th>Ends</th><th></th></tr>
-   ${expiring7.slice().sort((a,b)=>a.end.localeCompare(b.end)).slice(0,8).map(s=>{const c=client(s.clientId);return`<tr><td class="clickable" onclick="openClient('${s.clientId}')">${esc(c?c.name:'?')}</td><td>${esc(s.pkg)}</td><td>${fmtD(s.end)}</td><td><button class="btn sm" onclick="openSubForm('${s.clientId}','Renew Membership')">Renew</button></td></tr>`}).join('')||'<tr><td colspan=4 class="mut">Nothing expiring soon</td></tr>'}</table></div></div>
+   ${expiring7.slice().sort((a,b)=>a.end.localeCompare(b.end)).slice(0,8).map(s=>{const c=client(s.clientId);return`<tr><td class="clickable" onclick="openClient('${s.clientId}')">${esc(c?c.name:'?')}</td><td>${esc(s.pkg)}</td><td>${fmtD(s.end)}</td><td><button class="btn sm" onclick="openSubForm('${s.clientId}','Renew Membership')">Renew</button></td></tr>`}).join('')||'<tr><td colspan=4 class="mut">Nothing expiring soon</td></tr>'}
+   </table></div><button class="btn sm sec" style="margin-top:8px" onclick="CL_F.status='Active';go('clients')">View More Members →</button></div>
  </div>`;
 }
 function stat(l,v,cls){return`<div class="card stat ${cls||''}"><div class="l">${l}</div><div class="v">${v}</div></div>`}
@@ -2087,6 +2214,7 @@ function pgClients(){
    <td class="clickable" onclick="openClient('${c.id}')">${photo}${esc(c.name)}</td>
    <td>${formatMobile(c.mobile)}</td><td>${esc(c.email||'')}</td>
    <td>${pl?fmtD(pl.start):'-'}</td><td>${pl?fmtD(pl.end):'-'}</td>
+   <td>${pipelineDotsHTML(c)}</td>
    <td><span class="badge ${badge}">${st}</span></td>
    <td>${trainerCell(c,ptCounts)}</td><td>${esc(c.ref||'-')}</td>
    <td class="r" style="white-space:nowrap">
@@ -2144,8 +2272,8 @@ function pgClients(){
  <div class="sub" style="margin-bottom:8px">Showing <b>${list.length}</b> members · sorted by join date (newest first)</div>
  <div class="tbl"><table id="cl_tbl">
   <tr><th><input type="checkbox" onclick="document.querySelectorAll('.cl_sel').forEach(c=>c.checked=this.checked)"></th>
-  <th>ID</th><th>Name</th><th>Mobile</th><th>Email</th><th>Sub Start</th><th>Sub End</th><th>Status</th><th>Trainer (PT count)</th><th>Source</th><th></th></tr>
-  ${rows||'<tr><td colspan=11 class="mut">No members match filters</td></tr>'}
+  <th>ID</th><th>Name</th><th>Mobile</th><th>Email</th><th>Sub Start</th><th>Sub End</th><th>Pipeline</th><th>Status</th><th>Trainer (PT count)</th><th>Source</th><th></th></tr>
+  ${rows||'<tr><td colspan=12 class="mut">No members match filters</td></tr>'}
  </table></div>`;
 }
 function filterClients(){CL_F.q=val('cl_q')||val('cl_f')||'';applyClientFilters()}
@@ -2276,7 +2404,7 @@ function wizSave1(goNext){
    if(goNext){WIZ.step=2;renderWizard()}
    return;
   }
-  const c={id:'TMP'+Date.now(),...data,photo:photo||'',billRepId:br.billRepId,billRep:br.billRep,billRepFrozen:true,joined:today(),branch:db.settings.branch,notes:[],status:'Active'};
+  const c={id:'TMP'+Date.now(),...data,photo:photo||'',billRepId:br.billRepId,billRep:br.billRep,billRepFrozen:true,joined:today(),branch:db.settings.branch,notes:[],status:'Active',pipeline:{feesPaid:false,inbody:false,nutrition:false,workoutCard:false}};
   const h=parseFloat(c.ht),w=parseFloat(c.wt);if(h&&w)c.bmi=(w/((h/100)**2)).toFixed(1);
   db.clients.push(c);
   renumberClientIdsByJoinDate({prefix:clientIdPrefix(c.branch,c.joined)});
@@ -2548,6 +2676,7 @@ function savePayment(invId){
   db.cashbook.push({id:'CB'+Date.now()+Math.random().toString(36).slice(2,6),date:today(),type:'in',no:rc,particulars:iv.desc,category:iv.desc.split(' ·')[0]+' Payment',party:c.name,mode:p.mode,amount:p.amt,by,notes:'Invoice '+iv.no,salesType,roleCat:USER&&USER.role==='superadmin'?'Master Admin':(USER&&USER.role==='trainer'?'Trainer':(USER&&USER.role==='accountant'?'Admin':'Staff')),status:'Active'});
  });
  iv.paid+=totalPay;iv.pending=+(iv.grand-iv.paid).toFixed(2);iv.dueDate=val('p_due');
+ if(c){ensureClientPipeline(c);c.pipeline.feesPaid=true}
  save();audit('Payment Received',c.name+' · '+iv.no+' · '+inr(totalPay));
  toast('Payment saved — cashbook, ledger & dashboard updated');
  closeModal();showInvoice(iv.id)}
@@ -2737,6 +2866,8 @@ function openClient(id){const c=client(id);if(!c)return;
  <div class="sub" style="margin-top:4px"><b>Trainer:</b> ${esc(c.trainer||'—')}${c.trainer&&ptN?` (${ptN} PT clients)`:''} · <b>Bill Rep:</b> ${esc(c.billRep||'—')}${c.billRepFrozen?' <span class="mut">(locked)</span>':''}</div></div></div>
  <div class="row" style="gap:8px">${c.status!=='Inactive'?`<button class="btn" onclick="openSubForm('${id}')">New / Renew Plan</button>`:''}<button class="btn sec" onclick="openClientPhotoEdit('${id}')">Update Photo</button><button class="btn sec" onclick="editClientPersonal('${id}')">Edit Address</button><button class="btn sec" onclick="openTrainerChangeRequest('${id}')">Change Trainer Request</button>${c.status!=='Inactive'?`<button class="btn sec dgr" onclick="deactivateClient('${id}')">Deactivate</button>`:`<button class="btn sec" onclick="activateClient('${id}');openClient('${id}')">Activate</button>`}</div></div>
  <div class="grid g4" style="margin:12px 0">${stat('Sub Start',pl?fmtD(pl.start):'-','br')}${stat('Sub End',pl?fmtD(pl.end):'-','br')}${stat('Total Paid',inr(paid),'ok')}${stat('Outstanding',inr(due),due>0?'bad':'')}</div>
+ <h3>Onboarding Pipeline</h3><p class="sub" style="margin-bottom:8px">Grey = Fees Paid · Red = InBody · Yellow = Nutrition · Green = Workout Card — click to toggle</p>
+ ${pipelineStageHTML(c)}
  ${canAssignTrainer()?`<div class="row" style="align-items:flex-end;gap:10px;margin-bottom:12px;flex-wrap:wrap">${trainerAssignSelectHTML(c,'cp_trainer')}<button class="btn sm" onclick="saveClientTrainer('${id}')">Save Trainer</button><div class="sub" style="margin:0;padding-bottom:8px">Pick trainer staff · ${ptN||0} PT clients under selected trainer</div></div>`:`<div class="grid g4" style="margin-bottom:12px">${stat('Trainer',esc(c.trainer||'-'),'br')}${stat('Bill Rep',esc(c.billRep||'-'),'br')}${stat('PT Clients',ptN||'-')}${stat('Goal',esc(c.goal||'-'))}</div>`}
  ${canAssignTrainer()?`<div class="grid g3" style="margin-bottom:12px">${stat('Bill Rep',esc(c.billRep||'-'),'br')}${stat('PT Clients',ptN||'-')}${stat('Goal',esc(c.goal||'-'))}</div>`:''}
  <h3>Subscriptions</h3><div class="tbl"><table><tr><th>Package Type</th><th>Service</th><th>Start</th><th>End</th><th class="r">Amount</th><th>Status</th><th></th></tr>
@@ -3907,24 +4038,100 @@ function pgTrainerPortal(){
  </div>`;
 }
 
+/* ================= SALES REPORTS ================= */
+const SALES_REPORT_TYPES={membership:'New Membership',renewal:'Membership Renewal',pt:'Personal Training (PT)',pt_renewal:'PT Renewal'};
+function pgSalesReport(type){
+ type=type||window._salesReport.type||'membership';
+ window._salesReport.type=type;
+ const sr=window._salesReport;
+ const period=sr.period||'day';
+ const employee=sr.employee||'';
+ const reps=billRepOptions();
+ const rows=salesReportRows(type,period,employee);
+ const sum=salesReportSummary(type,period,employee);
+ const [from,to]=salesPeriodRange(period);
+ $('content').innerHTML=`${superPlatformBar()}<div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px"><div><h2>${esc(SALES_REPORT_TYPES[type]||'Sales Report')}</h2><div class="sub">${fmtD(from)} → ${fmtD(to)} · ${sum.count} records · ${inr(sum.amount)}</div></div><button class="btn sec" onclick="go('dashboard')">← Dashboard</button></div>
+ <div class="tabs">${Object.entries(SALES_REPORT_TYPES).map(([k,l])=>`<button type="button" class="${type===k?'on':''}" onclick="window._salesReport.type='${k}';pgSalesReport('${k}')">${esc(l)}</button>`).join('')}</div>
+ <div class="ana-filter" style="margin-top:12px">
+  <div class="field"><label>Period</label><select id="sr_period" onchange="window._salesReport.period=this.value;pgSalesReport('${type}')"><option value="day" ${period==='day'?'selected':''}>Day (Today)</option><option value="week" ${period==='week'?'selected':''}>Week (Last 7 days)</option><option value="month" ${period==='month'?'selected':''}>Month (This month)</option></select></div>
+  <div class="field"><label>Employee / Bill Rep</label><select id="sr_emp" onchange="window._salesReport.employee=this.value;pgSalesReport('${type}')"><option value="">All Employees</option>${reps.map(r=>`<option value="${esc(r)}" ${employee===r?'selected':''}>${esc(r)}</option>`).join('')}</select></div>
+  <div class="field" style="margin-left:auto"><label>&nbsp;</label><button class="btn sec sm" onclick="csvExport([['Date','Member','Package','Amount','Employee'],...salesReportRows('${type}','${period}','${employee.replace(/'/g,"\\'")}').map(r=>[r.date,r.member,r.package,r.amount,r.employee])],'${type}_report')">Export CSV</button></div>
+ </div>
+ <div class="rep-stats"><div class="rep-stat"><div class="k">Count</div><div class="v">${sum.count}</div></div><div class="rep-stat"><div class="k">Total Amount</div><div class="v">${inr(sum.amount)}</div></div><div class="rep-stat"><div class="k">Period</div><div class="v">${period==='day'?'Day':period==='week'?'Week':'Month'}</div></div></div>
+ <div class="ana-table-wrap"><table><tr><th>Date</th><th>Member</th><th>Package</th><th class="r">Amount</th><th>Employee</th><th></th></tr>
+ ${rows.map(r=>`<tr><td>${fmtD(r.date)}</td><td class="bold clickable" onclick="openClient('${r.id}')">${esc(r.member)}</td><td>${esc(r.package)}</td><td class="r bold">${inr(r.amount)}</td><td>${esc(r.employee)}</td><td><button class="btn sm sec" onclick="openClient('${r.id}')">Profile</button></td></tr>`).join('')||'<tr><td colspan=6 class="mut">No records for selected filters</td></tr>'}
+ </table></div>`;
+}
+
+/* ================= DIGITAL TRACKER ================= */
+function pgDigitalTracker(){
+ if(!db.digitalTracker)db.digitalTracker=[];
+ const rows=db.digitalTracker.slice().reverse();
+ $('content').innerHTML=`${superPlatformBar()}<div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px"><div><h2>Digital Tracker</h2><div class="sub">Track InBody, nutrition, workout cards, follow-ups and gym activities</div></div><button class="btn" onclick="trackerForm()">+ Add Record</button></div>
+ <div class="ana-table-wrap"><table><tr><th>Date</th><th>Type</th><th>Title</th><th>Member / Ref</th><th>Assigned</th><th>Status</th><th></th></tr>
+ ${rows.map(t=>`<tr><td>${fmtD(t.date)}</td><td class="bold">${esc(t.type)}</td><td>${esc(t.title)}</td><td>${t.clientId?`<span class="clickable" onclick="openClient('${t.clientId}')">${esc(t.reference||client(t.clientId)?.name||t.clientId)}</span>`:esc(t.reference||'—')}</td><td>${esc(t.assignedTo||'—')}</td><td><span class="trk-status trk-${(t.status||'open').toLowerCase()}">${esc(t.status||'Open')}</span></td><td class="r"><button class="btn sm sec" onclick="trackerForm('${t.id}')">Edit</button></td></tr>`).join('')||'<tr><td colspan=7 class="mut">No tracker records yet</td></tr>'}
+ </table></div>`;
+}
+function trackerForm(id){
+ const t=id?(db.digitalTracker||[]).find(x=>x.id===id):{};
+ const clients=(db.clients||[]).filter(c=>c.status!=='Inactive');
+ openModal(`<h2>${id?'Edit':'Add'} Tracker Record</h2>
+ <div class="grid g2">
+  ${fld('tr_date','Date',t.date||today(),'date')}
+  ${sel('tr_type','Type',['InBody Assessment','Nutrition Chart','Workout Card','Follow-up','Document','Enquiry','Other'],t.type||'Follow-up')}
+  ${fld('tr_title','Title *',t.title||'')}
+  <div class="field"><label>Member (optional)</label><select id="tr_client"><option value="">— None —</option>${clients.map(c=>`<option value="${c.id}" ${t.clientId===c.id?'selected':''}>${esc(c.name)} (${c.id})</option>`).join('')}</select></div>
+  ${fld('tr_ref','Reference / Notes',t.reference||'')}
+  ${fld('tr_assign','Assigned To',t.assignedTo||USER.name)}
+  ${sel('tr_status','Status',['Open','Done','On Hold'],t.status||'Open')}
+ </div>
+ <div class="row" style="justify-content:flex-end;gap:8px;margin-top:12px"><button class="btn sec" onclick="closeModal()">Cancel</button><button class="btn" onclick="saveTracker('${id||''}')">Save</button></div>`);
+}
+function saveTracker(id){
+ const title=val('tr_title').trim();if(!title){toast('Title required');return}
+ let t=id?(db.digitalTracker||[]).find(x=>x.id===id):null;
+ if(!t){t={id:'TR'+Date.now()};db.digitalTracker.push(t)}
+ Object.assign(t,{date:val('tr_date'),type:val('tr_type'),title,clientId:val('tr_client')||null,reference:val('tr_ref'),assignedTo:val('tr_assign'),status:val('tr_status'),updated:today()});
+ const cid=val('tr_client');
+ if(cid){
+  const c=client(cid);if(c){
+   ensureClientPipeline(c);
+   if(t.type==='InBody Assessment')c.pipeline.inbody=t.status==='Done';
+   if(t.type==='Nutrition Chart')c.pipeline.nutrition=t.status==='Done';
+   if(t.type==='Workout Card')c.pipeline.workoutCard=t.status==='Done';
+  }
+ }
+ save();audit('Tracker Saved',title);toast('Tracker saved');closeModal();go('digitaltracker');
+}
+
 /* ================= YDL LEADS / FOLLOW-UPS ================= */
 function pgLeads(){
  if(!db.leads)db.leads=[];
- const rows=db.leads.slice().reverse().map(l=>`<tr>
+ const tab=window._leadTab||'all';
+ let list=db.leads.slice();
+ if(tab==='online')list=list.filter(isOnlineLead);
+ else if(tab==='offline')list=list.filter(l=>!isOnlineLead(l));
+ const rows=list.reverse().map(l=>`<tr>
   <td>${esc(l.code||l.id||'')}</td><td>${fmtD(l.date)}</td><td class="bold">${esc(l.name)}</td><td>${formatMobile(l.mobile)}</td>
+  <td><span class="badge ${isOnlineLead(l)?'b-br':'b-mut'}">${isOnlineLead(l)?'Online':'Offline'}</span></td>
   <td>${esc(l.source||'')}</td><td>${esc(l.leadType||'')}</td><td>${esc(l.status||'New')}</td>
   <td>${esc(l.handledBy||'')}</td><td>${fmtD(l.follow)}</td>
   <td class="r"><button class="btn sm sec" onclick="leadForm('${l.id}')">Edit</button>
   <button class="btn sm" onclick="convertLead('${l.id}')">→ Client</button></td></tr>`).join('');
  $('content').innerHTML=`
- <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><div><h2>Leads / Enquiries</h2><div class="sub">YDL-style walk-ins &amp; enquiries</div></div>
+ <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><div><h2>Leads / Enquiries</h2><div class="sub">Online &amp; offline enquiry tracking · ${list.length} shown</div></div>
  <div class="row" style="gap:8px">
   <button class="btn sec" onclick="downloadYdlTemplate()">⬇ Template</button>
   <button class="btn sec" onclick="openYdlImport('leads')">⬆ Import CSV</button>
   <button class="btn" onclick="leadForm()">＋ Add Lead</button>
  </div></div>
- <div class="tbl" style="margin-top:12px"><table><tr><th>Code</th><th>Date</th><th>Name</th><th>Mobile</th><th>Source</th><th>Lead Type</th><th>Status</th><th>Handled By</th><th>Follow-up</th><th></th></tr>
- ${rows||'<tr><td colspan=10 class="mut">No leads yet — use Import CSV for your YDL sheet</td></tr>'}</table></div>`;
+ <div class="lead-tabs">
+  <button type="button" class="${tab==='all'?'on':''}" onclick="window._leadTab='all';pgLeads()">All (${db.leads.length})</button>
+  <button type="button" class="${tab==='online'?'on':''}" onclick="window._leadTab='online';pgLeads()">Online (${db.leads.filter(isOnlineLead).length})</button>
+  <button type="button" class="${tab==='offline'?'on':''}" onclick="window._leadTab='offline';pgLeads()">Offline (${db.leads.filter(l=>!isOnlineLead(l)).length})</button>
+ </div>
+ <div class="tbl" style="margin-top:12px"><table><tr><th>Code</th><th>Date</th><th>Name</th><th>Mobile</th><th>Channel</th><th>Source</th><th>Lead Type</th><th>Status</th><th>Handled By</th><th>Follow-up</th><th></th></tr>
+ ${rows||'<tr><td colspan=11 class="mut">No leads in this list</td></tr>'}</table></div>`;
 }
 function pgFollowups(){
  if(!db.leads)db.leads=[];
@@ -3979,7 +4186,8 @@ function saveLead(id){
   status:val('ld_status'),conversion:val('ld_conv'),leadType:val('ld_type'),source:val('ld_src'),
   handledBy:caps(val('ld_handled')),assignedTo:caps(val('ld_assign')),employment:val('ld_emp'),
   appInstall:val('ld_app'),membership:val('ld_mem'),address:caps(val('ld_addr')),emergency:val('ld_emg'),
-  refNo:val('ld_refno'),notes:val('ld_notes')
+  refNo:val('ld_refno'),notes:val('ld_notes'),
+  channel:isOnlineLead({source:val('ld_src')})?'online':'offline'
  });
  save();toast('Lead saved');closeModal();go(PAGE==='followups'?'followups':'leads');
 }
@@ -4864,12 +5072,9 @@ function pgSettings(){
   </div>
   <p class="sub" style="margin-top:8px">Format: <b>26SA001</b> (Super Admin) · <b>26ADM001</b> (Admin)</p></div>
  <div class="card"><h3>Branches — New Branch ID</h3>
-  <p class="sub">Current code: <b>${esc(s.branchCode||'BR01')}</b></p>
-  <div class="tbl"><table><tr><th>Branch</th></tr>${(s.branches||[]).map(b=>`<tr><td>${esc(b)}</td></tr>`).join('')}</table></div>
-  <div class="row" style="gap:8px;margin-top:10px;align-items:end">
-   ${fld('se_newbr','New branch name','')}
-   <button class="btn" onclick="addNewBranch()">Create Branch + ID</button>
-  </div></div>
+  <p class="sub">Current code: <b>${esc(s.branchCode||'BR01')}</b> · Member IDs use F126 / F226 format per branch</p>
+  <div class="tbl"><table><tr><th>Branch</th><th>Code</th><th>Documents</th></tr>${(s.branchDocs||[]).map(b=>`<tr><td class="bold">${esc(b.name)}</td><td>${esc(b.code)}</td><td>${(b.docs||[]).length} file(s) ${(b.docs||[]).length?`<button class="btn sm sec" onclick="viewBranchDocs('${b.id}')">View</button>`:''}</td></tr>`).join('')||((s.branches||[]).map(b=>`<tr><td>${esc(b)}</td><td colspan=2 class="mut">—</td></tr>`).join(''))}</table></div>
+  <div class="row" style="gap:8px;margin-top:10px"><button class="btn" onclick="openBranchModal()">+ Create Branch + Upload Docs</button></div></div>
  <div class="card"><h3>Membership / Subscriptions</h3>
   <p class="sub" style="margin-bottom:10px">Packages: Membership · PT · Group Class</p>
   <button class="btn" onclick="go('memberships')">Open Memberships Module →</button></div>
@@ -4905,14 +5110,44 @@ function genAdminId(kind){
  if(kind==='super')db.settings.adminIds.superAdmin=id;else db.settings.adminIds.admin=id;
  save();audit('Admin ID Generated',kind+' · '+id);toast(kind==='super'?'Super Admin ID: '+id:'Admin ID: '+id);pgSettings();
 }
-function addNewBranch(){
- const name=val('se_newbr');if(!name){toast('Enter branch name');return}
- if(!Array.isArray(db.settings.branches))db.settings.branches=[];
- const code=nextBranchCode();
- db.settings.branches.push(name+' ('+code+')');
- db.settings.branch=name;db.settings.branchCode=code;
- save();audit('Branch Created',name+' · '+code);toast('Branch created · ID '+code);pgSettings();
+function openBranchModal(){
+ window._branchDocs=[];
+ openModal(`<h2>Create New Branch</h2><p class="sub" style="margin-bottom:12px">Branch ID auto-generated · upload agreement / license / documents (PDF or image)</p>
+ ${reqFld('br_name','Branch Name','')}
+ ${optFld('br_agree','Agreement Reference','')}
+ <div class="field"><label>Branch Documents <span class="opt-tag">Optional</span></label>
+  <input type="file" id="br_files" accept=".pdf,application/pdf,image/*" multiple onchange="onBranchFiles(this)">
+  <div id="br_file_list" class="sub" style="margin-top:8px">No files selected</div>
+ </div>
+ <div class="row" style="justify-content:flex-end;gap:8px;margin-top:14px"><button class="btn sec" onclick="closeModal()">Cancel</button><button class="btn" onclick="saveNewBranch()">Create Branch</button></div>`);
 }
+function onBranchFiles(inp){
+ window._branchDocs=[];
+ const list=$('br_file_list');if(!list)return;
+ if(!inp.files||!inp.files.length){list.textContent='No files selected';return}
+ list.textContent=inp.files.length+' file(s) selected';
+ [...inp.files].forEach(f=>{
+  readFileAsDataUrl(f,data=>{window._branchDocs.push({name:f.name,type:f.type,data:data.slice(0,500000),uploadedAt:new Date().toISOString()});});
+ });
+}
+function saveNewBranch(){
+ const name=val('br_name').trim();if(name.length<2){toast('Branch name required');return}
+ if(!Array.isArray(db.settings.branches))db.settings.branches=[];
+ if(!Array.isArray(db.settings.branchDocs))db.settings.branchDocs=[];
+ const code=nextBranchCode();
+ const id='BR'+Date.now();
+ db.settings.branches.push(name+' ('+code+')');
+ db.settings.branchDocs.push({id,name,code,agreementRef:val('br_agree')||'',created:today(),docs:window._branchDocs||[]});
+ db.settings.branch=name;db.settings.branchCode=code;
+ save();audit('Branch Created',name+' · '+code);toast('Branch created · ID '+code);closeModal();pgSettings();
+}
+function viewBranchDocs(branchId){
+ const b=(db.settings.branchDocs||[]).find(x=>x.id===branchId);if(!b||!(b.docs||[]).length){toast('No documents');return}
+ openModal(`<h2>${esc(b.name)} — Documents</h2><p class="sub">Code: ${esc(b.code)}</p><div class="tbl"><table><tr><th>File</th><th>Uploaded</th><th></th></tr>
+ ${b.docs.map((d,i)=>`<tr><td>${esc(d.name)}</td><td class="mut">${d.uploadedAt?new Date(d.uploadedAt).toLocaleString('en-IN'):'—'}</td><td><a class="btn sm sec" href="${d.data}" target="_blank" download="${esc(d.name)}">Open</a></td></tr>`).join('')}
+ </table></div><div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn sec" onclick="closeModal()">Close</button></div>`);
+}
+function addNewBranch(){openBranchModal()}
 function toggleBillRepFlag(id){const s=staffById(id);if(!s)return;s.billRep=s.billRep===false;s.isBillRep=s.billRep;save();pgSettings()}
 async function saveSettings(){const s=db.settings;const old=s.gstPct;
  s.gymName=val('se_name');s.branch=val('se_branch');s.gstNo=val('se_gstno');s.gstPct=num('se_gstp');s.openingCash=num('se_open');s.openingBank=num('se_bank');
