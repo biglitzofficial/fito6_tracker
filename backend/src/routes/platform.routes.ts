@@ -25,6 +25,23 @@ router.get(
 );
 
 router.get(
+  '/gyms/:id',
+  asyncHandler(async (req: AuthRequest, res) => {
+    const gym = await platformService.getGymById(String(req.params.id));
+    sendSuccess(res, gym);
+  })
+);
+
+router.patch(
+  '/gyms/:id',
+  asyncHandler(async (req: AuthRequest, res) => {
+    const { gymName } = z.object({ gymName: z.string().min(2) }).parse(req.body);
+    const result = await platformService.updateGym(String(req.params.id), gymName, req.user!.userId);
+    sendSuccess(res, result);
+  })
+);
+
+router.get(
   '/gym-admins',
   asyncHandler(async (_req: AuthRequest, res) => {
     const admins = await platformService.listGymAdmins();

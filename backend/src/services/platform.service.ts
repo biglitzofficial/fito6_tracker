@@ -1,6 +1,6 @@
 import { Role } from '../types/enums';
 import { Business, BusinessMember, User } from '../types/models';
-import { COL, create, findMany, findOne, getById, sortBy } from '../lib/firestore';
+import { COL, create, findMany, findOne, getById, sortBy, update } from '../lib/firestore';
 import { seedBusinessDefaults } from '../lib/business-seed';
 import { erpStoreService } from './erp-store.service';
 import { hashPassword, validatePassword } from '../utils/password';
@@ -131,6 +131,29 @@ export const platformService = {
         };
       })
     );
+  },
+
+  async updateGym(businessId: string, gymName: string, updatedById: string) {
+    const trimmed = gymName.trim();
+    if (trimmed.length < 2) throw new AppError(400, 'Gym name must be at least 2 characters');
+
+    const business = await getById<Business>(COL.businesses, businessId);
+    if (!business) throw new AppError(404, 'Gym not found');
+
+    await update(COL.businesses, businessId, { name: trimmed });
+
+    const erp = ((await erpStoreService.get(businessId)) as ErpSnapshot | null) ?? defaultErpData(trimmed);
+    erp.settings = { ...(erp.settings || {}), gymName: trimmed };
+    await erpStoreService.save(businessId, erp as Record<string, unknown>, updatedById);
+
+    return { id: businessId, name: trimmed, gymName: trimmed };
+  },
+
+  async getGymById(businessId: string) {
+    const gyms = await this.listGyms();
+    const gym = gyms.find((g) => g.id === businessId);
+    if (!gym) throw new AppError(404, 'Gym not found');
+    return gym;
   },
 
   async createGymAdmin(data: {
