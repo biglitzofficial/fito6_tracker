@@ -5,6 +5,10 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'FITO6 ERP — Gym Management',
   description: 'Gym management, accounts, and cashbook for FITO6',
+  icons: {
+    icon: '/fito6-logo.webp',
+    apple: '/fito6-logo.webp',
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

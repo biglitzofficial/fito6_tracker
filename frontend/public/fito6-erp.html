@@ -4,62 +4,68 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>FITO6 ERP — Gym Management</title>
+<link rel="icon" type="image/webp" href="/fito6-logo.webp">
+<link rel="apple-touch-icon" href="/fito6-logo.webp">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#eef2f7;--card:#fff;--ink:#0f172a;--mut:#64748b;--brand:#0099ff;--brand2:#0077cc;--brand-dark:#005fa3;--dark:#0a0e17;--dark2:#111827;--sidebar:#0c1220;--sidebar2:#151d2e;--sidebar-hover:#1a2438;--sidebar-border:rgba(255,255,255,.07);--sidebar-text:#94a3b8;--sidebar-hi:#f1f5f9;--ok:#10b981;--bad:#ef4444;--warn:#f59e0b;--line:#e2e8f0;--shadow:0 4px 24px rgba(0,0,0,.08)}
+:root{--bg:#f1f5f9;--card:#fff;--ink:#0f172a;--mut:#64748b;--brand:#0099ff;--brand2:#0077cc;--brand-dark:#005fa3;--dark:#0a0e17;--dark2:#111827;--sidebar:#0a0e17;--sidebar2:#111827;--sidebar-hover:#1e293b;--sidebar-border:rgba(255,255,255,.06);--sidebar-text:#94a3b8;--sidebar-hi:#f8fafc;--ok:#10b981;--bad:#ef4444;--warn:#f59e0b;--line:#e2e8f0;--shadow:0 1px 3px rgba(15,23,42,.06),0 8px 24px rgba(15,23,42,.04);--radius:10px}
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--ink);font-size:14px;line-height:1.5}
+body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--ink);font-size:14px;line-height:1.55;font-feature-settings:'cv02','cv03','cv04','cv11';-webkit-font-smoothing:antialiased}
 button{cursor:pointer;font-family:inherit}
 input,select,textarea{font-family:inherit;font-size:13px;padding:9px 12px;border:1px solid #cbd5e1;border-radius:8px;width:100%;background:#fff;transition:border-color .15s,box-shadow .15s}
 input:focus,select:focus,textarea:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px rgba(0,153,255,.15)}
 label{font-size:11px;font-weight:600;color:var(--mut);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:5px}
 .field{margin-bottom:12px}
-h2{font-size:22px;font-weight:700;margin-bottom:4px;letter-spacing:-.02em} h3{font-size:15px;font-weight:600;margin-bottom:10px}
-.sub{color:var(--mut);font-size:12px}
+h2{font-size:1.375rem;font-weight:700;margin-bottom:4px;letter-spacing:-.025em;color:var(--ink)} h3{font-size:.8125rem;font-weight:600;margin-bottom:10px;letter-spacing:.04em;text-transform:uppercase;color:var(--mut)}
+.sub{color:var(--mut);font-size:12.5px;font-weight:400}
 /* LOGIN */
 #login{position:fixed;inset:0;background:linear-gradient(145deg,#0a0e17 0%,#0c1220 40%,#001a33 100%);display:flex;align-items:center;justify-content:center;z-index:100}
 #login .box{background:#fff;border-radius:16px;padding:40px;width:380px;box-shadow:0 24px 80px rgba(0,0,0,.5),0 0 0 1px rgba(0,153,255,.1)}
-.logo{font-weight:800;font-size:26px;letter-spacing:.5px}.logo span{color:var(--brand)}
-.logo-fit{color:#fff}.logo-six{color:var(--brand)}
+.brand-logo{display:block;width:100%;max-width:152px;height:auto;margin:0 auto}
+.brand-logo-sm{height:30px;width:auto;display:block;object-fit:contain}
+.top-brand{display:flex;align-items:center;flex-shrink:0;text-decoration:none}
+.login-brand{display:block;max-width:168px;width:100%;height:auto;margin:0 auto 18px}
 /* LAYOUT — sidebar shell */
 #app{display:none;min-height:100vh}
 #app-shell{display:flex;min-height:100vh}
-#sidebar{width:268px;min-width:268px;background:linear-gradient(180deg,var(--sidebar) 0%,#080b12 100%);color:var(--sidebar-hi);display:flex;flex-direction:column;border-right:1px solid var(--sidebar-border);position:fixed;top:0;left:0;bottom:0;z-index:45;transition:transform .25s ease}
-.sb-brand{padding:20px 18px 14px;border-bottom:1px solid var(--sidebar-border)}
-.sb-brand .logo{font-size:22px;color:#fff;letter-spacing:1px}
-.sb-brand .logo span{color:var(--brand);text-shadow:0 0 20px rgba(0,153,255,.4)}
-.sb-gym{padding:0 18px 10px;font-size:11px;color:var(--sidebar-text);font-weight:500;line-height:1.4}
+#sidebar{width:260px;min-width:260px;background:var(--sidebar);color:var(--sidebar-hi);display:flex;flex-direction:column;border-right:1px solid var(--sidebar-border);position:fixed;top:0;left:0;bottom:0;z-index:45;transition:transform .25s ease}
+.sb-brand{padding:18px 16px 14px;border-bottom:1px solid var(--sidebar-border);text-align:center}
+.sb-brand .brand-logo{max-width:140px}
+.sb-gym{padding:0 20px 12px;font-size:11px;color:var(--sidebar-text);font-weight:500;line-height:1.45;letter-spacing:.01em}
 #biz_switch{margin:0 14px 12px;padding:8px 10px;border-radius:8px;border:1px solid var(--sidebar-border);background:var(--sidebar2);color:var(--sidebar-hi);font-size:12px;width:calc(100% - 28px)}
 .sb-nav{flex:1;overflow-y:auto;overflow-x:hidden;padding:8px 10px 16px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.15) transparent}
 .sb-nav::-webkit-scrollbar{width:4px}.sb-nav::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:4px}
-.nav-group{margin-bottom:2px}
-.nav-head{display:flex;align-items:center;gap:10px;width:100%;padding:10px 12px;background:transparent;border:none;border-radius:8px;color:var(--sidebar-text);font-size:13px;font-weight:600;text-align:left;transition:background .15s,color .15s}
+.nav-group{margin-bottom:1px}
+.nav-head{display:flex;align-items:center;gap:8px;width:100%;padding:9px 14px;background:transparent;border:none;border-radius:6px;color:var(--sidebar-text);font-size:13px;font-weight:500;text-align:left;transition:background .15s,color .15s;letter-spacing:.01em}
 .nav-head:hover{background:var(--sidebar-hover);color:var(--sidebar-hi)}
-.nav-head.on{background:linear-gradient(90deg,rgba(0,153,255,.18),transparent);color:#fff;border-left:3px solid var(--brand);padding-left:9px}
-.nav-ico{font-size:16px;width:22px;text-align:center;flex-shrink:0;opacity:.9}
-.nav-label{flex:1;line-height:1.3}
-.nav-chevron{font-size:11px;opacity:.5;transition:transform .2s}
-.nav-group.open .nav-chevron{transform:rotate(90deg);opacity:.8}
-.nav-sub{display:none;padding:2px 0 6px 0;margin-left:12px;border-left:2px solid rgba(0,153,255,.2)}
+.nav-head.on{background:rgba(0,153,255,.08);color:#fff;box-shadow:inset 3px 0 0 var(--brand)}
+.nav-label{flex:1;line-height:1.35}
+.nav-chevron{width:6px;height:6px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(-45deg);opacity:.45;transition:transform .2s,opacity .2s;flex-shrink:0;margin-right:2px}
+.nav-group.open .nav-chevron{transform:rotate(45deg);opacity:.75}
+.nav-sub{display:none;padding:4px 0 8px 0;margin:0 8px 0 14px;border-left:1px solid rgba(255,255,255,.08)}
 .nav-group.open .nav-sub{display:block}
-.nav-sub-item{display:block;padding:8px 14px 8px 18px;color:var(--sidebar-text);text-decoration:none;font-size:12.5px;font-weight:500;border-radius:0 6px 6px 0;transition:background .12s,color .12s;margin:1px 0}
-.nav-sub-item:hover{background:rgba(255,255,255,.05);color:var(--sidebar-hi)}
-.nav-sub-item.on{color:var(--brand);background:rgba(0,153,255,.1);font-weight:600;border-left:2px solid var(--brand);margin-left:-2px;padding-left:16px}
-.nav-single .nav-head.on{border-left:3px solid var(--brand);padding-left:9px}
+.nav-sub-item{display:block;padding:7px 12px 7px 16px;color:var(--sidebar-text);text-decoration:none;font-size:12.5px;font-weight:400;border-radius:4px;transition:background .12s,color .12s;margin:1px 0;letter-spacing:.01em}
+.nav-sub-item:hover{background:rgba(255,255,255,.04);color:var(--sidebar-hi)}
+.nav-sub-item.on{color:var(--brand);background:rgba(0,153,255,.08);font-weight:600}
+.nav-single .nav-head.on{box-shadow:inset 3px 0 0 var(--brand)}
 .sb-footer{padding:14px 14px 18px;border-top:1px solid var(--sidebar-border);background:rgba(0,0,0,.2)}
 .sb-user{font-size:11px;color:var(--sidebar-text);margin-bottom:10px;line-height:1.5;word-break:break-word}
 .sb-user b{color:var(--sidebar-hi);display:block;font-size:12px;margin-bottom:2px}
 .sb-logout{width:100%;padding:9px;border-radius:8px;background:transparent;border:1px solid var(--sidebar-border);color:var(--sidebar-text);font-size:12px;font-weight:600;transition:all .15s}
 .sb-logout:hover{background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.35);color:#fca5a5}
-#shell{flex:1;margin-left:268px;display:flex;flex-direction:column;min-height:100vh;min-width:0}
-#topbar{display:flex;align-items:center;gap:12px;padding:12px 24px;background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:30;box-shadow:0 1px 3px rgba(0,0,0,.04)}
-#sb_toggle{display:none;background:var(--dark);color:#fff;border:none;border-radius:8px;width:38px;height:38px;font-size:18px;flex-shrink:0}
-#gsearch{max-width:420px;flex:1;min-width:160px}
+#shell{flex:1;margin-left:260px;display:flex;flex-direction:column;min-height:100vh;min-width:0}
+#topbar{display:flex;align-items:center;gap:10px;padding:14px 28px;background:rgba(255,255,255,.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:30}
+#sb_toggle{display:none;background:var(--dark);color:#fff;border:none;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:600;letter-spacing:.04em;flex-shrink:0}
+#gsearch{max-width:440px;flex:1;min-width:160px;border-radius:8px;background:#f8fafc}
 #topbar .sp{flex:1}
 .userchip{background:#fff;border:1px solid var(--line);border-radius:20px;padding:6px 14px;font-size:12px;font-weight:600}
 #main{padding:20px 24px 48px;flex:1}
 #sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:44}
-.tb-ico{position:relative;background:#fff;border:1px solid var(--line);border-radius:50%;width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;font-size:16px;cursor:pointer}
-.tb-ico .dot{position:absolute;top:-2px;right:-2px;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:var(--bad);color:#fff;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center}
+.tb-action{position:relative;background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px 14px;font-size:12px;font-weight:600;color:var(--ink);letter-spacing:.02em;transition:border-color .15s,background .15s}
+.tb-action:hover{background:#f8fafc;border-color:#cbd5e1}
+.tb-action .dot{position:absolute;top:-4px;right:-4px;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:var(--bad);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center}
 .tb-drop{position:absolute;right:0;top:40px;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 40px rgba(0,0,0,.15);min-width:220px;display:none;z-index:30;padding:8px}
 .tb-drop a,.tb-drop button{display:block;width:100%;text-align:left;padding:8px 12px;border:none;background:none;font-size:13px;color:var(--ink);text-decoration:none;border-radius:6px}
 .tb-drop a:hover,.tb-drop button:hover{background:#f4f6fa}
@@ -93,9 +99,9 @@ input.caps{text-transform:uppercase}
 /* CARDS/GRIDS */
 .grid{display:grid;gap:12px}
 .g2{grid-template-columns:repeat(2,1fr)}.g3{grid-template-columns:repeat(3,1fr)}.g4{grid-template-columns:repeat(4,1fr)}.g6{grid-template-columns:repeat(6,1fr)}
-.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;box-shadow:var(--shadow)}
-.stat .v{font-size:20px;font-weight:800;margin-top:2px}
-.stat .l{font-size:11px;color:var(--mut);font-weight:600;text-transform:uppercase;letter-spacing:.3px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow)}
+.stat .v{font-size:1.375rem;font-weight:700;margin-top:4px;letter-spacing:-.02em}
+.stat .l{font-size:10.5px;color:var(--mut);font-weight:600;text-transform:uppercase;letter-spacing:.06em}
 .stat.ok .v{color:var(--ok)}.stat.bad .v{color:var(--bad)}.stat.br .v{color:var(--brand)}.stat.warn .v{color:var(--warn)}
 .money-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:14px 0}
 .money-card{border-radius:8px;padding:14px 16px;color:#fff;font-weight:700;font-size:14px;display:flex;align-items:center;gap:10px;min-height:56px}
@@ -113,10 +119,10 @@ tr:hover td{background:#fbfcff}
 .tbl{background:#fff;border:1px solid var(--line);border-radius:10px;overflow:auto}
 .r{text-align:right}.c{text-align:center}
 /* BUTTONS/BADGES */
-.btn{background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff;border:none;border-radius:8px;padding:9px 18px;font-weight:600;font-size:13px;box-shadow:0 2px 8px rgba(0,153,255,.25);transition:transform .12s,box-shadow .12s}
-.btn:hover{background:linear-gradient(135deg,var(--brand2),var(--brand-dark));box-shadow:0 4px 14px rgba(0,153,255,.35);transform:translateY(-1px)}
+.btn{background:var(--brand);color:#fff;border:none;border-radius:8px;padding:9px 18px;font-weight:600;font-size:13px;letter-spacing:.01em;box-shadow:0 1px 2px rgba(0,153,255,.2);transition:background .15s,box-shadow .15s}
+.btn:hover{background:var(--brand2);box-shadow:0 4px 12px rgba(0,153,255,.28)}
 .btn.sec{background:#fff;color:var(--ink);border:1px solid #cbd5e1;box-shadow:none}
-.btn.sec:hover{transform:none;background:#f8fafc;border-color:#94a3b8}
+.btn.sec:hover{background:#f8fafc;border-color:#94a3b8}
 .btn.sm{padding:5px 10px;font-size:12px}
 .btn.dgr{background:var(--bad)}
 .badge{display:inline-block;padding:2px 9px;border-radius:10px;font-size:11px;font-weight:700}
@@ -143,6 +149,7 @@ tr:hover td{background:#fbfcff}
 .steps div.done{background:#e3f6ec;color:var(--ok)}
 /* TOAST */
 #toast{position:fixed;bottom:22px;right:22px;background:var(--dark);color:#fff;padding:12px 18px;border-radius:8px;font-size:13px;display:none;z-index:99;box-shadow:0 8px 30px rgba(0,0,0,.3)}
+@media(min-width:901px){.top-brand{display:none}}
 @media(max-width:900px){
  #sidebar{transform:translateX(-100%)}
  #sidebar.open{transform:translateX(0);box-shadow:8px 0 40px rgba(0,0,0,.4)}
@@ -172,8 +179,8 @@ hr.sep{border:none;border-top:1px solid var(--line);margin:14px 0}
 
 <div id="login">
   <div class="box">
-    <div class="logo">FITO<span>6</span> ERP</div>
-    <div class="sub" style="margin-bottom:20px">Gym Management + Accounts + Cashbook</div>
+    <img src="/fito6-logo.webp" alt="FITO6 Fitness Studio" class="login-brand" width="168" height="168">
+    <div class="sub" style="margin-bottom:20px;letter-spacing:.02em;text-align:center">Gym management · accounts · cashbook</div>
     <div class="field"><label>Email</label><input id="lg_u" type="email" placeholder="you@company.com" autocomplete="username"></div>
     <div class="field"><label>Password</label><input id="lg_p" type="password" placeholder="Your password" autocomplete="current-password"></div>
     <button class="btn" style="width:100%" id="lg_btn" onclick="doLogin()">Login</button>
@@ -187,8 +194,8 @@ hr.sep{border:none;border-top:1px solid var(--line);margin:14px 0}
   <div id="app-shell">
     <aside id="sidebar">
       <div class="sb-brand">
-        <div class="logo">FITO<span>6</span></div>
-        <div class="sub" style="color:var(--sidebar-text);margin-top:4px;font-size:10px;letter-spacing:1.5px;text-transform:uppercase">Fitness Studio ERP</div>
+        <img src="/fito6-logo.webp" alt="FITO6 Fitness Studio" class="brand-logo" width="140" height="140">
+        <div class="sub" style="color:var(--sidebar-text);margin-top:8px;font-size:10px;letter-spacing:1.5px;text-transform:uppercase">Fitness Studio ERP</div>
       </div>
       <div class="sb-gym" id="sb_role"></div>
       <select id="biz_switch" onchange="switchBusiness(this.value)" style="display:none"></select>
@@ -200,15 +207,18 @@ hr.sep{border:none;border-top:1px solid var(--line);margin:14px 0}
     </aside>
     <div id="shell">
       <header id="topbar">
-        <button type="button" id="sb_toggle" onclick="toggleSidebar()" title="Menu">☰</button>
-        <input id="gsearch" placeholder="🔍 Search name / phone / enquiry / invoice / member ID…" onkeydown="if(event.key==='Enter')doSearch()">
+        <button type="button" id="sb_toggle" onclick="toggleSidebar()" title="Menu">Menu</button>
+        <a class="top-brand" href="#" onclick="if(USER){go(homePage());return false}" title="FITO6 Home">
+          <img src="/fito6-logo.webp" alt="FITO6" class="brand-logo-sm" width="120" height="30">
+        </a>
+        <input id="gsearch" placeholder="Search members, enquiries, invoices…" onkeydown="if(event.key==='Enter')doSearch()">
         <div class="sp"></div>
         <div style="position:relative">
-          <button type="button" class="tb-ico" title="Bill notifications" onclick="toggleTbDrop('tb_bill_drop')">🔔<span class="dot" id="tb_bill_dot" style="display:none">0</span></button>
+          <button type="button" class="tb-action" title="Bill notifications" onclick="toggleTbDrop('tb_bill_drop')">Alerts<span class="dot" id="tb_bill_dot" style="display:none">0</span></button>
           <div class="tb-drop" id="tb_bill_drop"></div>
         </div>
         <div style="position:relative">
-          <button type="button" class="tb-ico" title="Cash / Bank" onclick="toggleTbDrop('tb_cash_drop')">💰</button>
+          <button type="button" class="tb-action" title="Cash / Bank" onclick="toggleTbDrop('tb_cash_drop')">Finance</button>
           <div class="tb-drop" id="tb_cash_drop">
             <a href="#" onclick="closeTbDrops();go('cashbook');return false">Cashbook</a>
             <a href="#" onclick="closeTbDrops();go('accounts');return false">Account / P&amp;L</a>
@@ -1160,11 +1170,11 @@ function clientPhotoSectionHTML(previewId,fileId,photo){
  photo=photo||'';
  return `<div class="client-photo-wrap">
   <img id="${previewId}" class="photo-av" style="${photo?'':'display:none'}" src="${photo||''}">
-  <div id="${previewId}_ph" class="photo-av" style="${photo?'display:none':'display:flex'};align-items:center;justify-content:center;color:var(--mut)">📷</div>
+  <div id="${previewId}_ph" class="photo-av" style="${photo?'display:none':'display:flex'};align-items:center;justify-content:center;color:var(--mut)">Photo</div>
   <div class="field"><label>Client Photo</label>
    <input id="${fileId}" type="file" accept="image/*" capture="environment" onchange="previewPhotoFile('${fileId}','${previewId}')">
    <div class="row" style="gap:6px;margin-top:6px;flex-wrap:wrap">
-    <button type="button" class="btn sm sec" style="flex:1" onclick="toggleWebcam('${previewId}')">📷 Webcam</button>
+    <button type="button" class="btn sm sec" style="flex:1" onclick="toggleWebcam('${previewId}')">Webcam</button>
    </div>
    <div id="wc_panel" style="display:none;margin-top:8px">
     <video id="wc_video" autoplay playsinline muted></video>
@@ -1274,33 +1284,33 @@ function isGroupClassType(t){return/group\s*class|dance|boxing|zumba|yoga/i.test
 
 /* ================= AUTH & NAV ================= */
 let USER=null,PAGE='dashboard';
-const ALL_PAGES=['platform','gymadmins','gymperformance','traineranalysis','clientanalysis','dashboard','leads','followups','clients','analysis','memberships','billing','batches','accounts','cashbook','expenses','notifications','trainers','trainer','fitness','staff','attendance','attreports','settings','help','appointments','payroll','todos','reports','meter','audit','interviews','more'];
+const ALL_PAGES=['platform','gymadmins','gymperformance','traineranalysis','clientanalysis','dashboard','leads','followups','clients','analysis','memberships','billing','batches','accounts','cashbook','expenses','notifications','trainers','trainer','fitness','staff','attendance','attreports','settings','help','appointments','payroll','todos','reports','audit','interviews','more'];
 const GYM_ADMIN_PAGES=ALL_PAGES.filter(p=>!['platform','gymadmins'].includes(p));
 const MENUS={
  superadmin:['platform','gymadmins',...GYM_ADMIN_PAGES],
  gymadmin:['dashboard','traineranalysis','clientanalysis',...GYM_ADMIN_PAGES.filter(p=>!['dashboard','traineranalysis','clientanalysis'].includes(p))],
- frontoffice:['dashboard','leads','followups','clients','analysis','gymperformance','memberships','billing','batches','accounts','cashbook','expenses','notifications','trainers','fitness','staff','attendance','attreports','appointments','todos','meter','help','more','settings','reports','interviews'],
- accountant:['dashboard','analysis','gymperformance','accounts','cashbook','expenses','attendance','attreports','settings','payroll','reports','meter','help','more','billing'],
+ frontoffice:['dashboard','leads','followups','clients','analysis','gymperformance','memberships','billing','batches','accounts','cashbook','expenses','notifications','trainers','fitness','staff','attendance','attreports','appointments','todos','help','more','settings','reports','interviews'],
+ accountant:['dashboard','analysis','gymperformance','accounts','cashbook','expenses','attendance','attreports','settings','payroll','reports','fitness','help','more','billing'],
  trainer:['trainer','clients','attendance','batches','todos','appointments','help']};
 const PAGES={
- platform:['🌐','Platform'],gymadmins:['🏋️','Gym Admins'],gymperformance:['📊','Gym Performance'],traineranalysis:['🧑','Trainer Analysis'],clientanalysis:['👥','Client Analysis'],
- dashboard:['🏠','Dashboard'],leads:['📋','Enquiry'],followups:['🔄','Follow Ups'],clients:['👥','Members'],analysis:['📈','Analysis'],
- memberships:['🪪','Memberships'],billing:['🧾','Billing'],batches:['👥','Batches & Classes'],accounts:['💵','Accounts'],cashbook:['💰','Cashbook'],
- expenses:['📤','Expenses'],notifications:['💬','Notification & WhatsApp'],trainers:['🧑','Trainers'],trainer:['📱','Trainer Portal'],
- fitness:['🏢','Fitness Center'],staff:['🧑','Staff'],attendance:['🕒','Attendance'],attreports:['📑','Attendance Reports'],
- settings:['⚙️','App Settings'],help:['❓','Tutorial & Help'],appointments:['📅','Appointments'],payroll:['💵','Payroll'],
- todos:['✅','To-do List'],reports:['📊','Reports'],meter:['⚡','EB Meter'],audit:['🛡️','Audit Log'],interviews:['📝','Interview Candidates'],more:['⋯','More Options']};
+ platform:'Platform',gymadmins:'Gym Admins',gymperformance:'Gym Performance',traineranalysis:'Trainer Analysis',clientanalysis:'Client Analysis',
+ dashboard:'Dashboard',leads:'Enquiry',followups:'Follow Ups',clients:'Members',analysis:'Analysis',
+ memberships:'Memberships',billing:'Billing',batches:'Batches & Classes',accounts:'Accounts',cashbook:'Cashbook',
+ expenses:'Expenses',notifications:'Notifications',trainers:'Trainers',trainer:'Trainer Portal',
+ fitness:'Fitness Center',staff:'Staff',attendance:'Attendance',attreports:'Attendance Reports',
+ settings:'Settings',help:'Help',appointments:'Appointments',payroll:'Payroll',
+ todos:'To-do List',reports:'Reports',meter:'EB Meter',audit:'Audit Log',interviews:'Interview Candidates',more:'More'};
 const NAV_TREE=[
- {id:'platform',icon:'🌐',label:'Platform',page:'platform'},
- {id:'gymadmins',icon:'🏋️',label:'Gym Admins',page:'gymadmins'},
- {id:'dashboard',icon:'🏠',label:'Dashboard',page:'dashboard'},
- {id:'enquiry',icon:'📋',label:'Enquiry',kids:[
+ {id:'platform',label:'Platform',page:'platform'},
+ {id:'gymadmins',label:'Gym Admins',page:'gymadmins'},
+ {id:'dashboard',label:'Dashboard',page:'dashboard'},
+ {id:'enquiry',label:'Enquiry',kids:[
   {label:'Leads / Enquiries',page:'leads'},
   {label:'Add Enquiry',page:'leads',fn:'leadForm()'},
   {label:'Import Enquiries CSV',page:'leads',fn:"openYdlImport('leads')"},
   {label:'Follow Ups',page:'followups'}
  ]},
- {id:'members',icon:'👥',label:'Members',kids:[
+ {id:'members',label:'Members',kids:[
   {label:'My Members',page:'clients'},
   {label:'Add Member',page:'clients',fn:'openWizard()'},
   {label:'Import Members CSV',page:'clients',fn:"openYdlImport('members')"},
@@ -1308,37 +1318,36 @@ const NAV_TREE=[
   {label:'Deactivated Members',page:'clients',fn:"CL_F.status='Inactive';go('clients')"},
   {label:'Appointments',page:'appointments'}
  ]},
- {id:'memberships',icon:'🪪',label:'Memberships & Billing',kids:[
+ {id:'memberships',label:'Memberships & Billing',kids:[
   {label:'Packages',page:'memberships'},
   {label:'Billing / Invoices',page:'billing'},
   {label:'Subscription Types',page:'settings'}
  ]},
- {id:'analysis',icon:'📈',label:'Admin Panel',kids:[
+ {id:'analysis',label:'Admin Panel',kids:[
   {label:'Trainer Analysis',page:'traineranalysis'},
   {label:'Client Analysis',page:'clientanalysis'},
   {label:'Gym Performance',page:'gymperformance'},
   {label:'Reports & Charts',page:'analysis'},
-  {label:'Classic Reports',page:'reports'},
-  {label:'EB Meter',page:'meter'}
+  {label:'Classic Reports',page:'reports'}
  ]},
- {id:'batches',icon:'📚',label:'Batches & Classes',kids:[
+ {id:'batches',label:'Batches & Classes',kids:[
   {label:'Batches / Classes',page:'batches'},
   {label:'Add Batch',page:'batches',fn:'batchForm()'}
  ]},
- {id:'accounts',icon:'💵',label:'Accounts & Finance',kids:[
+ {id:'accounts',label:'Accounts & Finance',kids:[
   {label:'Accounts / P&L',page:'accounts'},
   {label:'Cashbook',page:'cashbook'},
   {label:'Import Cashbook CSV',page:'cashbook',fn:'openCbImport()'},
   {label:'Expenses',page:'expenses'},
   {label:'Payroll',page:'payroll'}
  ]},
- {id:'trainers',icon:'🏋️',label:'Trainers',kids:[
+ {id:'trainers',label:'Trainers',kids:[
   {label:'Trainer List',page:'trainers'},
   {label:'Add New Trainer',page:'trainers',fn:'trainerForm()'},
   {label:'Trainer Portal',page:'trainer'},
   {label:'Assign To-dos',page:'todos'}
  ]},
- {id:'staff',icon:'🧑‍💼',label:'Staff & Attendance',kids:[
+ {id:'staff',label:'Staff & Attendance',kids:[
   {label:'Staff Directory',page:'staff'},
   {label:'Daily Attendance',page:'attendance'},
   {label:'Attendance Reports',page:'attreports'},
@@ -1346,23 +1355,23 @@ const NAV_TREE=[
   {label:'Payroll',page:'payroll'},
   {label:'To-do List',page:'todos'}
  ]},
- {id:'fitness',icon:'🏢',label:'Fitness Center',kids:[
+ {id:'fitness',label:'Fitness Center',kids:[
   {label:'Center Overview',page:'fitness'},
   {label:'EB Meter',page:'meter'},
   {label:'Branches',page:'settings'}
  ]},
- {id:'notifications',icon:'💬',label:'Notifications',kids:[
+ {id:'notifications',label:'Notifications',kids:[
   {label:'Notifications Center',page:'notifications'},
   {label:'WhatsApp Templates',page:'notifications'}
  ]},
- {id:'settings',icon:'⚙️',label:'Settings',kids:[
+ {id:'settings',label:'Settings',kids:[
   {label:'Gym Settings',page:'settings'},
   {label:'Payment Modes',page:'settings'},
   {label:'Audit Log',page:'audit'},
   {label:'Help Center',page:'help'},
   {label:'Tutorial & Tips',page:'help'}
  ]},
- {id:'more',icon:'⋯',label:'More',kids:[
+ {id:'more',label:'More',kids:[
   {label:'Interview Candidates',page:'interviews'},
   {label:'Import YDL CSV',page:'more',fn:"openYdlImport('auto')"},
   {label:'Delete Current Data',page:'more',fn:'openDeleteData()'}
@@ -1526,7 +1535,11 @@ function logout(){
  USER=null;_cloudReady=false;clearAuth();
  $('app').style.display='none';$('login').style.display='flex';
 }
-function canPage(p){return USER&&MENUS[USER.role]&&MENUS[USER.role].includes(p)}
+function canPage(p){
+ if(!USER||!MENUS[USER.role])return false;
+ if(p==='meter')return MENUS[USER.role].includes('fitness');
+ return MENUS[USER.role].includes(p);
+}
 function navVisible(item){
  if(item.page)return canPage(item.page);
  if(item.kids)return item.kids.some(k=>canPage(k.page));
@@ -1543,10 +1556,10 @@ function buildNav(){
    const kids=item.kids.filter(k=>canPage(k.page));
    if(!kids.length)return'';
    const nid='navg_'+item.id;
-   return `<div class="nav-group" id="${nid}"><button type="button" class="nav-head" id="navbtn_${item.id}" onclick="toggleNavGroup('${nid}',event)"><span class="nav-ico">${item.icon}</span><span class="nav-label">${item.label}</span><span class="nav-chevron">›</span></button>
+   return `<div class="nav-group" id="${nid}"><button type="button" class="nav-head" id="navbtn_${item.id}" onclick="toggleNavGroup('${nid}',event)"><span class="nav-label">${item.label}</span><span class="nav-chevron"></span></button>
     <div class="nav-sub">${kids.map((k,i)=>`<a href="#" class="nav-sub-item" id="navsub_${item.id}_${i}" data-page="${k.page}" onclick="closeSidebar();${k.fn||("go('"+k.page+"')")};return false">${k.label}</a>`).join('')}</div></div>`;
   }
-  return `<div class="nav-group nav-single"><button type="button" class="nav-head" id="navbtn_${item.id}" onclick="closeSidebar();go('${item.page}')"><span class="nav-ico">${item.icon}</span><span class="nav-label">${item.label}</span></button></div>`;
+  return `<div class="nav-group nav-single"><button type="button" class="nav-head" id="navbtn_${item.id}" onclick="closeSidebar();go('${item.page}')"><span class="nav-label">${item.label}</span></button></div>`;
  }).join('');
  markNavOn(PAGE);
 }
@@ -1570,7 +1583,7 @@ function markNavOn(p){
 function go(p,arg,opts){if(!canPage(p)){toast('No permission');return} PAGE=p;
  closeTbDrops();markNavOn(p);
  const pages={platform:pgPlatform,gymadmins:pgGymAdmins,gymperformance:pgGymPerformance,traineranalysis:pgTrainerAnalysis,clientanalysis:pgClientAnalysis,dashboard:pgDashboard,trainer:pgTrainerPortal,clients:pgClients,leads:pgLeads,followups:pgFollowups,memberships:pgMemberships,billing:pgBilling,cashbook:pgCashbook,expenses:pgExpenses,meter:pgMeter,staff:pgStaff,attendance:pgAttendance,payroll:pgPayroll,batches:pgBatches,todos:pgTodos,reports:pgReports,accounts:pgAccounts,audit:pgAudit,settings:pgSettings,analysis:pgAnalysis,notifications:pgNotifications,trainers:pgTrainers,fitness:pgFitness,attreports:pgAttReports,help:pgHelp,appointments:pgAppointments,interviews:pgInterviews,more:pgMore};
- if(pages[p])pages[p](arg);else pgStub(PAGES[p]?PAGES[p][1]:p);
+ if(pages[p])pages[p](arg);else pgStub(PAGES[p]||p);
  refreshTopbarNotifs();
  if(!opts||(!opts.hist&&!opts.silent))pushAppHistory(appHistState(p,$('modalwrap')&&$('modalwrap').style.display==='flex'),false)}
 function pgStub(title){$('content').innerHTML=`<div class="card"><h2>${esc(title)}</h2><p class="sub">This module is ready in the menu. Full screens coming next.</p></div>`}
@@ -1652,7 +1665,7 @@ function pgDashboard(){
  const clickStat=(l,v,cls,fn)=>`<div class="card stat clickable ${cls||''}" onclick="${fn}"><div class="l">${l}</div><div class="v">${v}</div></div>`;
  $('content').innerHTML=`${superPlatformBar()}
  <div class="row" style="justify-content:space-between"><div><h2>Dashboard</h2><div class="sub">${fmtD(t)} · ${esc(db.settings.branch)}</div></div>
- <div class="row"><button class="btn" onclick="openWizard()">➕ New Client</button><button class="btn sec" onclick="go('billing')">🧾 Billing</button></div></div>
+ <div class="row"><button class="btn" onclick="openWizard()">New Client</button><button class="btn sec" onclick="go('billing')">Billing</button></div></div>
  <h3 style="margin-top:16px">Member Snapshot</h3>
  <div class="grid g6">
   ${clickStat('Renewal Upcoming',expiring7.length,'br',"go('clients')")}
@@ -1677,9 +1690,9 @@ function pgDashboard(){
   ),'br',"go('cashbook')")}
  </div>
  <div class="grid g3" style="margin-top:18px">
-  <div class="card"><h3>🧍 Membership</h3>
+  <div class="card"><h3>Membership</h3>
    ${line('Active Members',activeSubs('Membership').length)}${line('Expired',expiredN)}${line('Frozen',db.subs.filter(s=>s.status==='Frozen').length)}${line('Pending Renewal (7d)',expiring7.length)}</div>
-  <div class="card"><h3>🏋️ PT & Staff</h3>
+  <div class="card"><h3>PT & Staff</h3>
    ${line('Active PT',activeSubs('PT').length)}${line('Expired PT',expiredSubs('PT').length)}${line('Staff Present / Absent',pres+' / '+abs)}${line('Late / Half Day',late+' / '+half)}</div>
   <div class="card"><h3>Today collection split</h3>
    ${line('Cash today',inr(cashTot))}${line('Bank today',inr(bankTot))}${line('Total today',inr(collToday))}</div>
@@ -1698,7 +1711,7 @@ function pgDashboard(){
    </table></div></div>
  </div>
  <div class="grid g2" style="margin-top:18px">
-  <div class="card"><h3>🏆 Sales Leaderboard (${m})</h3><div class="tbl"><table><tr><th>Sold By</th><th class="r">Today</th><th class="r">This Month</th></tr>
+  <div class="card"><h3>Sales Leaderboard (${m})</h3><div class="tbl"><table><tr><th>Sold By</th><th class="r">Today</th><th class="r">This Month</th></tr>
    ${Object.entries(lb).sort((a,b)=>b[1].m-a[1].m).map(([k,v])=>`<tr><td>${esc(k)}</td><td class="r">${inr(v.t)}</td><td class="r bold">${inr(v.m)}</td></tr>`).join('')||'<tr><td colspan=3 class="mut">No sales yet this month</td></tr>'}</table></div></div>
   <div class="card"><h3>⏳ Expiring in 7 days</h3><div class="tbl"><table><tr><th>Member</th><th>Package</th><th>Ends</th><th></th></tr>
    ${expiring7.slice().sort((a,b)=>a.end.localeCompare(b.end)).slice(0,8).map(s=>{const c=client(s.clientId);return`<tr><td class="clickable" onclick="openClient('${s.clientId}')">${esc(c?c.name:'?')}</td><td>${esc(s.pkg)}</td><td>${fmtD(s.end)}</td><td><button class="btn sm" onclick="openSubForm('${s.clientId}','Renew Membership')">Renew</button></td></tr>`}).join('')||'<tr><td colspan=4 class="mut">Nothing expiring soon</td></tr>'}</table></div></div>
@@ -1936,8 +1949,8 @@ function wizStep1(){
   <button class="btn sec" onclick="wizPrev()" ${WIZ.step<=1&&!WIZ.clientId?'disabled':''}>← Previous</button>
   <div class="row" style="gap:8px">
    <button class="btn sec" onclick="closeModal()">Cancel</button>
-   <button class="btn sec" onclick="wizSave1(false)">💾 Save</button>
-   <button class="btn" onclick="wizSave1(true)">Next ➜</button>
+   <button class="btn sec" onclick="wizSave1(false)">Save</button>
+   <button class="btn" onclick="wizSave1(true)">Next</button>
   </div>
  </div>`}
 function wizPrev(){
@@ -2157,7 +2170,7 @@ function subFormHTML(clientId,type,wizard){
  <div class="card" style="background:#fafbfd" id="s_calc"></div>
  <div class="row" style="justify-content:space-between;margin-top:12px">
   ${wizard?`<button class="btn sec" onclick="wizPrev()">← Previous</button>`:`<button class="btn sec" onclick="closeModal()">Cancel</button>`}
-  <button class="btn" onclick="saveSub('${clientId}',${wizard})">${wizard?'Save & Next ➜':'Save Subscription ➜ Billing'}</button>
+  <button class="btn" onclick="saveSub('${clientId}',${wizard})">${wizard?'Save & Next ':'Save Subscription Billing'}</button>
  </div>
  <script>fillPkgs();syncTrainerField();calcSub()<\/script>`}
 function fillPkgs(){const t=val('s_type');const list=pkgListFor(t);$('s_pkg').innerHTML=list.map(p=>`<option data-p="${p.price}" data-m="${p.months}">${esc(p.name)} — ${inr(p.price)}</option>`).join('')+'<option data-p="0" data-m="1">Custom</option>';
@@ -2210,14 +2223,14 @@ function payFormHTML(invId,wizard){
  <div class="grid g2" style="margin-top:12px">${fld('p_due','Due Date (for balance)',today(),'date')}${fld('p_by','Collected By',USER?USER.name:'')}</div>
  <div class="row" style="justify-content:flex-end;margin-top:10px">
   <button class="btn sec" onclick="closeModal();${wizard?'':''}go('billing')">Skip / Pay Later</button>
-  <button class="btn" onclick="savePayment('${invId}')">💾 Save Payment</button></div>
+  <button class="btn" onclick="savePayment('${invId}')">Save Payment</button></div>
  <script>addPayRow(${iv.pending})<\/script>`}
 let PAYROWN=0;
 function addPayRow(amt){PAYROWN++;const d=document.createElement('div');d.className='row';d.style.marginBottom='8px';d.style.flexWrap='wrap';d.style.gap='8px';
  d.innerHTML=`<select id="pm_top_${PAYROWN}" style="width:110px" onchange="syncPayRowSub(${PAYROWN})"><option value="Cash">Cash</option><option value="Bank">Bank</option></select>
  <select id="pm_sub_${PAYROWN}" style="width:130px;display:none">${bankPayModes().map(m=>`<option>${esc(m)}</option>`).join('')}</select>
  <input id="pa_${PAYROWN}" type="number" min="0" step="0.01" placeholder="Amount" style="width:160px" value="${amt||''}" oninput="if(this.value&&Number(this.value)<0)this.value=''">
- <button class="btn sm dgr" onclick="this.parentNode.remove()">✕</button>`;$('payrows').appendChild(d)}
+ <button class="btn sm dgr" onclick="this.parentNode.remove()"></button>`;$('payrows').appendChild(d)}
 function syncPayRowSub(n){const sub=$('pm_sub_'+n);if(!sub)return;sub.style.display=val('pm_top_'+n)==='Bank'?'inline-block':'none'}
 function readPayRowMode(row){
  const topSel=row.querySelector('[id^="pm_top_"]');const subSel=row.querySelector('[id^="pm_sub_"]');
@@ -2351,7 +2364,7 @@ function pgBilling(){
   <td>${iv.pending<=0?'<span class="badge b-ok">Paid</span>':iv.paid>0?'<span class="badge b-warn">Partial</span>':'<span class="badge b-bad">Unpaid</span>'}</td>
   <td>${iv.pending>0?`<button class="btn sm" onclick="openModal('<h2>Collect Payment</h2>'+payFormHTML('${iv.id}',false))">Collect</button>`:''} <button class="btn sm sec" onclick="showInvoice('${iv.id}')">View</button></td></tr>`}).join('');
  $('content').innerHTML=`<div class="row" style="justify-content:space-between"><div><h2>Billing / Invoices</h2><div class="sub">${filtered.length} shown · Pending ${inr(pend)}</div></div>
- <button class="btn" onclick="openWizard()">➕ New Client</button></div>
+ <button class="btn" onclick="openWizard()">New Client</button></div>
  <div class="toolbar" style="margin-top:12px">
   <div class="field"><label>Status</label><select id="bf_st" onchange="BILL_F.status=this.value;pgBilling()"><option value="">All</option><option ${BILL_F.status==='Paid'?'selected':''}>Paid</option><option ${BILL_F.status==='Unpaid'?'selected':''}>Unpaid</option><option ${BILL_F.status==='Partial'?'selected':''}>Partial</option></select></div>
   <div class="field"><label>Month</label><input type="month" id="bf_m" value="${BILL_F.month||''}" onchange="BILL_F.month=this.value;pgBilling()"></div>
@@ -2409,10 +2422,10 @@ function invoiceHTML(iv){const c=client(iv.clientId);const st=db.settings;
 function showInvoice(id){const iv=db.invoices.find(i=>i.id===id);
  openModal(`${invoiceHTML(iv)}<div class="row" style="justify-content:flex-end;margin-top:12px">
  <button class="btn sec" onclick="closeModal()">Close</button>
- <button class="btn sec" onclick="waShare('${id}')">📱 WhatsApp</button>
- <button class="btn" onclick="audit('Invoice Printed','${iv.no}');printHTML(document.querySelector('#modal .inv').outerHTML)">🖨️ Print / PDF</button></div>`)}
+ <button class="btn sec" onclick="waShare('${id}')">WhatsApp</button>
+ <button class="btn" onclick="audit('Invoice Printed','${iv.no}');printHTML(document.querySelector('#modal .inv').outerHTML)">Print / PDF</button></div>`)}
 function waShare(id){const iv=db.invoices.find(i=>i.id===id);const c=client(iv.clientId);
- const msg=encodeURIComponent(`Hi ${c.name}! Thank you for your payment at ${db.settings.gymName}.\nInvoice: ${iv.no}\nAmount: ${inr(iv.grand)}\nPaid: ${inr(iv.paid)}\nBalance: ${inr(iv.pending)}\nStay fit! 💪`);
+ const msg=encodeURIComponent(`Hi ${c.name}! Thank you for your payment at ${db.settings.gymName}.\nInvoice: ${iv.no}\nAmount: ${inr(iv.grand)}\nPaid: ${inr(iv.paid)}\nBalance: ${inr(iv.pending)}\nStay fit!`);
  window.open('https://wa.me/91'+(c.wa||c.mobile).replace(/\D/g,'').slice(-10)+'?text='+msg)}
 
 /* ================= CLIENT PROFILE ================= */
@@ -2424,12 +2437,12 @@ function openClient(id){const c=client(id);if(!c)return;
  const ptN=c.trainer?(trainerPtCounts()[c.trainer]||0):0;
  const pl=clientPlan(c);
  openModal(`<div class="row" style="justify-content:space-between;align-items:flex-start"><div class="row" style="gap:12px;align-items:flex-start">
- ${c.photo?`<img class="photo-av" src="${c.photo}">`:`<div class="photo-av" style="display:flex;align-items:center;justify-content:center;color:var(--mut)">📷</div>`}
+ ${c.photo?`<img class="photo-av" src="${c.photo}">`:`<div class="photo-av" style="display:flex;align-items:center;justify-content:center;color:var(--mut)">Photo</div>`}
  <div><h2>${esc(c.name)} <span class="badge b-br">${c.id}</span> ${c.status==='Inactive'?'<span class="badge b-bad">Inactive</span>':''}</h2>
  <div class="sub">${formatMobile(c.mobile)} · ${esc(c.email||'')} · Joined ${fmtD(c.joined)}</div>
  <div class="sub" style="margin-top:4px"><b>Referral:</b> ${esc(c.ref||'—')} · <b>DOB:</b> ${fmtD(c.dob)} · <b>Anniversary:</b> ${fmtD(c.anniversary)}</div>
  <div class="sub" style="margin-top:4px"><b>Trainer:</b> ${esc(c.trainer||'—')}${c.trainer&&ptN?` (${ptN} PT clients)`:''} · <b>Bill Rep:</b> ${esc(c.billRep||'—')}${c.billRepFrozen?' <span class="mut">(locked)</span>':''}</div></div></div>
- <div class="row" style="gap:8px">${c.status!=='Inactive'?`<button class="btn" onclick="openSubForm('${id}')">➕ New / Renew Plan</button>`:''}<button class="btn sec" onclick="openClientPhotoEdit('${id}')">📷 Update Photo</button><button class="btn sec" onclick="editClientPersonal('${id}')">Edit Address</button><button class="btn sec" onclick="openTrainerChangeRequest('${id}')">Change Trainer Request</button>${c.status!=='Inactive'?`<button class="btn sec dgr" onclick="deactivateClient('${id}')">Deactivate</button>`:`<button class="btn sec" onclick="activateClient('${id}');openClient('${id}')">Activate</button>`}</div></div>
+ <div class="row" style="gap:8px">${c.status!=='Inactive'?`<button class="btn" onclick="openSubForm('${id}')">New / Renew Plan</button>`:''}<button class="btn sec" onclick="openClientPhotoEdit('${id}')">Update Photo</button><button class="btn sec" onclick="editClientPersonal('${id}')">Edit Address</button><button class="btn sec" onclick="openTrainerChangeRequest('${id}')">Change Trainer Request</button>${c.status!=='Inactive'?`<button class="btn sec dgr" onclick="deactivateClient('${id}')">Deactivate</button>`:`<button class="btn sec" onclick="activateClient('${id}');openClient('${id}')">Activate</button>`}</div></div>
  <div class="grid g4" style="margin:12px 0">${stat('Sub Start',pl?fmtD(pl.start):'-','br')}${stat('Sub End',pl?fmtD(pl.end):'-','br')}${stat('Total Paid',inr(paid),'ok')}${stat('Outstanding',inr(due),due>0?'bad':'')}</div>
  ${canAssignTrainer()?`<div class="row" style="align-items:flex-end;gap:10px;margin-bottom:12px;flex-wrap:wrap">${trainerAssignSelectHTML(c,'cp_trainer')}<button class="btn sm" onclick="saveClientTrainer('${id}')">Save Trainer</button><div class="sub" style="margin:0;padding-bottom:8px">Pick trainer staff · ${ptN||0} PT clients under selected trainer</div></div>`:`<div class="grid g4" style="margin-bottom:12px">${stat('Trainer',esc(c.trainer||'-'),'br')}${stat('Bill Rep',esc(c.billRep||'-'),'br')}${stat('PT Clients',ptN||'-')}${stat('Goal',esc(c.goal||'-'))}</div>`}
  ${canAssignTrainer()?`<div class="grid g3" style="margin-bottom:12px">${stat('Bill Rep',esc(c.billRep||'-'),'br')}${stat('PT Clients',ptN||'-')}${stat('Goal',esc(c.goal||'-'))}</div>`:''}
@@ -2868,7 +2881,7 @@ function pgStaff(){
   <td><span class="badge ${s.status==='Active'?'b-ok':'b-mut'}">${s.status||'Active'}</span></td>
   <td class="r"><button class="btn sm sec" onclick="staffForm('${s.id}')">Edit</button></td></tr>`).join('');
  $('content').innerHTML=`<div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:10px"><div><h2>Staff Management</h2><div class="sub">${db.staff.length} staff · IDs: Admin <b>26ADM###</b> · Super Admin <b>26SA###</b> · Staff <b>26TR/FOM/ACC###</b>${canCreateStaffLogin()?' · Gym Admin can create ERP login':''}</div></div>
- <button class="btn" onclick="staffForm()">➕ Add Staff</button></div>
+ <button class="btn" onclick="staffForm()">Add Staff</button></div>
  <div class="row" style="margin:10px 0;gap:8px;flex-wrap:wrap;align-items:center">
   <button class="btn sec sm" onclick="document.querySelectorAll('.st_sel').forEach(c=>c.checked=true)">Select All</button>
   <button class="btn sec sm" onclick="document.querySelectorAll('.st_sel').forEach(c=>c.checked=false)">Deselect All</button>
@@ -3158,12 +3171,12 @@ function pgAttendance(){
  const memToday=db.memberAtt.filter(a=>a.date===t).slice().reverse();
  $('content').innerHTML=`<h2>Attendance — ${fmtD(t)}</h2>
  <div class="grid g2" style="margin-top:12px">
- <div class="card"><h3>🧍 Member Check-in</h3>
+ <div class="card"><h3>Member Check-in</h3>
   <div class="row"><input id="ma_id" placeholder="Member ID or phone (e.g. M1001)" style="flex:1" onkeydown="if(event.key==='Enter')checkinMember()"><button class="btn" onclick="checkinMember()">Check In</button></div>
   <div class="tbl" style="margin-top:10px"><table><tr><th>Time</th><th>Member</th><th>Status</th></tr>
   ${memToday.map(a=>{const c=client(a.clientId);const ms=db.subs.filter(s=>s.clientId===a.clientId&&s.type==='Membership').pop();const ok=ms&&subStatus(ms)==='Active';
    return`<tr><td>${a.time}</td><td>${esc(c?c.name:'?')}</td><td><span class="badge ${ok?'b-ok':'b-bad'}">${ok?'Active':'EXPIRED'}</span></td></tr>`}).join('')||'<tr><td colspan=3 class="mut">No check-ins today</td></tr>'}</table></div></div>
- <div class="card"><h3>👥 Staff Attendance</h3><div class="tbl"><table><tr><th>Staff</th><th>Dept</th><th>Mark</th><th>Today</th></tr>${staffRows||'<tr><td colspan=4 class="mut">Add staff first</td></tr>'}</table></div></div></div>`}
+ <div class="card"><h3>Staff Attendance</h3><div class="tbl"><table><tr><th>Staff</th><th>Dept</th><th>Mark</th><th>Today</th></tr>${staffRows||'<tr><td colspan=4 class="mut">Add staff first</td></tr>'}</table></div></div></div>`}
 function markStaff(staffId,status){
  let a=db.staffAtt.find(x=>x.date===today()&&x.staffId===staffId);
  if(!a){a={date:today(),staffId};db.staffAtt.push(a)}
@@ -3184,9 +3197,9 @@ function pgPayroll(){
  const m=thisMonth();
  const rows=db.payroll.slice().reverse().map(p=>{const s=staffById(p.staffId);
  return`<tr><td>${p.month}</td><td>${esc(s?s.name:'?')}</td><td class="r">${inr(p.basic)}</td><td class="r">${inr(p.incentive+p.commission+p.bonus)}</td><td class="r">${inr(p.deduction+p.advance)}</td><td class="r bold">${inr(p.net)}</td>
- <td><button class="btn sm sec" onclick="printSlip('${p.id}')">🖨 Slip</button></td></tr>`}).join('');
+ <td><button class="btn sm sec" onclick="printSlip('${p.id}')">Slip</button></td></tr>`}).join('');
  $('content').innerHTML=`<div class="row" style="justify-content:space-between"><div><h2>Payroll</h2><div class="sub">Generate monthly salary — auto-posts to cashbook as expense</div></div>
- <button class="btn" onclick="payrollForm()">💵 Generate Salary</button></div>
+ <button class="btn" onclick="payrollForm()">Generate Salary</button></div>
  <div class="tbl" style="margin-top:12px"><table><tr><th>Month</th><th>Staff</th><th class="r">Basic</th><th class="r">Additions</th><th class="r">Deductions</th><th class="r">Net Paid</th><th></th></tr>${rows||'<tr><td colspan=7 class="mut">No salary generated yet</td></tr>'}</table></div>`}
 function payrollForm(){
  openModal(`<h2>Generate Salary</h2>
@@ -3245,7 +3258,7 @@ function pgReports(){
  $('content').innerHTML=`<h2>Reports</h2><div class="sub">Click a report to view · export as CSV (opens in Excel) or print as PDF</div>
  <div class="tabs" style="margin-top:14px">${Object.keys(REPORTS).map((r,i)=>`<button class="${i===0?'on':''}" onclick="showReport(this,'${r}')">${r}</button>`).join('')}</div>
  <div class="toolbar"><button class="btn sec sm" onclick="csvExport(REPORTS[window._rep](),window._rep.replace(/[^a-z0-9]/gi,'_'))">⬇ Excel / CSV</button>
- <button class="btn sec sm" onclick="printHTML('<div class=inv><h2>'+window._rep+' — '+esc(db.settings.gymName)+'</h2>'+document.getElementById('rep_tbl').innerHTML+'</div>')">🖨 Print / PDF</button></div>
+ <button class="btn sec sm" onclick="printHTML('<div class=inv><h2>'+window._rep+' — '+esc(db.settings.gymName)+'</h2>'+document.getElementById('rep_tbl').innerHTML+'</div>')"> Print / PDF</button></div>
  <div class="tbl" id="rep_tbl"></div>`;
  window._rep=Object.keys(REPORTS)[0];renderReport()}
 function showReport(btn,name){document.querySelectorAll('.tabs button').forEach(b=>b.classList.remove('on'));btn.classList.add('on');window._rep=name;renderReport()}
@@ -3275,7 +3288,7 @@ function plRange(){const m=val('ac_m')||thisMonth(),v=val('ac_v')||'Monthly';
  if(v==='Yearly')return[m.slice(0,4)+'-01-01',m.slice(0,4)+'-12-31',m.slice(0,4)];
  if(v==='Quarterly'){const mm=parseInt(m.slice(5,7)),q=Math.floor((mm-1)/3);const f=String(q*3+1).padStart(2,'0'),l=String(q*3+3).padStart(2,'0');return[m.slice(0,4)+'-'+f+'-01',m.slice(0,4)+'-'+l+'-31','Q'+(q+1)+' '+m.slice(0,4)]}
  return[m+'-01',m+'-31',m]}
-function moneyCard(cls,label,amount){return`<div class="money-card ${cls}"><div class="ico">👛</div><div>${label} : ${inr(amount)}</div></div>`}
+function moneyCard(cls,label,amount){return`<div class="money-card ${cls}"><div>${label} : ${inr(amount)}</div></div>`}
 function renderAccounts(){renderPL();renderAccountSummary();renderAccountLedgers()}
 function renderAccountSummary(){
  const[f,t]=plRange();
@@ -3561,10 +3574,10 @@ function pgTrainerPortal(){
    ${stat('Check-ins today',att)}${stat('Date',fmtD(t))}
   </div>
   <div class="grid g1" style="gap:10px">
-   <button class="btn" style="padding:16px;font-size:16px;width:100%" onclick="go('clients')">🧍 My Members</button>
-   <button class="btn sec" style="padding:16px;font-size:16px;width:100%" onclick="go('attendance')">🕒 Attendance</button>
-   <button class="btn sec" style="padding:16px;font-size:16px;width:100%" onclick="go('todos')">✅ My To-dos (${myTodos.length})</button>
-   <button class="btn sec" style="padding:16px;font-size:16px;width:100%" onclick="go('batches')">🗓️ Batches / Classes</button>
+   <button class="btn" style="padding:16px;font-size:16px;width:100%" onclick="go('clients')">My Members</button>
+   <button class="btn sec" style="padding:16px;font-size:16px;width:100%" onclick="go('attendance')">Attendance</button>
+   <button class="btn sec" style="padding:16px;font-size:16px;width:100%" onclick="go('todos')">My To-dos (${myTodos.length})</button>
+   <button class="btn sec" style="padding:16px;font-size:16px;width:100%" onclick="go('batches')">Batches / Classes</button>
   </div>
   <h3 style="margin-top:18px">Today’s PT clients</h3>
   <div class="tbl"><table><tr><th>Member</th><th>Package</th><th>Ends</th><th></th></tr>
@@ -3839,7 +3852,7 @@ function pgTrainerAnalysis(){
  });
  const pending=(db.trainerRequests||[]).filter(r=>r.status==='Pending');
  $('content').innerHTML=`<div class="row" style="justify-content:space-between;margin-bottom:12px"><div><h2>Trainer Analysis</h2><div class="sub">Admin Panel · ${esc(db.settings.gymName||'FITO6')} · ${m}</div></div>
-  <div class="row" style="gap:8px">${canManageStaff()?`<button class="btn" onclick="trainerForm()">➕ Add New Trainer</button>`:''}<button class="btn sec" onclick="go('trainers')">Trainer List</button><button class="btn sec" onclick="go('gymperformance')">Gym Performance</button></div></div>
+  <div class="row" style="gap:8px">${canManageStaff()?`<button class="btn" onclick="trainerForm()">Add New Trainer</button>`:''}<button class="btn sec" onclick="go('trainers')">Trainer List</button><button class="btn sec" onclick="go('gymperformance')">Gym Performance</button></div></div>
  <div class="grid g4" style="margin-bottom:14px">${stat('Trainers',Object.keys(trainerStats).length,'br')}${stat('Total PT Clients',Object.values(ptCounts).reduce((a,b)=>a+b,0),'ok')}${stat('Pending Trainer Changes',pending.length,pending.length?'warn':'')}${stat('PT Revenue (active)',inr(Object.values(trainerStats).reduce((s,t)=>s+t.revenue,0)),'ok')}</div>
  <div class="card" style="margin-bottom:14px"><h3>Trainer-wise PT Client Count</h3>
   <div class="tbl"><table><tr><th>Trainer</th><th>Assigned Members</th><th>Active PT</th><th>Visits (${m})</th><th class="r">PT Revenue</th></tr>
@@ -3881,26 +3894,25 @@ function pgClientAnalysis(){
 function pgAnalysis(){
  $('content').innerHTML=`<div class="row" style="justify-content:space-between;margin-bottom:12px"><div><h2>Analysis</h2><div class="sub">Reports &amp; insights</div></div></div>
   <div class="grid g3">
-   <div class="card clickable" onclick="go('traineranalysis')"><h3>🧑 Trainer Analysis</h3><p class="sub">PT client count, trainer performance, change requests</p></div>
-   <div class="card clickable" onclick="go('clientanalysis')"><h3>👥 Client Analysis</h3><p class="sub">Membership stats, ID migration, client breakdown</p></div>
-   <div class="card clickable" onclick="go('gymperformance')"><h3>📊 Gym Performance</h3><p class="sub">Staff sales &amp; attendance</p></div>
-   <div class="card clickable" onclick="go('reports')"><h3>📈 Reports & Charts</h3><p class="sub">Collection, expense and membership reports</p></div>
-   <div class="card clickable" onclick="go('accounts')"><h3>💵 Accounts / P&L</h3><p class="sub">Profit & loss overview</p></div>
-   <div class="card clickable" onclick="go('meter')"><h3>⚡ EB Meter</h3><p class="sub">Day & night electricity readings</p></div>
-   <div class="card clickable" onclick="go('clients')"><h3>👥 Member Stats</h3><p class="sub">Active / inactive / no subscription</p></div>
-   <div class="card clickable" onclick="go('billing')"><h3>🧾 Billing Analysis</h3><p class="sub">Invoices, dues and payments</p></div>
-   <div class="card clickable" onclick="go('attreports')"><h3>📑 Attendance Analysis</h3><p class="sub">Attendance trends & irregulars</p></div>
+   <div class="card clickable" onclick="go('traineranalysis')"><h3>Trainer Analysis</h3><p class="sub">PT client count, trainer performance, change requests</p></div>
+   <div class="card clickable" onclick="go('clientanalysis')"><h3>Client Analysis</h3><p class="sub">Membership stats, ID migration, client breakdown</p></div>
+   <div class="card clickable" onclick="go('gymperformance')"><h3>Gym Performance</h3><p class="sub">Staff sales &amp; attendance</p></div>
+   <div class="card clickable" onclick="go('reports')"><h3>Reports & Charts</h3><p class="sub">Collection, expense and membership reports</p></div>
+   <div class="card clickable" onclick="go('accounts')"><h3>Accounts / P&L</h3><p class="sub">Profit & loss overview</p></div>
+   <div class="card clickable" onclick="go('clients')"><h3>Member Stats</h3><p class="sub">Active / inactive / no subscription</p></div>
+   <div class="card clickable" onclick="go('billing')"><h3>Billing Analysis</h3><p class="sub">Invoices, dues and payments</p></div>
+   <div class="card clickable" onclick="go('attreports')"><h3>Attendance Analysis</h3><p class="sub">Attendance trends & irregulars</p></div>
   </div>`}
 function pgNotifications(){
  const due=(db.invoices||[]).filter(i=>i.pending>0).slice(0,20);
  $('content').innerHTML=`<h2>Notification & WhatsApp</h2><div class="sub" style="margin-bottom:12px">Reminders and chat templates</div>
   <div class="grid g2">
-   <div class="card"><h3>🔔 Pending Balance Alerts</h3>
+   <div class="card"><h3>Pending Balance Alerts</h3>
     <div class="tbl"><table><tr><th>Invoice</th><th>Member</th><th class="r">Due</th><th></th></tr>
     ${due.map(i=>{const c=client(i.clientId);return`<tr><td>${esc(i.no)}</td><td>${esc(c?c.name:'')}</td><td class="r">${inr(i.pending)}</td>
     <td><button class="btn sm sec" onclick="waShare('${i.id}')">WhatsApp</button></td></tr>`}).join('')||'<tr><td colspan="4" class="mut">No pending dues</td></tr>'}
     </table></div></div>
-   <div class="card"><h3>💬 WhatsApp Templates</h3>
+   <div class="card"><h3>WhatsApp Templates</h3>
     <p class="sub">Use from invoice print / bill notifications.</p>
     <ul class="sub" style="margin:10px 0 0 18px;line-height:1.8">
      <li>Payment thank-you message</li>
@@ -3913,7 +3925,7 @@ function pgNotifications(){
   </div>`}
 function pgTrainers(){
  const show=listTrainersForPage();
- const addBtn=canManageStaff()?`<button class="btn" onclick="trainerForm()">➕ Add New Trainer</button>`:'';
+ const addBtn=canManageStaff()?`<button class="btn" onclick="trainerForm()">Add New Trainer</button>`:'';
  $('content').innerHTML=`<div class="row" style="justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:10px"><div><h2>Trainers</h2><div class="sub">${show.length} trainer(s) · set shift times & login in Add / Edit</div></div>
   <div class="row" style="gap:8px">${addBtn}<button class="btn sec" onclick="go('trainer')">Trainer Portal</button><button class="btn sec" onclick="go('staff')">All Staff</button></div></div>
   <div class="tbl"><table><tr><th>ID</th><th>Name</th><th>Dept</th><th>Shift Times</th><th>Mobile</th><th>Status</th><th></th></tr>
@@ -3923,12 +3935,12 @@ function pgFitness(){
  const s=db.settings||{};
  $('content').innerHTML=`${superPlatformBar()}<h2>Fitness Center</h2><div class="sub" style="margin-bottom:12px">${esc(s.gymName||'FITO6')} · ${esc(s.branch||'')}${isSuperAdmin()&&AUTH.businessId?` · <button class="btn sm sec" style="margin-left:6px" onclick="openEditGym('${AUTH.businessId}')">Edit Gym Name</button>`:''}</div>
   <div class="grid g3">
-   <div class="card"><h3>🏢 Center</h3><p class="big bold">${esc(s.gymName||'FITO6')}</p><p class="sub">Branch: ${esc(s.branch||'Main')} (${esc(s.branchCode||'BR01')})</p>${isSuperAdmin()&&AUTH.businessId?`<button class="btn sm sec" style="margin-top:10px" onclick="openEditGym('${AUTH.businessId}')">Edit Name</button>`:''}</div>
-   <div class="card clickable" onclick="go('meter')"><h3>⚡ EB Meter</h3><p class="sub">Day & night electricity readings</p></div>
-   <div class="card clickable" onclick="go('settings')"><h3>⚙️ Branches</h3><p class="sub">Create next branch ID</p></div>
-   <div class="card clickable" onclick="go('batches')"><h3>🗓️ Classes</h3><p class="sub">Batches & group classes</p></div>
-   <div class="card clickable" onclick="go('staff')"><h3>🧑 Team</h3><p class="sub">Staff & management</p></div>
-   <div class="card clickable" onclick="go('accounts')"><h3>💵 Accounts</h3><p class="sub">Cash / bank / P&L</p></div>
+   <div class="card"><h3>Center</h3><p class="big bold">${esc(s.gymName||'FITO6')}</p><p class="sub">Branch: ${esc(s.branch||'Main')} (${esc(s.branchCode||'BR01')})</p>${isSuperAdmin()&&AUTH.businessId?`<button class="btn sm sec" style="margin-top:10px" onclick="openEditGym('${AUTH.businessId}')">Edit Name</button>`:''}</div>
+   <div class="card clickable" onclick="go('meter')"><h3>EB Meter</h3><p class="sub">Day & night electricity readings</p></div>
+   <div class="card clickable" onclick="go('settings')"><h3>Branches</h3><p class="sub">Create next branch ID</p></div>
+   <div class="card clickable" onclick="go('batches')"><h3>Classes</h3><p class="sub">Batches & group classes</p></div>
+   <div class="card clickable" onclick="go('staff')"><h3>Team</h3><p class="sub">Staff & management</p></div>
+   <div class="card clickable" onclick="go('accounts')"><h3>Accounts</h3><p class="sub">Cash / bank / P&L</p></div>
   </div>`}
 function pgAttReports(){
  const t=today();
@@ -3959,7 +3971,7 @@ function pgAppointments(){
  if(!Array.isArray(db.appointments))db.appointments=[];
  const rows=db.appointments.slice().sort((a,b)=>(a.date||'').localeCompare(b.date||''));
  $('content').innerHTML=`<div class="row" style="justify-content:space-between;margin-bottom:12px"><div><h2>Appointments</h2><div class="sub">PT / trial / consultation slots</div></div>
-  <button class="btn" onclick="apptForm()">➕ Add Appointment</button></div>
+  <button class="btn" onclick="apptForm()">Add Appointment</button></div>
   <div class="tbl"><table><tr><th>Date</th><th>Time</th><th>Member / Lead</th><th>With</th><th>Type</th><th>Notes</th><th></th></tr>
   ${rows.map(a=>`<tr><td>${esc(a.date||'')}</td><td>${esc(a.time||'')}</td><td>${esc(a.person||'')}</td><td>${esc(a.with||'')}</td><td>${esc(a.type||'')}</td><td>${esc(a.notes||'')}</td>
   <td><button class="btn sm dgr" onclick="db.appointments=db.appointments.filter(x=>x.id!=='${a.id}');save();go('appointments')">Del</button></td></tr>`).join('')||'<tr><td colspan="7" class="mut">No appointments yet</td></tr>'}
@@ -4113,7 +4125,7 @@ function pgMore(){
  };
  $('content').innerHTML=`<h2>More Options</h2><div class="sub" style="margin-bottom:12px">Import, cleanup and extras</div>
  <div class="grid g3">
-  <div class="card clickable" onclick="go('interviews')"><h3>📝 Interview Candidates</h3>
+  <div class="card clickable" onclick="go('interviews')"><h3>Interview Candidates</h3>
    <p class="sub">Hiring sheet — enquiry date, contact, role, schedule, status · ${counts.interviews} records</p>
    <button class="btn sm" style="margin-top:10px" onclick="event.stopPropagation();go('interviews')">Open Sheet</button></div>
   <div class="card clickable" onclick="openYdlImport('auto')"><h3>⬆ Import YDL CSV</h3><p class="sub">Upload Members / Enquiries with YDL columns</p>
@@ -4122,16 +4134,15 @@ function pgMore(){
   <div class="card clickable" onclick="openCbImport()"><h3>⬆ Import Cashbook CSV</h3><p class="sub">Date, Time, Remark, Party, Cash In/Out, Client Name, Sales Type</p></div>
   <div class="card clickable" onclick="downloadCbTemplate()"><h3>⬇ Cashbook Template</h3><p class="sub">Blank CSV with Date, Time, Remark, Party, Cash In/Out fields</p></div>
   <div class="card clickable" onclick="openCbImport()"><h3>⬆ Import Cashbook CSV</h3><p class="sub">Upload YDL cashbook export into ledger</p></div>
-  <div class="card" style="border-color:#f5c2c2;background:#fff8f8"><h3 style="color:var(--bad)">🗑 Delete Current Data</h3>
+  <div class="card" style="border-color:#f5c2c2;background:#fff8f8"><h3 style="color:var(--bad)">Delete Current Data</h3>
    <p class="sub">Members ${counts.clients} · Leads ${counts.leads} · Bills ${counts.invoices} · Cash ${counts.cashbook}</p>
    <button class="btn dgr sm" style="margin-top:10px" onclick="openDeleteData()">Delete Data…</button></div>
-  <div class="card clickable" onclick="go('todos')"><h3>✅ To-do List</h3><p class="sub">Assign work to staff & trainers</p></div>
-  <div class="card clickable" onclick="go('audit')"><h3>🛡️ Audit Log</h3><p class="sub">Activity history</p></div>
-  <div class="card clickable" onclick="go('meter')"><h3>⚡ EB Meter</h3><p class="sub">Electricity readings</p></div>
-  <div class="card clickable" onclick="go('trainer')"><h3>📱 Trainer Portal</h3><p class="sub">Mobile trainer home</p></div>
-  <div class="card clickable" onclick="go('payroll')"><h3>💵 Payroll</h3><p class="sub">Salary generation</p></div>
-  <div class="card clickable" onclick="go('settings')"><h3>⚙️ Settings</h3><p class="sub">IDs, branches, packages</p></div>
-  <div class="card" style="border-color:#dbeafe;background:#f8fbff"><h3>🆔 Member ID Order</h3>
+  <div class="card clickable" onclick="go('todos')"><h3>To-do List</h3><p class="sub">Assign work to staff & trainers</p></div>
+  <div class="card clickable" onclick="go('audit')"><h3>Audit Log</h3><p class="sub">Activity history</p></div>
+  <div class="card clickable" onclick="go('trainer')"><h3>Trainer Portal</h3><p class="sub">Mobile trainer home</p></div>
+  <div class="card clickable" onclick="go('payroll')"><h3>Payroll</h3><p class="sub">Salary generation</p></div>
+  <div class="card clickable" onclick="go('settings')"><h3>Settings</h3><p class="sub">IDs, branches, packages</p></div>
+  <div class="card" style="border-color:#dbeafe;background:#f8fbff"><h3>Member ID Order</h3>
    <p class="sub">IDs follow <b>join date</b> (earliest = lowest number). Migrate old IDs or re-order after bulk import.</p>
    <div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap">
     <button class="btn sm" onclick="migrateClientIds()">Migrate Client IDs</button>
@@ -4263,8 +4274,8 @@ function pgSettings(){
  <div class="card"><h3>Backup & Data</h3>
   <div class="row" style="margin-bottom:10px"><button class="btn sec" onclick="backup()">⬇ Download Backup (JSON)</button>
   <label class="btn sec" style="display:inline-block">⬆ Restore Backup<input type="file" style="display:none" onchange="restore(this)"></label></div>
-  <div class="row"><button class="btn sec" onclick="seedDemo()">🧪 Load Demo Data</button>
-  <button class="btn dgr" onclick="if(confirm('Erase ALL data? This cannot be undone.')){localStorage.removeItem(DBKEY);location.reload()}">🗑 Factory Reset</button></div></div>
+  <div class="row"><button class="btn sec" onclick="seedDemo()">Load Demo Data</button>
+  <button class="btn dgr" onclick="if(confirm('Erase ALL data? This cannot be undone.')){localStorage.removeItem(DBKEY);location.reload()}">Factory Reset</button></div></div>
  </div>`}
 function genAdminId(kind){
  if(!db.settings.adminIds)db.settings.adminIds={superAdmin:'',admin:''};
@@ -4434,7 +4445,7 @@ function seedDemo(){
   }
  }
  const pw=$('lg_p');if(pw)pw.addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
- document.addEventListener('click',e=>{if(!e.target.closest('.tb-ico')&&!e.target.closest('.tb-drop'))closeTbDrops()});
+ document.addEventListener('click',e=>{if(!e.target.closest('.tb-action')&&!e.target.closest('.tb-drop'))closeTbDrops()});
 })();
 
 </script>
