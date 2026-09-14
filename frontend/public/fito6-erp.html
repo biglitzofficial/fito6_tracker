@@ -394,9 +394,12 @@ hr.sep{border:none;border-top:1px solid var(--line);margin:14px 0}
 
 <script>
 /* ================= CLOUD API + DATABASE ================= */
-const DBKEY='fito6_erp_v1';
+const DBKEY_LEGACY='fito6_erp_v1';
+const DBKEY_PREFIX='fito6_erp_v1_';
+const DBKEY_PLATFORM=DBKEY_PREFIX+'platform';
 const AUTHKEY='fito6_erp_auth';
 const LASTPAGEKEY='fito6_erp_page';
+const ERP_SYNC_CHANNEL='fito6_erp_sync';
 let API_URL='http://localhost:4000/api';
 let AUTH={token:null,businessId:null,user:null,businesses:[]};
 let db=null;
@@ -404,7 +407,26 @@ let _saveTimer=null;
 let _cloudReady=false;
 let _restoreBusy=false;
 let _cbPendingMode=null;
+let _syncChannel=null;
+let _cloudPullTimer=null;
+let _pullBusy=false;
+let _lastRemoteDbTs=0;
+let _notifySync=true;
 var _navSubId=null;
+function dbCacheKey(businessId){return businessId?DBKEY_PREFIX+businessId:DBKEY_PLATFORM}
+function currentCacheKey(){return dbCacheKey(AUTH.businessId||null)}
+function migrateLegacyCache(businessId){
+ if(!businessId)return null;
+ try{
+  const legacy=localStorage.getItem(DBKEY_LEGACY);
+  if(!legacy)return null;
+  const key=dbCacheKey(businessId);
+  if(localStorage.getItem(key))return null;
+  localStorage.setItem(key,legacy);
+  localStorage.removeItem(DBKEY_LEGACY);
+  return JSON.parse(legacy);
+ }catch(e){return null}
+}
 
 async function initApiConfig(){
  try{const r=await fetch('/fito6-config.json',{cache:'no-store'});if(r.ok){const j=await r.json();if(j.apiUrl)API_URL=j.apiUrl}}catch(e){}
@@ -589,17 +611,104 @@ function defaults(){return{
  seq:{client:1000,invoice:1,receipt:1,voucher:1,staff:100,trainer:0,payroll:0,clientByBranch:{},clientByYear:{}},
  clients:[],subs:[],invoices:[],cashbook:[],staff:[],staffAtt:[],memberAtt:[],payroll:[],audit:[],leads:[],batches:[],classes:[],todos:[],meterReadings:[],appointments:[],interviews:[],digitalTracker:[]};}
 
-function cacheLocal(){try{localStorage.setItem(DBKEY,JSON.stringify(db))}catch(e){}}
-function loadLocalCache(){try{return JSON.parse(localStorage.getItem(DBKEY))}catch(e){return null}}
+function cacheLocal(opts){
+ if(!db)return;
+ try{
+  localStorage.setItem(currentCacheKey(),JSON.stringify(db));
+  if(!opts||!opts.skipNotify)notifyDbSync('local');
+ }catch(e){console.warn('Local cache save failed',e)}
+}
+function loadLocalCache(businessId){
+ const bid=businessId!==undefined?businessId:AUTH.businessId;
+ try{
+  const key=dbCacheKey(bid||null);
+  let raw=localStorage.getItem(key);
+  if(!raw&&bid)migrateLegacyCache(bid);
+  raw=localStorage.getItem(key);
+  return raw?JSON.parse(raw):null;
+ }catch(e){return null}
+}
+function notifyDbSync(source){
+ if(!_notifySync)return;
+ const ts=Date.now();
+ _lastRemoteDbTs=ts;
+ try{
+  if(_syncChannel)_syncChannel.postMessage({type:'db-update',businessId:AUTH.businessId||null,ts,source});
+ }catch(e){}
+}
+function applyExternalDb(nextDb,source){
+ if(!nextDb||!USER)return;
+ const same=db&&JSON.stringify(db)===JSON.stringify(nextDb);
+ if(same)return;
+ db=nextDb;ensurePkgSettings();
+ _lastRemoteDbTs=Date.now();
+ if(source==='cloud'){
+  _notifySync=false;
+  cacheLocal({skipNotify:true});
+  _notifySync=true;
+ }
+ const modalOpen=$('modalwrap')&&$('modalwrap').style.display==='flex';
+ if(modalOpen){window._pendingPageRefresh=true;return}
+ refreshCurrentPage(true);
+}
+function refreshCurrentPage(quiet){
+ if(!USER||!PAGE||!AUTH.token)return;
+ go(PAGE,null,{hist:true,silent:true});
+ if(!quiet)toast('Data refreshed');
+}
+function scheduleCloudPull(quiet){
+ if(!AUTH.token||!AUTH.businessId||!_cloudReady)return;
+ clearTimeout(_cloudPullTimer);
+ _cloudPullTimer=setTimeout(()=>pullCloudDb(quiet),350);
+}
+async function pullCloudDb(quiet){
+ if(!AUTH.token||!AUTH.businessId||!_cloudReady||_pullBusy||_restoreBusy)return;
+ _pullBusy=true;
+ try{
+  const res=await api('/erp-store');
+  if(res&&res.data)applyExternalDb(res.data,'cloud');
+ }catch(e){}
+ finally{_pullBusy=false;}
+}
+function initDbSync(){
+ if(window._fito6DbSync)return;
+ window._fito6DbSync=true;
+ try{
+  _syncChannel=new BroadcastChannel(ERP_SYNC_CHANNEL);
+  _syncChannel.onmessage=(e)=>{
+   const m=e.data;
+   if(!m||m.type!=='db-update')return;
+   if((m.businessId||null)!==(AUTH.businessId||null))return;
+   if(m.ts<=_lastRemoteDbTs)return;
+   const local=loadLocalCache();
+   if(local)applyExternalDb(local,m.source||'broadcast');
+   else scheduleCloudPull(true);
+  };
+ }catch(e){}
+ window.addEventListener('storage',(e)=>{
+  if(!e.key||e.key!==currentCacheKey()||!e.newValue)return;
+  try{applyExternalDb(JSON.parse(e.newValue),'storage')}catch(err){}
+ });
+ document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState!=='visible')return;
+  scheduleCloudPull(true);
+ });
+ window.addEventListener('focus',()=>scheduleCloudPull(true));
+ setInterval(()=>{
+  if(document.visibilityState==='visible')scheduleCloudPull(true);
+ },15000);
+}
 
 async function loadFromCloud(){
+ if(!AUTH.businessId)throw new Error('No business context');
+ migrateLegacyCache(AUTH.businessId);
  const res=await api('/erp-store');
  if(res&&res.data){db=res.data;ensurePkgSettings();cacheLocal();_cloudReady=true;return 'firestore'}
- const local=loadLocalCache();
- if(local&&((local.clients&&local.clients.length)||(local.invoices&&local.invoices.length))){
+ const local=loadLocalCache(AUTH.businessId);
+ if(local&&((local.clients&&local.clients.length)||(local.invoices&&local.invoices.length)||(local.staff&&local.staff.length))){
   db=local;ensurePkgSettings();
   await api('/erp-store',{method:'PUT',body:{data:db}});
-  _cloudReady=true;return 'migrated';
+  cacheLocal();_cloudReady=true;return 'migrated';
  }
  db=defaults();ensurePkgSettings();
  await api('/erp-store',{method:'PUT',body:{data:db}});
@@ -617,10 +726,16 @@ async function persistCloud(){
  if(!AUTH.token||!AUTH.businessId||!db)return;
  try{
   await api('/erp-store',{method:'PUT',body:{data:db}});
+  notifyDbSync('cloud');
  }catch(e){
   console.error('Cloud save failed',e);
   toast('Cloud save failed — check connection. Data kept in this browser until retry.');
  }
+}
+async function flushCloudSave(){
+ clearTimeout(_saveTimer);
+ _saveTimer=null;
+ if(_cloudReady&&AUTH.token&&AUTH.businessId)await persistCloud();
 }
 
 function ensurePkgSettings(){
@@ -689,7 +804,7 @@ function toast(m){const t=$('toast');t.textContent=m;t.style.display='block';cle
 function val(id){return $(id)?$(id).value.trim():''}
 function num(id){return parseFloat(val(id))||0}
 function openModal(html,noHist){const wasOpen=$('modalwrap')&&$('modalwrap').style.display==='flex';$('modal').innerHTML=html;$('modalwrap').style.display='flex';$('modal').querySelectorAll('script').forEach(s=>{try{eval(s.textContent)}catch(e){console.error(e)}});if(!_histBusy&&!noHist&&!wasOpen)pushAppHistory(appHistState(PAGE,true),false)}
-function closeModal(fromPop){stopWebcam();$('modalwrap').style.display='none';if(!fromPop&&!_histBusy){const st=history.state;if(st&&st.fito6&&st.modal)history.back()}}
+function closeModal(fromPop){stopWebcam();$('modalwrap').style.display='none';if(!fromPop&&!_histBusy){const st=history.state;if(st&&st.fito6&&st.modal)history.back()}if(window._pendingPageRefresh){window._pendingPageRefresh=false;refreshCurrentPage(true)}}
 function audit(action,detail,oldV,newV){db.audit.unshift({ts:new Date().toISOString(),user:USER?USER.name:'-',role:USER?USER.role:'-',action,detail:detail||'',oldV:oldV||'',newV:newV||''});if(db.audit.length>3000)db.audit.length=3000;save()}
 function csvExport(rows,name){const csv=rows.map(r=>r.map(c=>'"'+String(c??'').replace(/"/g,'""')+'"').join(',')).join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download=name+'.csv';a.click();toast('Exported '+name+'.csv')}
 /* ---- YDL CSV Import (Members / Enquiries) ---- */
@@ -1649,18 +1764,15 @@ const NAV_TREE=[
   {label:'Expenses',page:'expenses'},
   {label:'Payroll',page:'payroll'}
  ]},
- {id:'trainers',label:'Trainers',kids:[
-  {label:'Trainer List',page:'trainers'},
-  {label:'Add New Trainer',page:'trainers',fn:'trainerForm()'},
-  {label:'Trainer Portal',page:'trainer'},
-  {label:'Assign To-dos',page:'todos'}
- ]},
- {id:'staff',label:'Staff & Attendance',kids:[
+ {id:'employee',label:'Employee',kids:[
   {label:'Staff Directory',page:'staff'},
   {label:'Daily Attendance',page:'attendance'},
   {label:'Attendance Reports',page:'attreports'},
   {label:'Irregular Members',page:'attreports'},
   {label:'Payroll',page:'payroll'},
+  {label:'Trainer List',page:'trainers'},
+  {label:'Add New Trainer',page:'trainers',fn:'trainerForm()'},
+  {label:'Trainer Portal',page:'trainer'},
   {label:'To-do List',page:'todos'}
  ]},
  {id:'fitness',label:'Fitness Center',kids:[
@@ -2655,7 +2767,7 @@ function readPayRowMode(row){
  if(topSel.value==='Bank')return normCbMode(subSel?subSel.value:'UPI');
  return'Cash';
 }
-function savePayment(invId){
+async function savePayment(invId){
  const iv=db.invoices.find(i=>i.id===invId);const c=client(iv.clientId);
  const rows=[...document.querySelectorAll('#payrows .row')];const pays=[];
  rows.forEach(r=>{const mode=readPayRowMode(r),amt=parseFloat(r.querySelector('input[type=number]').value)||0;if(amt>0)pays.push({mode,amt})});
@@ -2677,7 +2789,7 @@ function savePayment(invId){
  });
  iv.paid+=totalPay;iv.pending=+(iv.grand-iv.paid).toFixed(2);iv.dueDate=val('p_due');
  if(c){ensureClientPipeline(c);c.pipeline.feesPaid=true}
- save();audit('Payment Received',c.name+' · '+iv.no+' · '+inr(totalPay));
+ save();await flushCloudSave();audit('Payment Received',c.name+' · '+iv.no+' · '+inr(totalPay));
  toast('Payment saved — cashbook, ledger & dashboard updated');
  closeModal();showInvoice(iv.id)}
 function recalcInvoicePaid(iv){
@@ -3577,7 +3689,7 @@ async function saveStaff(id){
    await api('/staff/'+s.loginUserId+'/password',{method:'PATCH',body:{password:newPass}});
    audit('Staff Login Password Reset',s.id+' · '+s.loginEmail);
   }
-  save();audit(isNew?'Staff Added':'Staff Updated',s.id+' '+s.name,old,JSON.stringify({salary:s.salary,status:s.status}));
+  save();await flushCloudSave();audit(isNew?'Staff Added':'Staff Updated',s.id+' '+s.name,old,JSON.stringify({salary:s.salary,status:s.status}));
   toast('Staff saved · '+s.id+(s.loginUserId?' · login ready':''));closeModal();
   const preset=window._staffFormPreset||{};window._staffFormPreset=null;
   go(preset.returnPage||(isTrainerStaff(dept)?'trainers':'staff'));
@@ -3608,7 +3720,7 @@ function markStaff(staffId,status){
  let a=db.staffAtt.find(x=>x.date===today()&&x.staffId===staffId);
  if(!a){a={date:today(),staffId};db.staffAtt.push(a)}
  a.status=status;a.time=new Date().toTimeString().slice(0,5);
- save();audit('Attendance Marked',st.name+' → '+status);pgAttendance()}
+ save();flushCloudSave().catch(()=>{});audit('Attendance Marked',st.name+' → '+status);pgAttendance()}
 function checkinMember(){
  const raw=val('ma_id').trim();
  const q=raw.toLowerCase();
@@ -4172,7 +4284,7 @@ function leadForm(id,preset){
  </div><div class="row" style="justify-content:flex-end;gap:8px;margin-top:10px">
   <button class="btn sec" onclick="closeModal()">Cancel</button>
   <button class="btn" onclick="saveLead('${id||''}')">Save</button></div>`)}
-function saveLead(id){
+async function saveLead(id){
  if(!val('ld_name')){toast('Name required');return}
  const mobile=normalizeMobile(val('ld_mobile'));
  const wa=normalizeMobile(val('ld_wa'))||mobile;
@@ -4189,7 +4301,7 @@ function saveLead(id){
   refNo:val('ld_refno'),notes:val('ld_notes'),
   channel:isOnlineLead({source:val('ld_src')})?'online':'offline'
  });
- save();toast('Lead saved');closeModal();go(PAGE==='followups'?'followups':'leads');
+ save();await flushCloudSave();toast('Lead saved');closeModal();go(PAGE==='followups'?'followups':'leads');
 }
 function convertLead(id){
  const l=(db.leads||[]).find(x=>x.id===id);if(!l)return;
@@ -5102,7 +5214,7 @@ function pgSettings(){
   <div class="row" style="margin-bottom:10px"><button class="btn sec" onclick="backup()">⬇ Download Backup (JSON)</button>
   <label class="btn sec" style="display:inline-block">⬆ Restore Backup<input type="file" style="display:none" onchange="restore(this)"></label></div>
   <div class="row"><button class="btn sec" onclick="seedDemo()">Load Demo Data</button>
-  <button class="btn dgr" onclick="if(confirm('Erase ALL data? This cannot be undone.')){localStorage.removeItem(DBKEY);location.reload()}">Factory Reset</button></div></div>
+  <button class="btn dgr" onclick="if(confirm('Erase ALL data? This cannot be undone.')){localStorage.removeItem(currentCacheKey());localStorage.removeItem(DBKEY_LEGACY);location.reload()}">Factory Reset</button></div></div>
  </div>`}
 function genAdminId(kind){
  if(!db.settings.adminIds)db.settings.adminIds={superAdmin:'',admin:''};
@@ -5130,7 +5242,7 @@ function onBranchFiles(inp){
   readFileAsDataUrl(f,data=>{window._branchDocs.push({name:f.name,type:f.type,data:data.slice(0,500000),uploadedAt:new Date().toISOString()});});
  });
 }
-function saveNewBranch(){
+async function saveNewBranch(){
  const name=val('br_name').trim();if(name.length<2){toast('Branch name required');return}
  if(!Array.isArray(db.settings.branches))db.settings.branches=[];
  if(!Array.isArray(db.settings.branchDocs))db.settings.branchDocs=[];
@@ -5139,7 +5251,7 @@ function saveNewBranch(){
  db.settings.branches.push(name+' ('+code+')');
  db.settings.branchDocs.push({id,name,code,agreementRef:val('br_agree')||'',created:today(),docs:window._branchDocs||[]});
  db.settings.branch=name;db.settings.branchCode=code;
- save();audit('Branch Created',name+' · '+code);toast('Branch created · ID '+code);closeModal();pgSettings();
+ save();await flushCloudSave();audit('Branch Created',name+' · '+code);toast('Branch created · ID '+code);closeModal();pgSettings();
 }
 function viewBranchDocs(branchId){
  const b=(db.settings.branchDocs||[]).find(x=>x.id===branchId);if(!b||!(b.docs||[]).length){toast('No documents');return}
@@ -5151,7 +5263,7 @@ function addNewBranch(){openBranchModal()}
 function toggleBillRepFlag(id){const s=staffById(id);if(!s)return;s.billRep=s.billRep===false;s.isBillRep=s.billRep;save();pgSettings()}
 async function saveSettings(){const s=db.settings;const old=s.gstPct;
  s.gymName=val('se_name');s.branch=val('se_branch');s.gstNo=val('se_gstno');s.gstPct=num('se_gstp');s.openingCash=num('se_open');s.openingBank=num('se_bank');
- save();audit('Settings Changed','Business settings',String(old),String(s.gstPct));
+ save();await flushCloudSave();audit('Settings Changed','Business settings',String(old),String(s.gstPct));
  if(isSuperAdmin()&&AUTH.businessId&&AUTH.token&&s.gymName){
   try{
    await platformApi('/platform/gyms/'+AUTH.businessId,{method:'PATCH',body:{gymName:s.gymName}});
@@ -5296,6 +5408,7 @@ function seedDemo(){
 /* ================= INIT ================= */
 (async function boot(){
  setupHistoryNav();
+ initDbSync();
  restoreAuth();
  await initApiConfig();
  if(AUTH.token&&AUTH.user){
