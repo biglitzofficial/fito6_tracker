@@ -16,9 +16,41 @@ label{font-size:11px;font-weight:600;color:var(--mut);text-transform:uppercase;l
 h2{font-size:20px;margin-bottom:4px} h3{font-size:15px;margin-bottom:10px}
 .sub{color:var(--mut);font-size:12px}
 /* LOGIN */
-#login{position:fixed;inset:0;background:linear-gradient(135deg,#141b2d,#26314e);display:flex;align-items:center;justify-content:center;z-index:100}
+#login{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:100;background:#050b18;overflow:auto}
 #login .box{background:#fff;border-radius:14px;padding:36px;width:360px;box-shadow:0 20px 60px rgba(0,0,0,.4)}
 .logo{font-weight:800;font-size:26px;letter-spacing:1px}.logo span{color:var(--brand)}
+#login.branded{align-items:stretch;justify-content:stretch;padding:0}
+#login .login-bg{position:absolute;inset:0;background:#050b18 center/cover no-repeat;filter:saturate(1.05)}
+#login .login-bg:after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(3,8,20,.18),rgba(3,8,20,.55))}
+#login .login-stage{position:relative;z-index:2;width:100%;min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:28px 16px 36px}
+#login .login-glass{width:min(420px,94vw);background:rgba(8,22,48,.58);border:1px solid rgba(80,170,255,.38);border-radius:28px;padding:28px 26px 22px;box-shadow:0 0 0 1px rgba(80,180,255,.12),0 24px 70px rgba(0,0,20,.55),inset 0 1px 0 rgba(255,255,255,.12);backdrop-filter:blur(16px);color:#eaf6ff;text-align:center}
+#login .login-ico{width:72px;height:72px;margin:0 auto 10px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 30% 20%,#7ad0ff,#1c6ad8);box-shadow:0 0 24px rgba(50,160,255,.45);font-size:30px}
+#login .login-title{font-size:28px;letter-spacing:2px;font-weight:800;color:#fff;text-shadow:0 0 18px rgba(70,170,255,.55)}
+#login .login-sub{font-size:11px;letter-spacing:2.2px;color:#9ec9ea;margin:6px 0 18px;text-transform:uppercase}
+#login .login-badge{display:inline-block;margin:0 auto 16px;padding:4px 14px;border-radius:999px;border:1px solid rgba(90,180,255,.5);font-size:11px;letter-spacing:1.4px;color:#bde6ff}
+#login .login-glass .field{text-align:left;margin-bottom:12px}
+#login .login-glass label{color:#9ec9ea}
+#login .login-glass input{background:rgba(10,24,48,.72);border:1px solid rgba(90,180,255,.35);color:#fff;border-radius:12px;padding:12px 12px 12px 38px}
+#login .login-glass input::placeholder{color:#7ea8c8}
+#login .login-ico-in{position:relative}
+#login .login-ico-in:before{content:attr(data-ico);position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:14px;opacity:.85}
+#login .login-eye{position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;color:#bde6ff;font-size:16px;padding:4px}
+#login .login-row{display:flex;justify-content:space-between;align-items:center;margin:4px 0 16px;font-size:12px;color:#9ec9ea}
+#login .login-row label{display:flex;gap:8px;align-items:center;text-transform:none;letter-spacing:0;font-size:12px;color:#cfe8ff;margin:0;font-weight:500}
+#login .login-row input{width:auto;padding:0}
+#login .login-row a{color:#7ecbff;text-decoration:none}
+#login .login-cta{width:100%;border:none;border-radius:999px;padding:13px 18px;font-weight:800;letter-spacing:1.5px;color:#fff;background:linear-gradient(90deg,#1ea0ff,#0b5dff);box-shadow:0 10px 24px rgba(20,110,255,.45)}
+#login .login-cta:hover{filter:brightness(1.08)}
+#login .login-back{margin-top:14px;background:none;border:none;color:#9ec9ea;font-size:12px;text-decoration:underline}
+#login .login-err{margin-top:10px;color:#ff8b8b;font-size:12px;display:none}
+#login .chooser{position:relative;z-index:2;width:min(1080px,96vw);margin:auto;padding:28px 12px}
+#login .chooser h1{color:#fff;text-align:center;font-size:28px;letter-spacing:2px;margin-bottom:6px}
+#login .chooser p{color:#9ec9ea;text-align:center;margin-bottom:22px}
+#login .chooser-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+#login .chooser-card{position:relative;min-height:210px;border-radius:18px;overflow:hidden;border:1px solid rgba(90,180,255,.3);cursor:pointer;box-shadow:0 16px 40px rgba(0,0,0,.35)}
+#login .chooser-card img{width:100%;height:100%;object-fit:cover;position:absolute;inset:0;transform:scale(1.02)}
+#login .chooser-card span{position:absolute;left:0;right:0;bottom:0;padding:14px 14px 12px;background:linear-gradient(180deg,transparent,rgba(4,12,28,.92));color:#fff;font-weight:800;letter-spacing:1px}
+@media(max-width:760px){#login .chooser-grid{grid-template-columns:1fr}}
 /* LAYOUT */
 #app{display:none;min-height:100vh}
 #brandbar{display:flex;align-items:center;gap:14px;padding:10px 18px;background:#0f1524;color:#fff;border-bottom:1px solid #24304a}
@@ -143,17 +175,7 @@ hr.sep{border:none;border-top:1px solid var(--line);margin:14px 0}
 </head>
 <body>
 
-<div id="login">
-  <div class="box">
-    <div class="logo">FITO<span>6</span> ERP</div>
-    <div class="sub" style="margin-bottom:20px">Gym Management + Accounts + Cashbook</div>
-    <div class="field"><label>Email</label><input id="lg_u" type="email" placeholder="you@company.com" autocomplete="username"></div>
-    <div class="field"><label>Password</label><input id="lg_p" type="password" placeholder="Your password" autocomplete="current-password"></div>
-    <button class="btn" style="width:100%" id="lg_btn" onclick="doLogin()">Login</button>
-    <div class="sub" style="margin-top:14px;line-height:1.7" id="lg_hint">Cloud login · Super Admin: <b>superadmin@fito6.com</b> / <b>Fito6Super@2026</b> (created on backend deploy)</div>
-    <div class="sub" style="margin-top:8px;color:var(--bad);display:none" id="lg_err"></div>
-  </div>
-</div>
+<div id="login" class="branded"></div>
 
 <div id="app">
   <div id="brandbar">
@@ -1449,10 +1471,102 @@ async function saveGymName(id){
  }catch(e){toast(e.message||'Rename failed')}
 }
 function showLoginError(msg){const el=$('lg_err');if(!el)return;el.style.display=msg?'block':'none';el.textContent=msg||''}
+const LOGIN_REMEMBER='fito6_login_remember';
+const LOGIN_PORTALS={
+ chooser:{id:'chooser',title:'Choose Login'},
+ admin:{id:'admin',title:'ADMIN',sub:'Login to your account',bg:'login/admin.jpg',icon:'👤',match:[]},
+ superadmin:{id:'superadmin',title:'SUPER ADMIN',sub:'Full control. All branches.',bg:'login/superadmin.jpg',icon:'👑',match:[]},
+ dharapuram:{id:'dharapuram',title:'BRANCH LOGIN',sub:'Dharapuram Road',badge:'BRANCH 1',bg:'login/branch-dharapuram.jpg',icon:'🏋️',match:['dharapuram','branch 1','branch1']},
+ palladam:{id:'palladam',title:'BRANCH LOGIN',sub:'Palladam Road',badge:'BRANCH 2',bg:'login/branch-palladam.jpg',icon:'🏋️',match:['palladam','branch 2','branch2']}
+};
+let LOGIN_PORTAL='chooser';
+function loginPortalFromHash(){
+ const h=(location.hash||'').replace('#','').toLowerCase();
+ if(h==='login-admin'||h==='admin')return'admin';
+ if(h==='login-superadmin'||h==='superadmin'||h==='super')return'superadmin';
+ if(h==='login-dharapuram'||h==='dharapuram'||h==='branch1')return'dharapuram';
+ if(h==='login-palladam'||h==='palladam'||h==='branch2')return'palladam';
+ return'chooser';
+}
+function setLoginHash(id){
+ const map={chooser:'',admin:'login-admin',superadmin:'login-superadmin',dharapuram:'login-dharapuram',palladam:'login-palladam'};
+ const next=map[id]||'';
+ if((location.hash||'').replace('#','')===next)return;
+ if(next)location.hash=next;else if(location.hash)history.replaceState(null,'',location.pathname+location.search);
+}
+function rememberedLogin(){
+ try{return JSON.parse(localStorage.getItem(LOGIN_REMEMBER)||'null')}catch(e){return null}
+}
+function renderLoginChooser(){
+ LOGIN_PORTAL='chooser';
+ const el=$('login');if(!el)return;
+ el.className='branded';
+ el.innerHTML=`<div class="login-bg" style="background-image:url('login/superadmin.jpg')"></div>
+  <div class="chooser">
+   <h1>FITO6 LOGIN</h1>
+   <p>Select Super Admin, Admin, or a branch screen</p>
+   <div class="chooser-grid">
+    <div class="chooser-card" onclick="showLoginPortal('superadmin')"><img src="login/superadmin.jpg" alt="Super Admin"><span>SUPER ADMIN</span></div>
+    <div class="chooser-card" onclick="showLoginPortal('admin')"><img src="login/admin.jpg" alt="Admin"><span>ADMIN</span></div>
+    <div class="chooser-card" onclick="showLoginPortal('dharapuram')"><img src="login/branch-dharapuram.jpg" alt="Dharapuram Road"><span>DHARAPURAM ROAD · BRANCH 1</span></div>
+    <div class="chooser-card" onclick="showLoginPortal('palladam')"><img src="login/branch-palladam.jpg" alt="Palladam Road"><span>PALLADAM ROAD · BRANCH 2</span></div>
+   </div>
+  </div>`;
+ setLoginHash('chooser');
+}
+function showLoginPortal(id){
+ const p=LOGIN_PORTALS[id];
+ if(!p||id==='chooser'){renderLoginChooser();return}
+ LOGIN_PORTAL=id;
+ const saved=rememberedLogin();
+ const email=(saved&&saved.email)||'';
+ const el=$('login');if(!el)return;
+ el.className='branded';
+ el.innerHTML=`<div class="login-bg" style="background-image:url('${p.bg}')"></div>
+  <div class="login-stage">
+   <div class="login-glass">
+    <div class="login-ico">${p.icon||'👤'}</div>
+    <div class="login-title">${esc(p.title)}</div>
+    <div class="login-sub">${esc(p.sub||'Login to your account')}</div>
+    ${p.badge?`<div class="login-badge">${esc(p.badge)}</div>`:''}
+    <div class="field login-ico-in" data-ico="👤"><input id="lg_u" type="email" placeholder="Username" autocomplete="username" value="${esc(email)}"></div>
+    <div class="field login-ico-in" data-ico="🔒" style="position:relative">
+     <input id="lg_p" type="password" placeholder="Password" autocomplete="current-password">
+     <button type="button" class="login-eye" onclick="toggleLoginPw()" title="Show password">👁</button>
+    </div>
+    <div class="login-row">
+     <label><input id="lg_remember" type="checkbox" ${saved&&saved.email?'checked':''}> Remember Me</label>
+     <a href="#" onclick="forgotLoginPw();return false">Forgot Password?</a>
+    </div>
+    <button class="login-cta" id="lg_btn" onclick="doLogin()">LOGIN →</button>
+    <div class="login-err" id="lg_err"></div>
+    <button type="button" class="login-back" onclick="renderLoginChooser()">← Choose another login</button>
+   </div>
+  </div>`;
+ const pw=$('lg_p'),em=$('lg_u');
+ if(em)em.addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
+ if(pw)pw.addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
+ setLoginHash(id);
+}
+function toggleLoginPw(){
+ const inp=$('lg_p');if(!inp)return;
+ inp.type=inp.type==='password'?'text':'password';
+}
+function forgotLoginPw(){toast('Ask Super Admin to reset this account password')}
+function matchGymForPortal(businesses,portalId){
+ const p=LOGIN_PORTALS[portalId];if(!p||!p.match||!p.match.length)return null;
+ const keys=p.match.map(k=>k.toLowerCase());
+ return (businesses||[]).find(b=>{
+  const n=String(b.name||b.gymName||'').toLowerCase();
+  return keys.some(k=>n.includes(k));
+ })||null;
+}
 async function doLogin(){
  showLoginError('');
  const email=val('lg_u').toLowerCase(),password=val('lg_p');
  if(!email||!password){showLoginError('Enter email and password');return}
+ if($('lg_remember')&&$('lg_remember').checked)localStorage.setItem(LOGIN_REMEMBER,JSON.stringify({email,portal:LOGIN_PORTAL}));
+ else localStorage.removeItem(LOGIN_REMEMBER);
  const btn=$('lg_btn');if(btn){btn.disabled=true;btn.textContent='Signing in…'}
  try{
   await initApiConfig();
@@ -1469,7 +1583,8 @@ async function doLogin(){
    throw new Error('No business found for this account');
   }else{
    AUTH.businesses=businesses;
-   AUTH.businessId=businesses[0].id;
+   const matched=matchGymForPortal(businesses,LOGIN_PORTAL);
+   AUTH.businessId=(matched&&matched.id)||businesses[0].id;
    persistAuth();
    const source=await loadFromCloud();
    toast(source==='migrated'?'Local data uploaded to cloud database':source==='new'?'Cloud database ready':'Loaded from cloud database');
@@ -1488,13 +1603,14 @@ async function doLogin(){
   showLoginError(e.message||'Login failed');
   toast(e.message||'Login failed');
  }finally{
-  if(btn){btn.disabled=false;btn.textContent='Login'}
+  if(btn){btn.disabled=false;btn.textContent='LOGIN →'}
  }
 }
 function logout(){
  try{if(db&&USER)audit('Logout','User logged out')}catch(e){}
  USER=null;_cloudReady=false;clearAuth();
  $('app').style.display='none';$('login').style.display='flex';
+ showLoginPortal(LOGIN_PORTAL==='chooser'?'chooser':LOGIN_PORTAL);
 }
 function canPage(p){return USER&&MENUS[USER.role]&&MENUS[USER.role].includes(p)}
 function navVisible(item){
@@ -4393,6 +4509,8 @@ function seedDemo(){
   }
  }
  const pw=$('lg_p');if(pw)pw.addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
+ showLoginPortal(loginPortalFromHash());
+ window.addEventListener('hashchange',()=>{if($('app')&&$('app').style.display==='none')showLoginPortal(loginPortalFromHash())});
  document.addEventListener('click',e=>{if(!e.target.closest('.tb-ico')&&!e.target.closest('.tb-drop'))closeTbDrops()});
 })();
 
