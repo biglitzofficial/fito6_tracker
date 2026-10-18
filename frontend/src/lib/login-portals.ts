@@ -37,7 +37,7 @@ export const LOGIN_PORTALS: Record<LoginPortalId, LoginPortal> = {
   },
   admin: {
     id: 'admin',
-    path: '/admin',
+    path: '/',
     title: 'Admin',
     kicker: '',
     subtitle: 'Gym operations · members · billing',

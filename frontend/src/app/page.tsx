@@ -1,5 +1,5 @@
-import { HomeLanding } from '@/components/login/home-landing';
+import { PortalLogin } from '@/components/login/portal-login';
 
 export default function Home() {
-  return <HomeLanding />;
+  return <PortalLogin portalId="admin" />;
 }

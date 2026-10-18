@@ -189,6 +189,32 @@ export function PortalLogin({ portalId }: { portalId: LoginPortalId }) {
           <p className="mt-5 text-center text-[10px] font-semibold uppercase tracking-[0.28em] text-sky-200/55">
             Built for a stronger tomorrow
           </p>
+
+          {portal.id === 'admin' ? (
+            <div className="mt-5 border-t border-sky-300/15 pt-4">
+              <p className="mb-2 text-center text-[10px] font-semibold uppercase tracking-[0.28em] text-sky-200/70">
+                Gym login
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <Link
+                  href={LOGIN_PORTALS.dharapuram.path}
+                  className="rounded-full border border-sky-300/35 px-2 py-2 text-center text-[10px] font-semibold uppercase tracking-wide text-sky-100 hover:border-sky-200/70 hover:bg-sky-400/10"
+                >
+                  Dharapuram Road
+                </Link>
+                <Link
+                  href={LOGIN_PORTALS.palladam.path}
+                  className="rounded-full border border-sky-300/35 px-2 py-2 text-center text-[10px] font-semibold uppercase tracking-wide text-sky-100 hover:border-sky-200/70 hover:bg-sky-400/10"
+                >
+                  Palladam Road
+                </Link>
+              </div>
+            </div>
+          ) : portal.id === 'dharapuram' || portal.id === 'palladam' ? (
+            <Link href="/" className="mt-5 block text-center text-xs text-sky-200/80 underline-offset-4 hover:text-white hover:underline">
+              ← Admin login
+            </Link>
+          ) : null}
         </form>
 
         {portal.location ? (

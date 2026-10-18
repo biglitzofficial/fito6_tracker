@@ -1210,20 +1210,22 @@ function catManageList(kind,items){
 }
 function removeCatItem(kind,idx){removeSettingsItem(kind==='inc'?'incCats':'expCats',idx)}
 function addCatItem(kind){addSettingsItem(kind==='inc'?'incCats':'expCats',kind==='inc'?'add_incCats':'add_expCats')}
-function clientHadMembership(c){return!!c&&db.subs.some(s=>s.clientId===c.id&&s.type==='Membership')}
+function clientMembershipSubs(c){return!c?[]:db.subs.filter(s=>s.clientId===c.id&&s.type==='Membership')}
+function clientSoldMembership(c){return clientMembershipSubs(c).some(s=>!s.imported)}
+function clientHadMembership(c){return!!c&&clientMembershipSubs(c).length>0}
 function clientHadPt(c){return!!c&&db.subs.some(s=>s.clientId===c.id&&s.type==='PT')}
 function subTypesForClient(clientId){
  const all=db.settings.subTypes||['New Membership','Renew Membership','Upgrade Membership','New PT','Renew PT','Group Class','Freeze Membership','Transfer Membership'];
  const c=client(clientId);
  if(!c)return all;
  let types=all.slice();
- if(clientHadMembership(c))types=types.filter(t=>t!=='New Membership');
  if(clientHadPt(c))types=types.filter(t=>t!=='New PT');
- return types.length?types:all.filter(t=>t!=='New Membership'&&t!=='New PT');
+ return types.length?types:all;
 }
 function defaultSubType(clientId){
  const c=client(clientId);
- if(!c||!clientHadMembership(c))return'New Membership';
+ if(!c||!clientSoldMembership(c))return'New Membership';
+ if(c.pipeline&&c.pipeline.feesPaid===false)return'New Membership';
  return'Renew Membership';
 }
 function ensureCbCategory(cat,type){
@@ -1333,14 +1335,25 @@ function syncClientSeqFromPrefix(prefix){
  if(!db.seq.clientByBranch)db.seq.clientByBranch={};
  db.seq.clientByBranch[key]=maxSeq;
 }
+function rewriteClientId(oldId,newId){
+ (db.subs||[]).forEach(s=>{if(s.clientId===oldId)s.clientId=newId});
+ (db.invoices||[]).forEach(i=>{if(i.clientId===oldId)i.clientId=newId});
+ (db.memberAtt||[]).forEach(a=>{if(a.clientId===oldId)a.clientId=newId});
+ (db.trainerRequests||[]).forEach(r=>{if(r.clientId===oldId)r.clientId=newId});
+ (db.leads||[]).forEach(l=>{if(l.clientId===oldId)l.clientId=newId});
+}
 function applyClientIdRefs(idMap){
  if(!idMap||!Object.keys(idMap).length)return;
- Object.entries(idMap).forEach(([oldId,newId])=>{
-  (db.subs||[]).forEach(s=>{if(s.clientId===oldId)s.clientId=newId});
-  (db.invoices||[]).forEach(i=>{if(i.clientId===oldId)i.clientId=newId});
-  (db.memberAtt||[]).forEach(a=>{if(a.clientId===oldId)a.clientId=newId});
-  (db.trainerRequests||[]).forEach(r=>{if(r.clientId===oldId){r.clientId=newId;const nc=client(newId);if(nc)r.clientName=nc.name}});
-  (db.leads||[]).forEach(l=>{if(l.clientId===oldId)l.clientId=newId});
+ const temps={};
+ const stamp='__idtmp_'+Date.now()+'_';
+ Object.keys(idMap).forEach((oldId,i)=>{
+  const tmp=stamp+i;
+  temps[tmp]=idMap[oldId];
+  rewriteClientId(oldId,tmp);
+ });
+ Object.entries(temps).forEach(([tmp,newId])=>{
+  rewriteClientId(tmp,newId);
+  (db.trainerRequests||[]).forEach(r=>{if(r.clientId===newId){const nc=client(newId);if(nc)r.clientName=nc.name}});
  });
 }
 function renumberClientIdsByJoinDate(opts){
@@ -2333,7 +2346,7 @@ function pgClients(){
    <td>${pl?fmtD(pl.start):'-'}</td><td>${pl?fmtD(pl.end):'-'}</td>
    <td>${pipelineDotsHTML(c)}</td>
    <td><span class="badge ${badge}">${st}</span></td>
-   <td>${trainerCell(c,ptCounts)}</td><td>${esc(c.ref||'-')}</td>
+   <td>${trainerCell(c,ptCounts)}</td><td class="clickable" onclick="openEditClientSource('${c.id}','list')" title="Edit source">${esc(c.ref||'-')}</td>
    <td class="r" style="white-space:nowrap">
     <button class="btn sm sec" onclick="openClient('${c.id}')">Profile</button>
    </td></tr>`;
@@ -2427,6 +2440,7 @@ function reqFld(id,l,v,t,extra){return`<div class="field"><label>${esc(l)} <span
 function optFld(id,l,v,t,extra){return`<div class="field"><label>${esc(l)} <span class="opt-tag">Optional</span></label><input id="${id}" type="${t||'text'}" value="${esc(v||'')}" ${extra||''}></div>`}
 function reqArea(id,l,v,extra){return`<div class="field"><label>${esc(l)} <span class="req-tag">Required</span></label><textarea id="${id}" rows="3" ${extra||''}>${esc(v||'')}</textarea></div>`}
 function sel(id,l,opts,v,extra){return`<div class="field"><label>${l}</label><select id="${id}" ${extra||''}>${opts.map(o=>`<option ${o===v?'selected':''}>${o}</option>`).join('')}</select></div>`}
+const REF_SOURCES=['Walk-in','Facebook','Instagram','Google','Existing Member','Reference','Advertisement','Others'];
 function staffBillRepList(){
  const list=(db.staff||[]).filter(s=>s.status!=='Inactive'&&(s.billRep!==false));
  // Prefer staff flagged as bill reps when any exist
@@ -2471,7 +2485,7 @@ function wizStep1(){
   ${fld('w_pin','Pincode',c.pin)}${fld('w_occ','Occupation',c.occ,'text','class="caps"')}${sel('w_blood','Blood Group',['','A+','A-','B+','B-','O+','O-','AB+','AB-'],c.blood)}
   ${fld('w_ht','Height (cm)',c.ht)}${fld('w_wt','Weight (kg)',c.wt)}${fld('w_med','Medical Conditions',c.med,'text','class="caps"')}
   ${sel('w_goal','Fitness Goal',['','Weight Loss','Weight Gain','Muscle Building','General Fitness','Strength','Rehab'],c.goal)}
-  ${sel('w_ref','Referral Source',['Walk-in','Facebook','Instagram','Google','Existing Member','Reference','Advertisement','Others'],c.ref)}
+  ${sel('w_ref','Referral Source',REF_SOURCES,c.ref)}
   ${sel('w_idt','ID Proof',['','Aadhaar','PAN','Driving License','Passport'],c.idt)}
   ${fld('w_idn','ID Number',c.idn,'text','class="caps"')}${fld('w_emg','Emergency Contact Name',c.emg,'text','class="caps"')}${fld('w_emgp','Emergency Contact No.',c.emgp)}
   ${billRepSelect('w_billrep',c.billRep,c.billRepId,c.billRepFrozen)}
@@ -2688,7 +2702,7 @@ function subFormHTML(clientId,type,wizard){
  const used=db.subs.filter(s=>s.clientId===clientId).map(s=>`<span class="badge ${subStatus(s)==='Used'?'b-mut':subStatus(s)==='Active'?'b-ok':'b-bad'}">${esc(s.type)} · ${esc(s.pkg)} · ${subStatus(s)}</span>`).join(' ');
  return`
  ${used?`<div class="sub" style="margin-bottom:10px"><b>Previous subscriptions:</b> ${used}</div>`:''}
- ${clientHadMembership(c)?'<p class="sub" style="margin-bottom:8px">Existing member — use <b>Renew</b> or <b>Upgrade</b> (New Membership hidden).</p>':''}
+ ${clientSoldMembership(c)&&!(c.pipeline&&c.pipeline.feesPaid===false)?'<p class="sub" style="margin-bottom:8px">This member already has a billed membership. Choose <b>New Membership</b> if this is their first sale.</p>':''}
  ${clientHadPt(c)?'<p class="sub" style="margin-bottom:8px">Existing PT client — use <b>Renew PT</b> (New PT hidden).</p>':''}
  <div class="grid g3">
   ${sel('s_type','Subscription Type',types,pick)}
@@ -2979,7 +2993,7 @@ function openClient(id){const c=client(id);if(!c)return;
  ${c.photo?`<img class="photo-av" src="${c.photo}">`:`<div class="photo-av" style="display:flex;align-items:center;justify-content:center;color:var(--mut)">Photo</div>`}
  <div><h2>${esc(c.name)} <span class="badge b-br">${c.id}</span> ${c.status==='Inactive'?'<span class="badge b-bad">Inactive</span>':''}</h2>
  <div class="sub">${formatMobile(c.mobile)} · ${esc(c.email||'')} · Joined ${fmtD(c.joined)}</div>
- <div class="sub" style="margin-top:4px"><b>Referral:</b> ${esc(c.ref||'—')} · <b>DOB:</b> ${fmtD(c.dob)} · <b>Anniversary:</b> ${fmtD(c.anniversary)}</div>
+ <div class="sub" style="margin-top:4px"><b>Referral:</b> ${esc(c.ref||'—')} <button class="btn sm sec" onclick="openEditClientSource('${id}','profile')">Edit Source</button> · <b>DOB:</b> ${fmtD(c.dob)} · <b>Anniversary:</b> ${fmtD(c.anniversary)}</div>
  <div class="sub" style="margin-top:4px"><b>Trainer:</b> ${esc(c.trainer||'—')}${c.trainer&&ptN?` (${ptN} PT clients)`:''} · <b>Bill Rep:</b> ${esc(c.billRep||'—')}${c.billRepFrozen?' <span class="mut">(locked)</span>':''}</div></div></div>
  <div class="row" style="gap:8px">${c.status!=='Inactive'?`<button class="btn" onclick="openSubForm('${id}')">New / Renew Plan</button>`:''}<button class="btn sec" onclick="openClientPhotoEdit('${id}')">Update Photo</button><button class="btn sec" onclick="editClientPersonal('${id}')">Edit Address</button><button class="btn sec" onclick="openTrainerChangeRequest('${id}')">Change Trainer Request</button>${c.status!=='Inactive'?`<button class="btn sec dgr" onclick="deactivateClient('${id}')">Deactivate</button>`:`<button class="btn sec" onclick="activateClient('${id}');openClient('${id}')">Activate</button>`}</div></div>
  <div class="grid g4" style="margin:12px 0">${stat('Sub Start',pl?fmtD(pl.start):'-','br')}${stat('Sub End',pl?fmtD(pl.end):'-','br')}${stat('Total Paid',inr(paid),'ok')}${stat('Outstanding',inr(due),due>0?'bad':'')}</div>
@@ -3020,6 +3034,26 @@ function saveClientPhoto(id){
  const data=window._clientPhotoData;
  if(!data){toast('Choose a photo or capture from webcam');return}
  c.photo=data;save();audit('Member Photo Updated',c.id);toast('Photo saved');openClient(id);
+}
+function openEditClientSource(id,back){
+ const c=client(id);if(!c)return;
+ const opts=REF_SOURCES.slice();
+ if(c.ref&&!opts.includes(c.ref))opts.unshift(c.ref);
+ openModal(`<h2>Edit Source — ${esc(c.name)}</h2>
+ <p class="sub" style="margin-bottom:12px">This updates the Source column on My Members.</p>
+ ${sel('es_ref','Source',opts,c.ref||'Walk-in')}
+ <div class="row" style="justify-content:flex-end;gap:8px;margin-top:12px">
+  <button class="btn sec" onclick="${back==='profile'?`openClient('${id}')`:'closeModal()'}">Cancel</button>
+  <button class="btn" onclick="saveClientSource('${id}','${back||'list'}')">Save Source</button>
+ </div>`);
+}
+function saveClientSource(id,back){
+ const c=client(id);if(!c)return;
+ const ref=val('es_ref');
+ if(!ref){toast('Select a source');return}
+ c.ref=ref;save();audit('Member Source Updated',c.id+' · '+ref);toast('Source saved');
+ if(back==='profile')openClient(id);
+ else{closeModal();if(PAGE==='clients')pgClients()}
 }
 function editClientPersonal(id){
  const c=client(id);if(!c)return;
