@@ -1,6 +1,5 @@
-import { redirect } from 'next/navigation';
+import { PortalChooser } from '@/components/login/portal-chooser';
 
-/** Primary app is the Claude FITO6 localStorage ERP SPA. */
 export default function Home() {
-  redirect('/fito6-erp.html');
+  return <PortalChooser />;
 }

@@ -474,6 +474,10 @@ function showLoginScreen(){
  if(login)login.style.display='flex';
  if(app)app.style.display='none';
  if(boot){boot.style.display='none';boot.setAttribute('aria-busy','false')}
+ try{
+  const dest=localStorage.getItem('fito6_login_portal')||'/';
+  if(location.pathname.indexOf('fito6-erp')>=0){window.location.replace(dest);return}
+ }catch(e){}
 }
 function showAppShell(){
  document.documentElement.classList.add('session-restore');
@@ -2000,8 +2004,9 @@ async function doLogin(){
 function logout(){
  try{if(db&&USER)audit('Logout','User logged out')}catch(e){}
  USER=null;PAGE='dashboard';_navSubId=null;_restoreBusy=false;_superGymMode=false;_cloudReady=false;clearAuth();
- try{history.replaceState(null,'',location.pathname+location.search)}catch(e){}
- showLoginScreen();
+ let dest='/';
+ try{dest=localStorage.getItem('fito6_login_portal')||'/'}catch(e){}
+ window.location.href=dest;
 }
 function canPage(p){
  if(!USER)return false;
@@ -5426,7 +5431,7 @@ function seedDemo(){
    }
   }
  }else{
-  showLoginScreen();
+  window.location.replace('/');
  }
  const pw=$('lg_p');if(pw)pw.addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
  document.addEventListener('click',e=>{if(!e.target.closest('.tb-action')&&!e.target.closest('.tb-drop'))closeTbDrops()});
