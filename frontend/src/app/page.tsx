@@ -1,5 +1,5 @@
-import { PortalChooser } from '@/components/login/portal-chooser';
+import { HomeLanding } from '@/components/login/home-landing';
 
 export default function Home() {
-  return <PortalChooser />;
+  return <HomeLanding />;
 }

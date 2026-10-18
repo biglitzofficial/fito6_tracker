@@ -1,3 +1,5 @@
+const SCENE_BG = '/login/admin-background.png';
+
 export type LoginPortalId = 'admin' | 'superadmin' | 'dharapuram' | 'palladam';
 
 export type LoginFeature = { icon: 'chart' | 'users' | 'gear' | 'growth'; label: string };
@@ -8,14 +10,12 @@ export type LoginPortal = {
   title: string;
   kicker: string;
   subtitle: string;
-  panelLabel?: string;
+  panelLabel: string;
   badge?: string;
   location?: string;
   image: string;
   match: string[];
-  icon: 'admin' | 'crown' | 'gym';
-  scene?: boolean;
-  features?: LoginFeature[];
+  features: LoginFeature[];
 };
 
 export const LOGIN_PORTALS: Record<LoginPortalId, LoginPortal> = {
@@ -23,23 +23,27 @@ export const LOGIN_PORTALS: Record<LoginPortalId, LoginPortal> = {
     id: 'superadmin',
     path: '/superadmin',
     title: 'Super Admin',
-    kicker: 'Full control. All branches.',
+    kicker: '',
     subtitle: 'Franchise command · every gym, every report',
-    image: '/login/superadmin.jpg',
+    panelLabel: 'Super Admin',
+    image: SCENE_BG,
     match: [],
-    icon: 'crown',
+    features: [
+      { icon: 'gear', label: 'Multi Branch' },
+      { icon: 'users', label: 'User Control' },
+      { icon: 'chart', label: 'Complete Reports' },
+      { icon: 'growth', label: 'Grow Together' },
+    ],
   },
   admin: {
     id: 'admin',
     path: '/admin',
     title: 'Admin',
-    kicker: 'Admin Panel',
+    kicker: '',
     subtitle: 'Gym operations · members · billing',
-    panelLabel: 'Admin Panel',
-    image: '/login/admin-background.png',
+    panelLabel: 'Admin',
+    image: SCENE_BG,
     match: [],
-    icon: 'admin',
-    scene: true,
     features: [
       { icon: 'chart', label: 'Track Performance' },
       { icon: 'users', label: 'Manage Members' },
@@ -50,26 +54,38 @@ export const LOGIN_PORTALS: Record<LoginPortalId, LoginPortal> = {
   dharapuram: {
     id: 'dharapuram',
     path: '/Dharapuram-road-branch',
-    title: 'Branch Login',
-    kicker: 'Dharapuram Road',
+    title: 'Dharapuram Road Branch',
+    kicker: '',
     subtitle: 'Branch 1 · Tirupur',
-    badge: 'BRANCH 1',
+    panelLabel: 'Dharapuram Road Branch',
+    badge: '',
     location: 'Canara Bank & HDFC Bank Upstairs, Dharapuram Road, Tirupur – 641605',
-    image: '/login/branch-dharapuram.jpg',
+    image: SCENE_BG,
     match: ['dharapuram', 'branch 1', 'branch1'],
-    icon: 'gym',
+    features: [
+      { icon: 'chart', label: 'Track Performance' },
+      { icon: 'users', label: 'Manage Members' },
+      { icon: 'gear', label: 'Operate Smoothly' },
+      { icon: 'growth', label: 'Grow Together' },
+    ],
   },
   palladam: {
     id: 'palladam',
     path: '/palladam-road-branch',
-    title: 'Branch Login',
-    kicker: 'Palladam Road',
+    title: 'Palladam Road Branch',
+    kicker: '',
     subtitle: 'Branch 2 · Tirupur',
-    badge: 'BRANCH 2',
+    panelLabel: 'Palladam Road Branch',
+    badge: '',
     location: 'TKT Mill Bus Stop, Near Hyundai Showroom, Palladam Road, Tirupur',
-    image: '/login/branch-palladam.jpg',
+    image: SCENE_BG,
     match: ['palladam', 'branch 2', 'branch2'],
-    icon: 'gym',
+    features: [
+      { icon: 'chart', label: 'Track Performance' },
+      { icon: 'users', label: 'Manage Members' },
+      { icon: 'gear', label: 'Operate Smoothly' },
+      { icon: 'growth', label: 'Grow Together' },
+    ],
   },
 };
 

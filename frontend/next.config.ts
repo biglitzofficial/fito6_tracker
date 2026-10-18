@@ -20,7 +20,7 @@ const nextConfig: NextConfig = {
   },
   async redirects() {
     return [
-      { source: '/login', destination: '/', permanent: false },
+      { source: '/login', destination: '/admin', permanent: false },
       { source: '/dharapuram-road-branch', destination: '/Dharapuram-road-branch', permanent: false },
     ];
   },
