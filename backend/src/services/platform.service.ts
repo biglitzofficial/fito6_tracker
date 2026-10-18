@@ -1,7 +1,7 @@
 import { Role } from '../types/enums';
-import { Business, BusinessMember, FranchiseProfile, User } from '../types/models';
-import { uploadFranchiseAgreement, getSignedDownloadUrl } from '../lib/storage';
-import { COL, create, findMany, findOne, getById, sortBy, update } from '../lib/firestore';
+import { Business, BusinessMember, FranchiseProfile, Staff, User } from '../types/models';
+import { uploadFranchiseAgreement, getSignedDownloadUrl, deleteFile } from '../lib/storage';
+import { COL, create, findMany, findOne, getById, remove, sortBy, update } from '../lib/firestore';
 import { seedBusinessDefaults } from '../lib/business-seed';
 import { erpStoreService } from './erp-store.service';
 import { hashPassword, validatePassword } from '../utils/password';
@@ -356,6 +356,79 @@ export const platformService = {
     await erpStoreService.save(businessId, erp as Record<string, unknown>, updatedById);
 
     return { id: businessId, name: trimmed, gymName: trimmed };
+  },
+
+  async deleteGym(businessId: string) {
+    const business = await getById<Business>(COL.businesses, businessId);
+    if (!business) throw new AppError(404, 'Gym not found');
+
+    const members = await findMany<BusinessMember>(
+      COL.businessMembers,
+      (m) => m.businessId === businessId
+    );
+    const allMembers = await findMany<BusinessMember>(COL.businessMembers, () => true);
+    const exclusiveUserIds: string[] = [];
+    for (const userId of [...new Set(members.map((m) => m.userId))]) {
+      const stillElsewhere = allMembers.some((m) => m.userId === userId && m.businessId !== businessId);
+      if (stillElsewhere) continue;
+      const user = await getById<User>(COL.users, userId);
+      if (!user || user.role === Role.SUPERADMIN) continue;
+      exclusiveUserIds.push(userId);
+    }
+
+    const scoped = [
+      COL.income,
+      COL.expenses,
+      COL.categories,
+      COL.accounts,
+      COL.parties,
+      COL.membershipPlans,
+      COL.subscriptions,
+      COL.memberAttendance,
+      COL.staffTargets,
+      COL.reports,
+      COL.counters,
+    ];
+    for (const collection of scoped) {
+      const items = await findMany<{ businessId?: string | null }>(
+        collection,
+        (item) => item.businessId === businessId
+      );
+      await Promise.all(items.map((item) => remove(collection, item.id)));
+    }
+
+    const settings = await findMany<{ key?: string; businessId?: string | null }>(
+      COL.settings,
+      (item) =>
+        item.businessId === businessId ||
+        (typeof item.key === 'string' && item.key.startsWith(`${businessId}:`))
+    );
+    await Promise.all(settings.map((item) => remove(COL.settings, item.id)));
+
+    await remove(COL.erpStores, businessId);
+
+    if (business.franchise?.agreementFilePath) {
+      try {
+        await deleteFile(business.franchise.agreementFilePath);
+      } catch {
+        /* agreement file is optional once the gym is gone */
+      }
+    }
+
+    await Promise.all(members.map((member) => remove(COL.businessMembers, member.id)));
+
+    for (const userId of exclusiveUserIds) {
+      const staff = await findOne<Staff>(COL.staff, 'userId', userId);
+      if (staff) await remove(COL.staff, staff.id);
+      const attendance = await findMany<{ userId: string }>(COL.attendance, (row) => row.userId === userId);
+      await Promise.all(attendance.map((row) => remove(COL.attendance, row.id)));
+      const notes = await findMany<{ userId: string }>(COL.notifications, (row) => row.userId === userId);
+      await Promise.all(notes.map((row) => remove(COL.notifications, row.id)));
+      await remove(COL.users, userId);
+    }
+
+    await remove(COL.businesses, businessId);
+    return { id: businessId, name: business.name };
   },
 
   async getGymById(businessId: string) {

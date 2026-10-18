@@ -61,6 +61,14 @@ router.patch(
   })
 );
 
+router.delete(
+  '/gyms/:id',
+  asyncHandler(async (req: AuthRequest, res) => {
+    const result = await platformService.deleteGym(String(req.params.id));
+    sendSuccess(res, result);
+  })
+);
+
 router.get(
   '/gym-admins',
   asyncHandler(async (_req: AuthRequest, res) => {

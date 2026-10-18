@@ -707,7 +707,7 @@ async function loadFromCloud(){
  if(!AUTH.businessId)throw new Error('No business context');
  migrateLegacyCache(AUTH.businessId);
  const res=await api('/erp-store');
- if(res&&res.data){db=res.data;ensurePkgSettings();cacheLocal();_cloudReady=true;return 'firestore'}
+ if(res&&res.data){db=res.data;const seedSocial=dharapuramSocialNeedsSeed();ensurePkgSettings();cacheLocal();_cloudReady=true;if(seedSocial)await persistCloud();return 'firestore'}
  const local=loadLocalCache(AUTH.businessId);
  if(local&&((local.clients&&local.clients.length)||(local.invoices&&local.invoices.length)||(local.staff&&local.staff.length))){
   db=local;ensurePkgSettings();
@@ -775,6 +775,7 @@ function ensurePkgSettings(){
  if(!Array.isArray(db.appointments))db.appointments=[];
  if(!Array.isArray(db.interviews))db.interviews=[];
  if(!Array.isArray(db.digitalTracker))db.digitalTracker=[];
+ ensureDharapuramSocial();
  if(!Array.isArray(db.settings.branchDocs))db.settings.branchDocs=[];
  (db.clients||[]).forEach(c=>{
   if(!c.status)c.status='Active';
@@ -1878,6 +1879,22 @@ function platformGymTabs(gyms,activeId){
   ${list.map(g=>`<button type="button" class="${activeId===g.id?'on':''}" onclick="openGymAnalytics('${g.id}')">${esc(g.gymName||g.name)}</button>`).join('')}
  </div>`;
 }
+function platformGymManage(gyms){
+ const list=gyms||window._platformGyms||[];
+ if(!list.length)return'';
+ return `<div class="ana-panel" style="margin-bottom:16px"><div class="ana-panel-h"><h3>Manage Gyms</h3><span class="tag">${list.length}</span></div>
+  <div class="ana-table-wrap"><table><tr><th>Gym</th><th>Admin login</th><th>Members</th><th></th></tr>
+  ${list.map(g=>{
+   const loc=g.franchise?(g.franchise.branch||[g.franchise.city,g.franchise.state].filter(Boolean).join(', ')):'';
+   return `<tr>
+    <td><div class="bold">${esc(g.gymName||g.name)}</div>${loc?`<div class="mut" style="font-size:11px">${esc(loc)}</div>`:''}</td>
+    <td>${g.admin?`${esc(g.admin.name)}<div class="mut" style="font-size:11px">${esc(g.admin.email)}</div>`:'<span class="mut">No admin</span>'}</td>
+    <td>${g.stats?g.stats.members:0}</td>
+    <td style="white-space:nowrap"><button class="btn sm sec" onclick="openEditGym('${g.id}')">Edit</button> <button class="btn sm sec" style="border-color:var(--bad);color:var(--bad)" onclick="confirmDeleteGym('${g.id}')">Delete</button></td>
+   </tr>`;
+  }).join('')}
+  </table></div></div>`;
+}
 async function switchBusiness(id,afterPage){
  if(id===AUTH.businessId||(id===''&&!AUTH.businessId))return;
  if(!id){
@@ -1947,6 +1964,38 @@ function openEditGym(id){
   <button class="btn" onclick="saveGymName('${id}')">Save Name</button>
  </div>`);
 }
+function confirmDeleteGym(id){
+ if(!isSuperAdmin()){toast('Only Super Admin can delete gyms');return}
+ const gym=(window._platformGyms||[]).find(g=>g.id===id);
+ const biz=(AUTH.businesses||[]).find(b=>b.id===id);
+ const name=(gym&&(gym.gymName||gym.name))||(biz&&biz.name)||'this gym';
+ const admin=gym&&gym.admin&&gym.admin.email?gym.admin.email:'';
+ openModal(`<h2>Delete Gym</h2>
+ <p class="sub" style="margin-bottom:12px">This removes <b>${esc(name)}</b>${admin?` and the login <b>${esc(admin)}</b>`:''}, plus that gym’s members and records. This cannot be undone.</p>
+ ${fld('dg_confirm','Type DELETE to confirm','')}
+ <div class="row" style="justify-content:flex-end;gap:8px;margin-top:14px">
+  <button class="btn sec" onclick="closeModal()">Cancel</button>
+  <button class="btn" style="background:var(--bad);border-color:var(--bad)" onclick="deleteGym('${id}')">Delete Gym</button>
+ </div>`);
+}
+async function deleteGym(id){
+ if(val('dg_confirm').trim().toUpperCase()!=='DELETE'){toast('Type DELETE to confirm');return}
+ try{
+  await platformApi('/platform/gyms/'+id,{method:'DELETE'});
+  AUTH.businesses=(AUTH.businesses||[]).filter(b=>b.id!==id);
+  if(window._platformGyms)window._platformGyms=window._platformGyms.filter(g=>g.id!==id);
+  if(AUTH.businessId===id){AUTH.businessId=null;_superGymMode=false;_cloudReady=false}
+  persistAuth();
+  populateBizSwitcher(AUTH.businesses||[]);
+  try{audit('Gym Deleted',id)}catch(err){}
+  toast('Gym deleted');
+  closeModal();
+  if(PAGE==='franchise-gym'&&window._franchiseGymId===id){window._franchiseGymId=null;go('platform')}
+  else if(PAGE==='platform')pgPlatform();
+  else if(PAGE==='gymadmins')pgGymAdmins();
+  else go('platform');
+ }catch(e){toast(e.message||'Delete failed')}
+}
 async function saveGymName(id){
  const name=val('eg_name').trim();
  if(name.length<2){toast('Enter a gym name (min 2 characters)');return}
@@ -1960,6 +2009,7 @@ async function saveGymName(id){
   closeModal();
   if(PAGE==='platform')pgPlatform();
   else if(PAGE==='gymadmins')pgGymAdmins();
+  else if(PAGE==='franchise-gym'&&window._franchiseGymId)pgFranchiseGym(window._franchiseGymId);
   else if(PAGE==='fitness')pgFitness();
   else if(PAGE==='settings')pgSettings();
   else if(PAGE==='gymperformance')pgGymPerformance();
@@ -4215,7 +4265,62 @@ function pgSalesReport(type){
 }
 
 /* ================= DIGITAL TRACKER ================= */
+const DHARAPURAM_SOCIAL_SEED='dharapuram-q2-2026';
+const DHARAPURAM_SOCIAL_WEEKS=[
+ {week:'W1',range:'Jun 29 - Jul 5',reviews:249,reviewsNew:6,igViews:246,igStories:11,waStories:7,igFollowers:5036,igNew:182,waMembers:674,waReplies:3,waRate:0.004451038576,growth:null},
+ {week:'W2',range:'Jul 6 - Jul 12',reviews:269,reviewsNew:20,igViews:269,igStories:14,waStories:7,igFollowers:5127,igNew:91,waMembers:671,waReplies:3,waRate:0.004470938897,growth:0.01806989674},
+ {week:'W3',range:'Jul 13 - Jul 19',reviews:266,reviewsNew:-3,igViews:267,igStories:10,waStories:7,igFollowers:5202,igNew:75,waMembers:669,waReplies:2,waRate:0.002989536622,growth:0.01462843768},
+ {week:'W4',range:'Jul 20 - Jul 26',reviews:267,reviewsNew:1,igViews:312,igStories:11,waStories:6,igFollowers:5367,igNew:165,waMembers:670,waReplies:4,waRate:0.005970149254,growth:0.03171856978},
+ {week:'W5',range:'Jul 27 - Aug 2',reviews:265,reviewsNew:-2,igViews:null,igStories:null,waStories:null,igFollowers:null,igNew:null,waMembers:null,waReplies:null,waRate:null,growth:null},
+ {week:'W6',range:'Aug 3 - Aug 9',reviews:264,reviewsNew:-1,igViews:null,igStories:null,waStories:null,igFollowers:null,igNew:null,waMembers:null,waReplies:null,waRate:null,growth:null},
+ {week:'W7',range:'Aug 10 - Aug 16',reviews:263,reviewsNew:-1,igViews:null,igStories:null,waStories:6,igFollowers:5562,igNew:5562,waMembers:660,waReplies:null,waRate:0,growth:null},
+ {week:'W8',range:'Aug 17 - Aug 23',reviews:262,reviewsNew:-1,igViews:null,igStories:null,waStories:6,igFollowers:5752,igNew:190,waMembers:663,waReplies:0,waRate:0,growth:0.03416037397},
+ {week:'W9',range:'Aug 24 - Aug 30',reviews:261,reviewsNew:-1,igViews:null,igStories:null,waStories:6,igFollowers:5892,igNew:140,waMembers:670,waReplies:null,waRate:0,growth:0.02433936022},
+ {week:'W10',range:'Aug 31 - Sep 6',reviews:261,reviewsNew:0,igViews:null,igStories:null,waStories:6,igFollowers:5941,igNew:49,waMembers:671,waReplies:0,waRate:0,growth:0.008316361168},
+ {week:'W11',range:'Sep 7 - Sep 13',reviews:261,reviewsNew:0,igViews:101,igStories:7,waStories:6,igFollowers:6087,igNew:146,waMembers:668,waReplies:2,waRate:0.002994011976,growth:0.02457498738},
+ {week:'W12',range:'Sep 14 - Sep 20',reviews:260,reviewsNew:-1,igViews:133,igStories:14,waStories:6,igFollowers:6223,igNew:136,waMembers:657,waReplies:1,waRate:0.001522070015,growth:0.02234269755},
+ {week:'W13',range:'Sep 21 - Sep 27',reviews:260,reviewsNew:0,igViews:1268,igStories:15,waStories:7,igFollowers:6337,igNew:114,waMembers:659,waReplies:1,waRate:0.001517450683,growth:0.01831913868}
+];
+const DHARAPURAM_SOCIAL_MONTHS=[
+ {month:'April',reviews:267,reviewsNew:24,igViews:273.5,igStories:46,waStories:27,igFollowers:5367,igNew:513,waMembers:670,waReplies:12,waRate:0.004470415837,growth:0.06572676728},
+ {month:'May',reviews:262,reviewsNew:-5,igViews:null,igStories:0,waStories:12,igFollowers:5752,igNew:5752,waMembers:663,waReplies:0,waRate:0,growth:0.07173467486},
+ {month:'June',reviews:260,reviewsNew:-2,igViews:500.6666667,igStories:36,waStories:31,igFollowers:6337,igNew:585,waMembers:659,waReplies:4,waRate:0.001206706535,growth:0.1017037552},
+ {month:'Q2 TOTAL',reviews:260,reviewsNew:17,igViews:387.0833333,igStories:82,waStories:70,igFollowers:6337,igNew:6850,waMembers:659,waReplies:16,waRate:0.001892374124,growth:0.1807341159}
+];
+function isDharapuramGymLogin(){
+ const email=String((AUTH.user&&AUTH.user.email)||'').toLowerCase();
+ return email==='fit6.gym1@gmail.com';
+}
+function dharapuramSocialNeedsSeed(){
+ return !!(db&&isDharapuramGymLogin()&&!(db.socialTracker&&db.socialTracker.seed===DHARAPURAM_SOCIAL_SEED));
+}
+function ensureDharapuramSocial(){
+ if(!db||!dharapuramSocialNeedsSeed())return false;
+ db.socialTracker={branch:'Dharapuram Road',seed:DHARAPURAM_SOCIAL_SEED,weeks:DHARAPURAM_SOCIAL_WEEKS,months:DHARAPURAM_SOCIAL_MONTHS};
+ return true;
+}
+function socInt(v){if(v==null||v==='')return '—';const n=Number(v);return Number.isFinite(n)?String(Math.round(n)):'—'}
+function socPct(v){if(v==null||v==='')return '—';const n=Number(v);return Number.isFinite(n)?(n*100).toFixed(2)+'%':'—'}
+function socialRowHTML(r,label,sub){
+ return `<tr><td class="bold">${esc(label)}</td><td>${esc(sub||'')}</td><td class="r">${socInt(r.reviews)}</td><td class="r">${socInt(r.reviewsNew)}</td><td class="r">${socInt(r.igViews)}</td><td class="r">${socInt(r.igStories)}</td><td class="r">${socInt(r.waStories)}</td><td class="r">${socInt(r.igFollowers)}</td><td class="r">${socInt(r.igNew)}</td><td class="r">${socInt(r.waMembers)}</td><td class="r">${socInt(r.waReplies)}</td><td class="r">${socPct(r.waRate)}</td><td class="r">${socPct(r.growth)}</td></tr>`;
+}
 function pgDigitalTracker(){
+ if(db.socialTracker&&db.socialTracker.seed===DHARAPURAM_SOCIAL_SEED){
+  const weeks=db.socialTracker.weeks||[];
+  const months=db.socialTracker.months||[];
+  const head=`<tr><th>Week</th><th>Date range</th><th class="r">Google reviews</th><th class="r">New reviews</th><th class="r">Max IG story views</th><th class="r">IG stories</th><th class="r">WA stories</th><th class="r">IG followers</th><th class="r">New IG followers</th><th class="r">WA community</th><th class="r">WA replies</th><th class="r">WA engagement</th><th class="r">Weekly growth</th></tr>`;
+  $('content').innerHTML=`<div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px"><div><h2>Digital Tracker</h2><div class="sub">Dharapuram Road · social media growth · Q2 2026 · fit6.gym1@gmail.com</div></div></div>
+  <div class="ana-table-wrap"><table>${head}
+  ${weeks.map(w=>socialRowHTML(w,w.week,w.range)).join('')}
+  </table></div>
+  <h3 style="margin-top:18px">Monthly summary</h3>
+  <div class="ana-table-wrap"><table><tr><th>Month</th><th></th><th class="r">Google reviews</th><th class="r">New reviews</th><th class="r">Avg IG story views</th><th class="r">IG stories</th><th class="r">WA stories</th><th class="r">IG followers</th><th class="r">New IG followers</th><th class="r">WA community</th><th class="r">WA replies</th><th class="r">WA engagement</th><th class="r">Monthly growth</th></tr>
+  ${months.map(m=>socialRowHTML(m,m.month,'')).join('')}
+  </table></div>`;
+  return;
+ }
+ if(ensureDharapuramSocial())save();
+ if(db.socialTracker&&db.socialTracker.seed===DHARAPURAM_SOCIAL_SEED){pgDigitalTracker();return}
  if(!db.digitalTracker)db.digitalTracker=[];
  const rows=db.digitalTracker.slice().reverse();
  $('content').innerHTML=`${superPlatformBar()}<div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px"><div><h2>Digital Tracker</h2><div class="sub">Track InBody, nutrition, workout cards, follow-ups and gym activities</div></div><button class="btn" onclick="trackerForm()">+ Add Record</button></div>
@@ -4477,6 +4582,7 @@ async function pgPlatform(){
   const revTrend=trends.map(t=>({x:String(t.month).slice(5),y:t.collection||0}));
   $('plat_body').innerHTML=`
    ${platformGymTabs(gyms,null)}
+   ${platformGymManage(gyms)}
    <div class="ana-hero-lite"><div class="row" style="justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px"><div><h2>Platform Analytics</h2><div class="sub">Franchise network intelligence · ${franchiseMonthLabel(analytics.month)} · revenue, growth & performance</div></div><button class="btn sec" style="background:rgba(255,255,255,.08);color:#fff;border-color:rgba(255,255,255,.15)" onclick="go('add-gym')">+ Add Gym</button></div></div>
    ${anaFilterBar(gyms,{reload:'reloadPlatformAnalytics()'})}
    ${anaSection('Network Overview')}
@@ -4550,7 +4656,7 @@ async function pgFranchiseGym(gymId){
   const franchiseBlock=f?`<div class="ana-panel"><div class="ana-panel-h"><h3>Franchise Profile</h3>${f.agreementFilePath?`<button class="btn sm sec" onclick="viewFranchiseAgreement('${gymId}')">View Agreement</button>`:''}</div><div class="review-grid">${[['Location',f.branch],['Address',[f.address,f.city,f.state,f.pincode].filter(Boolean).join(', ')],['Owner Phone',f.ownerPhone],['Agreement',f.agreementStartDate?(f.agreementStartDate+(f.agreementEndDate?' → '+f.agreementEndDate:'')):'—'],['Franchise Fee',f.franchiseFee!=null?inr(f.franchiseFee):'—'],['Royalty',f.royaltyPct!=null?f.royaltyPct+'%':'—']].map(([k,v])=>`<div><div class="k">${esc(k)}</div><div class="bold">${esc(String(v||'—'))}</div></div>`).join('')}</div></div>`:'';
   $('fg_body').innerHTML=`
    ${platformGymTabs(gyms,gymId)}
-   <div class="ana-head"><div><h2>${esc(g.gymName||g.name)}</h2><div class="sub">${franchiseMonthLabel(data.month)} · ${esc(g.admin?g.admin.name:'—')} · Score ${g.score||0} · Performance analytics</div></div><div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn" onclick="openGymWorkspace('${gymId}')">Enter Gym →</button><button class="btn sec" onclick="openEditGym('${gymId}')">Edit Name</button></div></div>
+   <div class="ana-head"><div><h2>${esc(g.gymName||g.name)}</h2><div class="sub">${franchiseMonthLabel(data.month)} · ${esc(g.admin?g.admin.name:'—')} · Score ${g.score||0} · Performance analytics</div></div><div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn" onclick="openGymWorkspace('${gymId}')">Enter Gym →</button><button class="btn sec" onclick="openEditGym('${gymId}')">Edit</button><button class="btn sec" style="border-color:var(--bad);color:var(--bad)" onclick="confirmDeleteGym('${gymId}')">Delete</button></div></div>
    ${anaFilterBar(gyms,{hideGymFilter:true,reload:"pgFranchiseGym('"+gymId+"')"})}
    ${franchiseBlock}
    <div class="ana-kpi-grid">
@@ -4596,7 +4702,7 @@ async function pgGymAdmins(){
     const f=a.business&&a.business.franchise;
     const loc=f?[f.city,f.state].filter(Boolean).join(', '):'';
     return `<tr><td class="bold">${esc(a.name)}</td><td>${esc(a.email)}</td>
-    <td><span class="bold">${esc(a.business?a.business.name:'—')}</span>${loc?`<div class="mut" style="font-size:11px">${esc(loc)}</div>`:''}${a.business?` <button class="btn sm sec" style="margin-left:4px" onclick="openEditGym('${a.business.id}')">Edit</button>`:''}</td>
+    <td><span class="bold">${esc(a.business?a.business.name:'—')}</span>${loc?`<div class="mut" style="font-size:11px">${esc(loc)}</div>`:''}${a.business?` <button class="btn sm sec" style="margin-left:4px" onclick="openEditGym('${a.business.id}')">Edit</button> <button class="btn sm sec" style="margin-left:4px;border-color:var(--bad);color:var(--bad)" onclick="confirmDeleteGym('${a.business.id}')">Delete</button>`:''}</td>
     <td>${f&&f.agreementFilePath?`<button class="btn sm sec" onclick="viewFranchiseAgreement('${a.business.id}')">View Agreement</button>`:'<span class="mut">—</span>'}</td>
     <td><span class="badge ${a.isActive?'b-ok':'b-bad'}">${a.isActive?'Active':'Inactive'}</span></td>
     <td style="white-space:nowrap">${a.business?`<button class="btn sm" onclick="openGymAnalytics('${a.business.id}')">Performance</button>`:''}</td></tr>`}).join('')||'<tr><td colspan=6 class="mut">No franchise gyms yet · click Add Gym to onboard</td></tr>'}
